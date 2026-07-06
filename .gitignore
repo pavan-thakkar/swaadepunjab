@@ -1,0 +1,11 @@
+# Large archive files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# OS and IDE files
+.DS_Store
+.idea/
+.vscode/
+*.log
