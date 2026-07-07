@@ -161,6 +161,51 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                         subtitle: 'Enjoy your tasty Swaad E Punjab meal!',
                         icon: Icons.check_circle_outline,
                       ),
+                      const SizedBox(height: 32),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8E7),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFEDE0C4)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Bill Details',
+                              style: GoogleFonts.outfit(color: const Color(0xFF1A0F00), fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Subtotal', style: TextStyle(color: Color(0xFF7A6040))),
+                                Text('₹${_order!.subtotal.toStringAsFixed(0)}', style: const TextStyle(color: Color(0xFF1A0F00), fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Delivery Charge', style: TextStyle(color: Color(0xFF7A6040))),
+                                Text(
+                                  _order!.deliveryFee > 0 ? '₹${_order!.deliveryFee.toStringAsFixed(0)}' : 'FREE',
+                                  style: TextStyle(color: _order!.deliveryFee > 0 ? const Color(0xFF1A0F00) : Colors.green, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                            const Divider(color: Color(0xFFEDE0C4), height: 20),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Total Amount', style: GoogleFonts.outfit(color: const Color(0xFF1A0F00), fontSize: 16, fontWeight: FontWeight.bold)),
+                                Text('₹${_order!.grandTotal.toStringAsFixed(0)}', style: GoogleFonts.outfit(color: const Color(0xFFFF6B00), fontSize: 18, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),

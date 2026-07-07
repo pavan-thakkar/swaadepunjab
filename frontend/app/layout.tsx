@@ -7,6 +7,12 @@ export const metadata: Metadata = {
   description: "Order authentic Punjabi food — Dal Makhani, Paneer Butter Masala, Sarson da Saag and more. Fast delivery, pure desi flavours!",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">

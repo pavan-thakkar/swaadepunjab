@@ -63,7 +63,7 @@ class OrderController extends Controller
 
         if ($orderType === 'delivery') {
             $address = $validated['delivery_address'] ?? '';
-            $city = $validated['city'] ?? 'Amritsar';
+            $city = $validated['city'] ?? 'Gandhinagar';
             
             $calc = \App\Models\DeliveryFeeSetting::calculateDistanceAndFee($address, $city, $subtotal, $request->latitude, $request->longitude);
             
@@ -102,7 +102,7 @@ class OrderController extends Controller
             'table_number'         => $validated['table_number'] ?? null,
             'pickup_time'          => $pickupTime,
             'delivery_address'     => $validated['delivery_address'] ?? ($orderType === 'dine_in' ? 'Dine In' : 'Take Away'),
-            'city'                 => $validated['city'] ?? 'Amritsar',
+            'city'                 => $validated['city'] ?? 'Gandhinagar',
             'subtotal'             => $subtotal,
             'delivery_fee'         => $deliveryFee,
             'total'                => $total,
@@ -147,7 +147,7 @@ class OrderController extends Controller
             $query->where('status', $request->status);
         }
 
-        return response()->json(['data' => $query->paginate(20)]);
+        return response()->json(['data' => $query->get()]);
     }
 
     /**
@@ -200,7 +200,7 @@ class OrderController extends Controller
         ]);
 
         $address = $validated['delivery_address'];
-        $city = $validated['city'] ?? 'Amritsar';
+        $city = $validated['city'] ?? 'Gandhinagar';
         $subtotal = (float) ($validated['subtotal'] ?? 0);
         $latitude = isset($validated['latitude']) ? (float)$validated['latitude'] : null;
         $longitude = isset($validated['longitude']) ? (float)$validated['longitude'] : null;

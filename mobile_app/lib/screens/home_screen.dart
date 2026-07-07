@@ -11,6 +11,7 @@ import 'item_details_screen.dart';
 import 'checkout_screen.dart';
 import 'profile_details_screen.dart';
 import 'order_history_screen.dart';
+import 'location_picker_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -173,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const ProfileDetailsScreen(),
+                      builder: (context) => const LocationPickerScreen(),
                     ),
                   );
                 },
@@ -187,27 +188,40 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Row(
                             children: [
-                              Text(
-                                cart.userAddress?.isNotEmpty == true
-                                    ? (cart.userAddress!.length > 20
-                                        ? '${cart.userAddress!.substring(0, 20)}...'
-                                        : cart.userAddress!)
-                                    : (cart.userLatitude != null
-                                        ? 'Current Location'
-                                        : 'Set Location'),
-                                style: GoogleFonts.outfit(
-                                  color: const Color(0xFF1A0F00),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
+                              Flexible(
+                                child: Text(
+                                  cart.isForSomeoneElse
+                                      ? (cart.deliveryAddress != null && cart.deliveryAddress!.isNotEmpty
+                                          ? (cart.deliveryAddress!.length > 18
+                                              ? '${cart.deliveryAddress!.substring(0, 18)}...'
+                                              : cart.deliveryAddress!)
+                                          : 'Someone Else\'s Addr')
+                                      : (cart.userAddress?.isNotEmpty == true
+                                          ? (cart.userAddress!.length > 20
+                                              ? '${cart.userAddress!.substring(0, 20)}...'
+                                              : cart.userAddress!)
+                                          : (cart.userLatitude != null
+                                              ? 'Current Location'
+                                              : 'Set Location')),
+                                  style: GoogleFonts.outfit(
+                                    color: const Color(0xFF1A0F00),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1A0F00), size: 16),
                             ],
                           ),
                           Text(
-                            cart.userCity ?? 'Amritsar',
+                            cart.isForSomeoneElse
+                                ? '👥 For someone else • ${cart.deliveryCity ?? ''}'
+                                : (cart.userCity ?? 'Tap to set location'),
                             style: GoogleFonts.outfit(
-                              color: const Color(0xFF7A6040),
+                              color: cart.isForSomeoneElse
+                                  ? const Color(0xFF4CAF50)
+                                  : const Color(0xFF7A6040),
                               fontSize: 10,
                             ),
                           ),
@@ -667,15 +681,36 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Subtotal',
-                    style: GoogleFonts.outfit(color: const Color(0xFF7A6040), fontSize: 16),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total Amount',
+                        style: GoogleFonts.outfit(color: const Color(0xFF1A0F00), fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 2),
+                      if (cart.customDeliveryFee > 0)
+                        Text(
+                          'Subtotal: ₹${cart.totalSubtotal.toStringAsFixed(0)} • Delivery: ₹${cart.customDeliveryFee.toStringAsFixed(0)}',
+                          style: GoogleFonts.outfit(color: const Color(0xFF7A6040), fontSize: 12),
+                        )
+                      else if (cart.deliveryAddress != null && cart.deliveryAddress!.isNotEmpty)
+                        Text(
+                          'Subtotal: ₹${cart.totalSubtotal.toStringAsFixed(0)} • Delivery: FREE',
+                          style: GoogleFonts.outfit(color: const Color(0xFF2E7D32), fontSize: 12, fontWeight: FontWeight.w600),
+                        )
+                      else
+                        Text(
+                          'Subtotal: ₹${cart.totalSubtotal.toStringAsFixed(0)} • + Delivery at checkout',
+                          style: GoogleFonts.outfit(color: const Color(0xFF7A6040), fontSize: 12),
+                        ),
+                    ],
                   ),
                   Text(
-                    '₹${cart.totalSubtotal.toStringAsFixed(0)}',
+                    '₹${(cart.totalSubtotal + cart.customDeliveryFee).toStringAsFixed(0)}',
                     style: GoogleFonts.outfit(
                       color: const Color(0xFFFF6B00),
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

@@ -16,6 +16,7 @@ class CartProvider with ChangeNotifier {
   double _customDeliveryFee = 0.0;
   double? _distanceKm;
   String _distanceError = '';
+  bool _isCalculatingFee = false;
 
   CartProvider() {
     _loadAuthAndCartFromPrefs();
@@ -29,6 +30,7 @@ class CartProvider with ChangeNotifier {
   double get customDeliveryFee => _customDeliveryFee;
   double? get distanceKm => _distanceKm;
   String get distanceError => _distanceError;
+  bool get isCalculatingFee => _isCalculatingFee;
 
   int get itemCount => _items.fold(0, (sum, item) => sum + item.quantity);
   double get totalSubtotal => _items.fold(0.0, (sum, item) => sum + item.subtotal);
@@ -51,6 +53,7 @@ class CartProvider with ChangeNotifier {
       _items.add(CartItem(menuItem: menuItem));
     }
     _saveCartToPrefs();
+    _recalculateFeeIfNeeded();
     notifyListeners();
   }
 
@@ -59,6 +62,7 @@ class CartProvider with ChangeNotifier {
     if (index >= 0) {
       _items[index].quantity += 1;
       _saveCartToPrefs();
+      _recalculateFeeIfNeeded();
       notifyListeners();
     }
   }
@@ -72,6 +76,7 @@ class CartProvider with ChangeNotifier {
         _items[index].quantity -= 1;
       }
       _saveCartToPrefs();
+      _recalculateFeeIfNeeded();
       notifyListeners();
     }
   }
@@ -79,6 +84,7 @@ class CartProvider with ChangeNotifier {
   void removeItem(int itemId) {
     _items.removeWhere((i) => i.menuItem.id == itemId);
     _saveCartToPrefs();
+    _recalculateFeeIfNeeded();
     notifyListeners();
   }
 
@@ -88,9 +94,22 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void _recalculateFeeIfNeeded() {
+    final addr = deliveryAddress;
+    final cty = deliveryCity ?? 'Gandhinagar';
+    final lat = deliveryLatitude;
+    final lng = deliveryLongitude;
+    if (addr != null && addr.isNotEmpty) {
+      calculateDeliveryFee(addr, cty, lat, lng);
+    }
+  }
+
   Future<void> calculateDeliveryFee(String address, String city, double? latitude, double? longitude) async {
     if (address.isEmpty) return;
     
+    _isCalculatingFee = true;
+    notifyListeners();
+
     final result = await ApiService.calculateDeliveryFee(
       address: address,
       city: city,
@@ -99,6 +118,7 @@ class CartProvider with ChangeNotifier {
       longitude: longitude,
     );
 
+    _isCalculatingFee = false;
     if (result['success'] == true) {
       _customDeliveryFee = (result['fee'] as num).toDouble();
       _distanceKm = result['distance_km'] != null ? (result['distance_km'] as num).toDouble() : null;
@@ -115,6 +135,7 @@ class CartProvider with ChangeNotifier {
     _customDeliveryFee = 0.0;
     _distanceKm = null;
     _distanceError = '';
+    _isCalculatingFee = false;
     notifyListeners();
   }
 
@@ -124,11 +145,24 @@ class CartProvider with ChangeNotifier {
   double? _userLatitude;
   double? _userLongitude;
 
+  // "Order for someone else" delivery override
+  bool _isForSomeoneElse = false;
+  String? _deliveryAddress;
+  String? _deliveryCity;
+  double? _deliveryLatitude;
+  double? _deliveryLongitude;
+
   String? get userEmail => _userEmail;
   String? get userAddress => _userAddress;
   String? get userCity => _userCity;
   double? get userLatitude => _userLatitude;
   double? get userLongitude => _userLongitude;
+
+  bool get isForSomeoneElse => _isForSomeoneElse;
+  String? get deliveryAddress => _isForSomeoneElse ? _deliveryAddress : _userAddress;
+  String? get deliveryCity => _isForSomeoneElse ? _deliveryCity : _userCity;
+  double? get deliveryLatitude => _isForSomeoneElse ? _deliveryLatitude : _userLatitude;
+  double? get deliveryLongitude => _isForSomeoneElse ? _deliveryLongitude : _userLongitude;
 
   Future<void> saveProfile({
     required String name,
@@ -170,8 +204,8 @@ class CartProvider with ChangeNotifier {
     }
 
     if (isSimulatorMock) {
-      final overrideAddress = "Ranjit Avenue, Block B";
-      final overrideCity = "Amritsar";
+      final overrideAddress = "GIFT City, Gandhinagar";
+      final overrideCity = "Gandhinagar";
       _userAddress = overrideAddress;
       _userCity = overrideCity;
       await prefs.setString('user_address', overrideAddress);
@@ -191,7 +225,7 @@ class CartProvider with ChangeNotifier {
           
           final road = addr['road'] ?? addr['suburb'] ?? addr['neighbourhood'] ?? addr['village'] ?? addr['subdistrict'];
           final residential = addr['residential'] ?? addr['apartment'] ?? addr['hotel'] ?? addr['amenity'];
-          final city = addr['city'] ?? addr['town'] ?? addr['county'] ?? 'Amritsar';
+          final city = addr['city'] ?? addr['town'] ?? addr['county'] ?? 'Gandhinagar';
           
           String areaName = '';
           if (residential != null) {
@@ -233,8 +267,40 @@ class CartProvider with ChangeNotifier {
       phone: phone,
       email: _userEmail ?? '',
       address: _userAddress ?? '',
-      city: _userCity ?? 'Amritsar',
+      city: _userCity ?? 'Gandhinagar',
     );
+  }
+
+  Future<void> setDeliveryForSomeoneElse({
+    required String address,
+    required String city,
+    required double latitude,
+    required double longitude,
+  }) async {
+    _isForSomeoneElse = true;
+    _deliveryAddress = address;
+    _deliveryCity = city;
+    _deliveryLatitude = latitude;
+    _deliveryLongitude = longitude;
+    await calculateDeliveryFee(address, city, latitude, longitude);
+    notifyListeners();
+  }
+
+  void clearSomeoneElseDelivery() {
+    _isForSomeoneElse = false;
+    _deliveryAddress = null;
+    _deliveryCity = null;
+    _deliveryLatitude = null;
+    _deliveryLongitude = null;
+    notifyListeners();
+  }
+
+  void setManualAddress({required String address, required String city}) {
+    _isForSomeoneElse = false;
+    _userAddress = address;
+    _userCity = city;
+    _recalculateFeeIfNeeded();
+    notifyListeners();
   }
 
   Future<void> logoutUser() async {
@@ -281,6 +347,7 @@ class CartProvider with ChangeNotifier {
         debugPrint("Failed to load cart items from preferences: $e");
       }
     }
+    _recalculateFeeIfNeeded();
     notifyListeners();
   }
 

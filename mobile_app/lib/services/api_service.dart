@@ -6,7 +6,7 @@ import '../models/order.dart';
 
 class ApiService {
   static String get baseUrl {
-    return 'https://orange-eyes-trade.loca.lt/api';
+    return 'https://backend.swaadepunjab.com/api';
   }
 
   static Map<String, String> get _headers => {

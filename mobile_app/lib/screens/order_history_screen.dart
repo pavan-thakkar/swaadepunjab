@@ -127,8 +127,10 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           children: [
             const SizedBox(height: 8),
             Text(
-              'Subtotal: ₹${order.subtotal.toStringAsFixed(0)} • Total: ₹${order.grandTotal.toStringAsFixed(0)}',
-              style: const TextStyle(color: Color(0xFF7A6040), fontSize: 13),
+              order.deliveryFee > 0
+                  ? 'Subtotal: ₹${order.subtotal.toStringAsFixed(0)} • Delivery: ₹${order.deliveryFee.toStringAsFixed(0)} • Total: ₹${order.grandTotal.toStringAsFixed(0)}'
+                  : 'Subtotal: ₹${order.subtotal.toStringAsFixed(0)} • Delivery: FREE • Total: ₹${order.grandTotal.toStringAsFixed(0)}',
+              style: const TextStyle(color: Color(0xFF7A6040), fontSize: 12),
             ),
             const SizedBox(height: 4),
             Text(

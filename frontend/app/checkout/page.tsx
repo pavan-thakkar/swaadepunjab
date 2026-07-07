@@ -25,9 +25,13 @@ export default function CheckoutPage() {
     customer_email: '',
     customer_phone: '',
     delivery_address: '',
-    city: '',
+    city: 'Amritsar',
+    state: 'Punjab',
+    pincode: '',
     apartment_no: '',
     apartment_name: '',
+    address_type: 'Home' as 'Home' | 'Office',
+    is_default: true,
     special_instructions: '',
     table_number: '',
     pickup_time: '',
@@ -100,6 +104,40 @@ export default function CheckoutPage() {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showMapSearch, setShowMapSearch] = useState(false);
+  const [modalScreen, setModalScreen] = useState<'form' | 'map_picker' | 'search_location'>('form');
+
+  useEffect(() => {
+    if (modalScreen !== 'search_location') return;
+    if (!searchQuery || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=12&q=${encodeURIComponent(searchQuery)}&addressdetails=1&countrycodes=in`
+        );
+        const data = await res.json();
+        setSearchResults(data || []);
+      } catch (e) {
+        console.error("Search error:", e);
+      } finally {
+        setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchQuery, modalScreen]);
+
+  useEffect(() => {
+    if (orderType === 'delivery' && !form.delivery_address) {
+      setShowAddressModal(true);
+      setModalScreen('form');
+    }
+  }, [orderType]);
+
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -170,11 +208,17 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (data && data.address) {
         const addr = data.display_name || '';
-        const city = data.address.city || data.address.town || data.address.village || data.address.suburb || '';
+        const city = data.address.city || data.address.town || data.address.village || data.address.state_district || '';
+        const pincode = data.address.postcode || '';
+        const state = data.address.state || 'Punjab';
+        const locality = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || '';
         setForm(prev => ({
           ...prev,
           delivery_address: addr,
-          city: city,
+          city: city || prev.city || 'Amritsar',
+          pincode: pincode || prev.pincode,
+          state: state || prev.state || 'Punjab',
+          apartment_name: locality || prev.apartment_name,
         }));
       }
     } catch (e) {
@@ -186,61 +230,61 @@ export default function CheckoutPage() {
     if (typeof window === 'undefined' || !(window as any).L) return;
     const L = (window as any).L;
 
-    // Custom marker icon logic to prevent icon image loading issues in Next.js
+    if (mapRef.current) {
+      try {
+        mapRef.current.remove();
+      } catch (e) {}
+      mapRef.current = null;
+      markerRef.current = null;
+    }
+
     const customIcon = L.icon({
       iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
       shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      iconSize: [25, 41],
-      iconAnchor: [12, 41],
+      iconSize: [28, 46],
+      iconAnchor: [14, 46],
       popupAnchor: [1, -34],
-      shadowSize: [41, 41]
+      shadowSize: [46, 46]
     });
 
-    if (!mapRef.current) {
-      const mapContainer = document.getElementById('map-picker');
+    if (showAddressModal && modalScreen === 'form') {
+      const mapContainer = document.getElementById('mini-map-preview');
       if (!mapContainer) return;
-
-      const map = L.map('map-picker', { zoomControl: false }).setView([lat, lng], 13);
+      const map = L.map('mini-map-preview', { zoomControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false }).setView([lat, lng], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
-
+      L.marker([lat, lng], { icon: customIcon }).addTo(map);
+      mapRef.current = map;
+    } else if (showAddressModal && modalScreen === 'map_picker') {
+      const mapContainer = document.getElementById('full-map-picker');
+      if (!mapContainer) return;
+      const map = L.map('full-map-picker', { zoomControl: false }).setView([lat, lng], 16);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      const marker = L.marker([lat, lng], { draggable: true, icon: customIcon }).addTo(map);
-
-      marker.on('dragend', async () => {
-        const position = marker.getLatLng();
-        setCoordinates({ lat: position.lat, lng: position.lng });
-        await reverseGeocode(position.lat, position.lng);
-      });
-
-      map.on('click', async (e: any) => {
-        const { lat: clickLat, lng: clickLng } = e.latlng;
-        marker.setLatLng([clickLat, clickLng]);
-        setCoordinates({ lat: clickLat, lng: clickLng });
-        await reverseGeocode(clickLat, clickLng);
+      map.on('moveend', async () => {
+        const center = map.getCenter();
+        setCoordinates({ lat: center.lat, lng: center.lng });
+        await reverseGeocode(center.lat, center.lng);
       });
 
       mapRef.current = map;
-      markerRef.current = marker;
-    } else {
-      mapRef.current.setView([lat, lng], 13);
-      markerRef.current.setLatLng([lat, lng]);
     }
   };
 
   useEffect(() => {
-    if (mapLoaded) {
-      const defaultLat = 23.0225; // Ahmedabad Lat
-      const defaultLng = 72.5714; // Ahmedabad Lng
-      setCoordinates({ lat: defaultLat, lng: defaultLng });
+    if (mapLoaded && showAddressModal && (modalScreen === 'form' || modalScreen === 'map_picker')) {
+      const defaultLat = coordinates ? coordinates.lat : 23.0225; // Default Ahmedabad/Vastral Lat
+      const defaultLng = coordinates ? coordinates.lng : 72.5714; // Default Lng
       const timer = setTimeout(() => {
         initMap(defaultLat, defaultLng);
-      }, 100);
+      }, 150);
       return () => clearTimeout(timer);
     }
-  }, [mapLoaded]);
+  }, [mapLoaded, showAddressModal, modalScreen]);
 
   // Pre-fill user contact info if logged in
   useEffect(() => {
@@ -274,7 +318,10 @@ export default function CheckoutPage() {
 
   const handleSelectResult = (result: any) => {
     const addr = result.display_name || '';
-    const city = result.address.city || result.address.town || result.address.village || result.address.suburb || result.address.state || '';
+    const city = result.address?.city || result.address?.town || result.address?.village || result.address?.suburb || result.address?.state || '';
+    const pincode = result.address?.postcode || '';
+    const state = result.address?.state || 'Punjab';
+    const locality = result.address?.suburb || result.address?.neighbourhood || result.address?.residential || result.address?.road || '';
     const lat = parseFloat(result.lat);
     const lon = parseFloat(result.lon);
 
@@ -289,11 +336,15 @@ export default function CheckoutPage() {
     setForm(prev => ({
       ...prev,
       delivery_address: addr,
-      city: city,
+      city: city || prev.city || 'Amritsar',
+      pincode: pincode || prev.pincode,
+      state: state || prev.state || 'Punjab',
+      apartment_name: locality || prev.apartment_name,
     }));
     setShowSearch(false);
     setSearchResults([]);
     setSearchQuery('');
+    setModalScreen('map_picker');
   };
 
   const handleDetectLocation = () => {
@@ -303,6 +354,7 @@ export default function CheckoutPage() {
     }
 
     setLocating(true);
+    setModalScreen('map_picker');
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
@@ -322,11 +374,17 @@ export default function CheckoutPage() {
           const data = await res.json();
           if (data && data.address) {
             const addr = data.display_name || '';
-            const city = data.address.city || data.address.town || data.address.village || data.address.suburb || '';
+            const city = data.address.city || data.address.town || data.address.village || data.address.state_district || '';
+            const pincode = data.address.postcode || '';
+            const state = data.address.state || 'Punjab';
+            const locality = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || '';
             setForm(prev => ({
               ...prev,
               delivery_address: addr,
-              city: city,
+              city: city || prev.city || 'Amritsar',
+              pincode: pincode || prev.pincode,
+              state: state || prev.state || 'Punjab',
+              apartment_name: locality || prev.apartment_name,
             }));
           } else {
             alert("Location mil gayi, par address read nahi ho paya. Kripya manually fill karein.");
@@ -543,129 +601,97 @@ export default function CheckoutPage() {
 
             {orderType === 'delivery' && (
               <div className="checkout-section">
-                <h3 style={{ margin: '0 0 1.2rem 0', paddingBottom: '10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '8px' }}>📍 Delivery Address</h3>
-                
-                {/* Location Buttons Group */}
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem' }}>
-                  <button 
-                    type="button" 
-                    onClick={handleDetectLocation}
-                    disabled={locating}
-                    className="btn-secondary" 
-                    style={{ flex: 1, fontSize: '0.82rem', padding: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', borderRadius: 'var(--radius-sm)' }}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                  <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', border: 'none', padding: 0 }}>📍 Delivery Address</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddressModal(true)}
+                    style={{
+                      background: 'rgba(244, 63, 94, 0.1)',
+                      color: '#F43F5E',
+                      border: '1px solid rgba(244, 63, 94, 0.3)',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
                   >
-                    🎯 {locating ? '⏳ GPS locating...' : 'Use My Current GPS Location'}
+                    {form.delivery_address ? '✎ Change Address' : '+ Add New Address'}
                   </button>
                 </div>
 
-                {/* Map Picker with Inline Search */}
-                <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '6px', color: 'var(--text-muted)' }}>
-                    🗺️ Pin Delivery Location (Search landmark or drag marker)
-                  </div>
-                  <div style={{ position: 'relative', height: '300px', width: '100%' }}>
-                    
-                    {/* Floating Search Bar Inside Map */}
-                    {mapLoaded && (
-                      <div style={{ position: 'absolute', top: '12px', left: '12px', right: '12px', zIndex: 1000 }}>
-                        <div style={{ display: 'flex', gap: '6px', background: '#fff', padding: '6px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--border)', boxShadow: '0 4px 12px rgba(100,60,0,0.12)' }}>
-                          <input 
-                            type="text" 
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="🔍 Search Landmark, Building or Area..."
-                            style={{ flex: 1, border: 'none', outline: 'none', padding: '6px 10px', fontSize: '0.82rem', background: 'transparent' }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleSearchAddress();
-                              }
-                            }}
-                          />
-                          <button 
-                            type="button"
-                            onClick={handleSearchAddress}
-                            disabled={searching}
-                            className="btn-primary"
-                            style={{ padding: '6px 14px', fontSize: '0.78rem', borderRadius: '6px', cursor: 'pointer' }}
-                          >
-                            {searching ? '⏳' : 'Search'}
-                          </button>
-                        </div>
-
-                        {searchResults.length > 0 && (
-                          <div style={{ position: 'absolute', top: '105%', left: 0, right: 0, background: '#fff', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', boxShadow: 'var(--shadow)', zIndex: 1001, maxHeight: '180px', overflowY: 'auto' }}>
-                            {searchResults.map((result: any, idx: number) => (
-                              <div 
-                                key={idx} 
-                                onClick={() => handleSelectResult(result)} 
-                                className="search-result-item"
-                                style={{ padding: '10px 12px', borderBottom: idx < searchResults.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', transition: 'var(--transition)' }}
-                              >
-                                <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: 'var(--text)' }}>{result.display_name.split(',')[0]}</div>
-                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.display_name}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div 
-                      id="map-picker" 
-                      style={{ 
-                        height: '100%', 
-                        width: '100%', 
-                        borderRadius: 'var(--radius-sm)', 
-                        border: '1.5px solid var(--border)',
-                        boxShadow: 'inset 0 2px 4px rgba(100,60,0,0.06)'
-                      }} 
-                    />
-                    {!mapLoaded && (
-                      <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'var(--bg-elevated)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1.5px solid var(--border)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-dim)',
-                        fontSize: '0.9rem',
-                        zIndex: 10
+                {form.delivery_address ? (
+                  <div style={{
+                    padding: '16px',
+                    background: '#F8FAFC',
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px',
+                    position: 'relative'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{
+                        background: '#F43F5E',
+                        color: '#fff',
+                        fontSize: '0.72rem',
+                        fontWeight: 800,
+                        padding: '3px 10px',
+                        borderRadius: '6px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
                       }}>
-                        ⏳ Loading map...
-                      </div>
-                    )}
-                  </div>
-                  {coordinates && (
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Lat: {coordinates.lat.toFixed(6)}</span>
-                      <span>Lng: {coordinates.lng.toFixed(6)}</span>
+                        {form.address_type || 'Home'}
+                      </span>
+                      <strong style={{ fontSize: '0.96rem', color: '#1E293B' }}>{form.customer_name || 'Customer'}</strong>
+                      <span style={{ color: '#64748B', fontSize: '0.85rem' }}>({form.customer_phone})</span>
+                      {form.is_default && (
+                        <span style={{ fontSize: '0.75rem', background: '#E2E8F0', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>Default</span>
+                      )}
                     </div>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Flat / House / Apartment No.</label>
-                  <input name="apartment_no" className="form-input" placeholder="e.g. Flat 102, 1st Floor" required={orderType === 'delivery'} value={form.apartment_no} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Building / Apartment / Landmark Name</label>
-                  <input name="apartment_name" className="form-input" placeholder="e.g. Shanti Heights, near Temple" required={orderType === 'delivery'} value={form.apartment_name} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Street Address / Area</label>
-                  <input name="delivery_address" className="form-input" placeholder="e.g. SP Ring Road, Vastral" required={orderType === 'delivery'} value={form.delivery_address} onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">City</label>
-                  <input name="city" className="form-input" placeholder="e.g. Ahmedabad" required={orderType === 'delivery'} value={form.city} onChange={handleChange} />
-                </div>
+                    <div style={{ fontSize: '0.9rem', color: '#334155', lineHeight: 1.5, marginBottom: '6px' }}>
+                      {[
+                        form.apartment_no,
+                        form.apartment_name,
+                        form.delivery_address,
+                        form.city,
+                        form.state,
+                        form.pincode ? `- ${form.pincode}` : ''
+                      ].filter(Boolean).join(', ')}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem' }}>
+                      {coordinates ? (
+                        <span style={{ color: '#10B981', fontWeight: 600 }}>✓ GPS Location Pinned</span>
+                      ) : (
+                        <span style={{ color: '#64748B', fontStyle: 'italic' }}>ℹ️ Standard doorstep delivery (No mandatory GPS required)</span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div 
+                    onClick={() => setShowAddressModal(true)}
+                    style={{
+                      padding: '28px 20px',
+                      border: '2px dashed #CBD5E1',
+                      borderRadius: '12px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: '#F8FAFC',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ fontSize: '2.4rem' }}>📍</div>
+                    <div style={{ fontWeight: 700, color: '#1E293B', fontSize: '1.05rem' }}>Add New Delivery Address</div>
+                    <div style={{ fontSize: '0.85rem', color: '#64748B' }}>Click here to enter your address (Current location setting is optional)</div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1016,6 +1042,725 @@ export default function CheckoutPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ADD NEW ADDRESS MODAL OVERLAY - 3 SCREEN MATCHING SCREENSHOT DESIGN EXACTLY */}
+      {showAddressModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 100000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          {/* SCREEN 1: ADD NEW ADDRESS FORM (IMAGE 1) */}
+          {modalScreen === 'form' && (
+            <div style={{
+              background: '#F8FAFC',
+              width: '100%',
+              maxWidth: '520px',
+              borderRadius: '20px',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              maxHeight: '90vh'
+            }}>
+              {/* Modal Header */}
+              <div style={{
+                background: '#fff',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                borderBottom: '1px solid #E2E8F0',
+                position: 'sticky',
+                top: 0,
+                zIndex: 10
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddressModal(false)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '1.4rem',
+                    color: '#1E293B',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontWeight: 700
+                  }}
+                >
+                  ←
+                </button>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#1E293B', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                  ADD NEW ADDRESS
+                </h2>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ padding: '20px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+                
+                {/* Contact Details Card */}
+                <div style={{ background: '#fff', borderRadius: '16px', padding: '18px', border: '1px solid #E2E8F0', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1E293B', marginBottom: '14px' }}>
+                    Contact Details
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>Name*</label>
+                    <input
+                      type="text"
+                      name="customer_name"
+                      value={form.customer_name}
+                      onChange={handleChange}
+                      placeholder="Enter full name"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>Mobile No*</label>
+                    <input
+                      type="text"
+                      name="customer_phone"
+                      value={form.customer_phone}
+                      onChange={handleChange}
+                      placeholder="Enter 10-digit mobile number"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Address Card */}
+                <div style={{ background: '#fff', borderRadius: '16px', padding: '18px', border: '1px solid #E2E8F0', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1E293B', marginBottom: '12px' }}>
+                    Address
+                  </div>
+
+                  {/* Map Preview Box (Image 1 Style) */}
+                  <div style={{
+                    position: 'relative',
+                    height: '160px',
+                    width: '100%',
+                    borderRadius: '14px',
+                    overflow: 'hidden',
+                    border: '1.5px solid #E2E8F0',
+                    marginBottom: '16px',
+                    background: '#F1F5F9'
+                  }}>
+                    <div id="mini-map-preview" style={{ width: '100%', height: '100%' }} />
+                    <button
+                      type="button"
+                      onClick={() => setModalScreen('map_picker')}
+                      style={{
+                        position: 'absolute',
+                        bottom: '12px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: '#fff',
+                        color: '#F43F5E',
+                        border: '1.5px solid #F43F5E',
+                        padding: '8px 18px',
+                        borderRadius: '30px',
+                        fontSize: '0.88rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        zIndex: 1000
+                      }}
+                    >
+                      <span style={{ fontSize: '1.1rem' }}>🗺️</span> Edit on map
+                    </button>
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>Pin Code*</label>
+                    <input
+                      type="text"
+                      name="pincode"
+                      value={form.pincode || ''}
+                      onChange={handleChange}
+                      placeholder="e.g. 382418"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>House Number/Tower/Block*</label>
+                    <input
+                      type="text"
+                      name="apartment_no"
+                      value={form.apartment_no}
+                      onChange={handleChange}
+                      placeholder="e.g. Flat 402, Block A / House 12"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ color: '#D97706', fontSize: '0.76rem', marginTop: '5px', fontWeight: 600, letterSpacing: '0.2px' }}>
+                      *House Number will allow a doorstep delivery
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>Address (locality,building,street)*</label>
+                    <input
+                      type="text"
+                      name="delivery_address"
+                      value={form.delivery_address}
+                      onChange={handleChange}
+                      placeholder="e.g. Vastral Road, Pranami Nagar"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                    <div style={{ color: '#D97706', fontSize: '0.76rem', marginTop: '5px', fontWeight: 600, letterSpacing: '0.2px' }}>
+                      *Please update society/apartment details
+                    </div>
+                  </div>
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>Locality / Town*</label>
+                    <input
+                      type="text"
+                      name="apartment_name"
+                      value={form.apartment_name}
+                      onChange={handleChange}
+                      placeholder="e.g. Vastral / Ranjit Avenue"
+                      style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>City / District*</label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={form.city}
+                        onChange={handleChange}
+                        placeholder="Ahmedabad"
+                        style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#64748B', marginBottom: '6px' }}>State*</label>
+                      <input
+                        type="text"
+                        name="state"
+                        value={form.state || ''}
+                        onChange={handleChange}
+                        placeholder="Gujarat"
+                        style={{ width: '100%', padding: '12px 14px', border: '1.5px solid #CBD5E1', borderRadius: '10px', fontSize: '0.92rem', color: '#1E293B', outline: 'none', background: '#fff', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address Type Card */}
+                <div style={{ background: '#fff', borderRadius: '16px', padding: '18px', border: '1px solid #E2E8F0', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1E293B', marginBottom: '14px' }}>
+                    Address Type
+                  </div>
+                  <div style={{ display: 'flex', gap: '28px', marginBottom: '18px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, color: '#334155' }}>
+                      <input
+                        type="radio"
+                        name="address_type"
+                        value="Home"
+                        checked={form.address_type === 'Home' || !form.address_type}
+                        onChange={() => setForm(prev => ({ ...prev, address_type: 'Home' as 'Home' | 'Office' }))}
+                        style={{ accentColor: '#F43F5E', width: '20px', height: '20px', cursor: 'pointer' }}
+                      />
+                      Home
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600, color: '#334155' }}>
+                      <input
+                        type="radio"
+                        name="address_type"
+                        value="Office"
+                        checked={form.address_type === 'Office'}
+                        onChange={() => setForm(prev => ({ ...prev, address_type: 'Office' as 'Home' | 'Office' }))}
+                        style={{ accentColor: '#F43F5E', width: '20px', height: '20px', cursor: 'pointer' }}
+                      />
+                      Office
+                    </label>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: '#475569', fontWeight: 500 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.is_default !== false}
+                      onChange={(e) => setForm(prev => ({ ...prev, is_default: e.target.checked }))}
+                      style={{ accentColor: '#F43F5E', width: '18px', height: '18px', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                    Make this as my default address
+                  </label>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{
+                background: '#fff',
+                padding: '16px 20px',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                gap: '12px',
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 10
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddressModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    background: '#fff',
+                    border: '1.5px solid #CBD5E1',
+                    borderRadius: '12px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    color: '#334155',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!form.delivery_address || !form.apartment_no || !form.city) {
+                      alert('Please fill the required address fields (*)');
+                      return;
+                    }
+                    setShowAddressModal(false);
+                    const fullAddress = [
+                      form.apartment_no ? `Apt/Flat: ${form.apartment_no}` : '',
+                      form.apartment_name ? `Locality: ${form.apartment_name}` : '',
+                      form.delivery_address,
+                      form.pincode ? `PIN: ${form.pincode}` : '',
+                      form.state ? `State: ${form.state}` : ''
+                    ].filter(Boolean).join(', ');
+                    updateDeliveryDistanceAndFee(fullAddress, form.city);
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '14px',
+                    background: '#F43F5E',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(244,63,94,0.35)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SCREEN 2: MAP PICKER (IMAGE 2) */}
+          {modalScreen === 'map_picker' && (
+            <div style={{
+              background: '#F8FAFC',
+              width: '100%',
+              maxWidth: '560px',
+              height: '85vh',
+              maxHeight: '750px',
+              borderRadius: '24px',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
+            }}>
+              {/* Top Floating Search Bar over Map */}
+              <div style={{
+                position: 'absolute',
+                top: '16px',
+                left: '16px',
+                right: '16px',
+                zIndex: 1000,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setModalScreen('form')}
+                  style={{
+                    background: '#fff',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '44px',
+                    height: '44px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1.3rem',
+                    color: '#1E293B',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    fontWeight: 700
+                  }}
+                >
+                  ←
+                </button>
+                <div
+                  onClick={() => setModalScreen('search_location')}
+                  style={{
+                    flex: 1,
+                    background: '#fff',
+                    borderRadius: '30px',
+                    padding: '12px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+                    cursor: 'pointer',
+                    color: '#64748B',
+                    fontSize: '0.92rem'
+                  }}
+                >
+                  <span style={{ fontSize: '1.1rem' }}>🔍</span>
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {searchQuery || 'Search for building, street or area'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Map Container */}
+              <div style={{ flex: 1, position: 'relative', width: '100%' }}>
+                <div id="full-map-picker" style={{ width: '100%', height: '100%' }} />
+
+                {/* Fixed Center Tooltip & Marker Overlay (Exact Image 2 Style) */}
+                <div style={{
+                  position: 'absolute',
+                  top: '48%',
+                  left: '50%',
+                  transform: 'translate(-50%, -100%)',
+                  zIndex: 800,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  pointerEvents: 'none'
+                }}>
+                  <div style={{
+                    background: '#0F172A',
+                    color: '#fff',
+                    padding: '10px 16px',
+                    borderRadius: '12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
+                    textAlign: 'center',
+                    marginBottom: '4px',
+                    maxWidth: '220px',
+                    lineHeight: 1.3
+                  }}>
+                    Order will be delivered here, Move the pin to change location
+                  </div>
+                  <div style={{
+                    width: '0',
+                    height: '0',
+                    borderLeft: '7px solid transparent',
+                    borderRight: '7px solid transparent',
+                    borderTop: '7px solid #0F172A',
+                    marginTop: '-4px',
+                    marginBottom: '2px'
+                  }} />
+                  <div style={{ fontSize: '2.6rem', filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))', marginTop: '-4px' }}>
+                    📍
+                  </div>
+                </div>
+
+                {/* Floating Current Location Pill Button at bottom of Map */}
+                <button
+                  type="button"
+                  onClick={handleDetectLocation}
+                  style={{
+                    position: 'absolute',
+                    bottom: '16px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: '#fff',
+                    color: '#F43F5E',
+                    border: 'none',
+                    padding: '10px 22px',
+                    borderRadius: '30px',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    zIndex: 900,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <span style={{ fontSize: '1.2rem' }}>🎯</span>
+                  <span>{locating ? 'Detecting...' : 'Use my current Location'}</span>
+                </button>
+              </div>
+
+              {/* Bottom Sheet Card: Deliver To (Image 2 Style) */}
+              <div style={{
+                background: '#fff',
+                borderTopLeftRadius: '24px',
+                borderTopRightRadius: '24px',
+                padding: '20px',
+                boxShadow: '0 -4px 25px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                position: 'relative'
+              }}>
+                <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1E293B', marginBottom: '12px', textAlign: 'left' }}>
+                  Deliver To
+                </div>
+                <div style={{
+                  background: '#F8FAFC',
+                  border: '1.5px solid #E2E8F0',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  marginBottom: '16px',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <span style={{ fontSize: '1.3rem', marginTop: '2px' }}>📍</span>
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#1E293B', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {form.delivery_address ? form.delivery_address.split(',')[0] : (locating ? 'Detecting location...' : 'Selected Location')}
+                      </div>
+                      <div style={{ fontSize: '0.84rem', color: '#64748B', lineHeight: 1.4 }}>
+                        {[form.apartment_name, form.delivery_address, form.city, form.state, form.pincode].filter(Boolean).join(', ') || 'Move pin on map or search to select address'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalScreen('form');
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: '#F43F5E',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '14px',
+                    fontSize: '1.02rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(244,63,94,0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <span>Confirm & Proceed</span>
+                  <span>&gt;</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SCREEN 3: SEARCH LOCATION (IMAGE 3) */}
+          {modalScreen === 'search_location' && (
+            <div style={{
+              background: '#fff',
+              width: '100%',
+              maxWidth: '560px',
+              height: '85vh',
+              maxHeight: '750px',
+              borderRadius: '24px',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative'
+            }}>
+              {/* Header */}
+              <div style={{
+                background: '#fff',
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '14px',
+                borderBottom: '1px solid #F1F5F9'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setModalScreen('map_picker')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '1.4rem',
+                    color: '#1E293B',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                    padding: 0
+                  }}
+                >
+                  ←
+                </button>
+                <h2 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, color: '#1E293B' }}>
+                  Select Delivery Address
+                </h2>
+              </div>
+
+              {/* Amber Important Banner */}
+              <div style={{
+                background: '#FFFBEB',
+                padding: '12px 18px',
+                display: 'flex',
+                gap: '10px',
+                alignItems: 'flex-start',
+                borderBottom: '1px solid #FEF3C7',
+                color: '#B45309',
+                fontSize: '0.82rem',
+                lineHeight: 1.4,
+                fontWeight: 500,
+                textAlign: 'left'
+              }}>
+                <span style={{ fontSize: '1.1rem' }}>ℹ️</span>
+                <span><strong>Important:</strong> Use your current location or manually search on the map to guide delivery partners.</span>
+              </div>
+
+              {/* Search Bar Input */}
+              <div style={{ padding: '14px 18px', borderBottom: '1px solid #F1F5F9', position: 'relative' }}>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: '14px', color: '#64748B', fontSize: '1.1rem' }}>🔍</span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search for building, street or area"
+                    autoFocus
+                    style={{
+                      width: '100%',
+                      padding: '12px 38px 12px 42px',
+                      border: '1.5px solid #CBD5E1',
+                      borderRadius: '12px',
+                      fontSize: '0.94rem',
+                      color: '#1E293B',
+                      outline: 'none',
+                      background: '#fff',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSearchResults([]);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '12px',
+                        background: '#94A3B8',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '22px',
+                        height: '22px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Current Location Row */}
+              <div
+                onClick={handleDetectLocation}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '14px 20px',
+                  borderBottom: '1px solid #F1F5F9',
+                  cursor: 'pointer',
+                  color: '#F43F5E',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  transition: 'background 0.2s',
+                  textAlign: 'left'
+                }}
+              >
+                <span style={{ fontSize: '1.3rem' }}>🎯</span>
+                <span>Use my current Location</span>
+              </div>
+
+              {/* Live Search Results List */}
+              <div style={{ flex: 1, overflowY: 'auto', textAlign: 'left' }}>
+                {searching && (
+                  <div style={{ padding: '30px', textAlign: 'center', color: '#64748B', fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                    <span>⏳ Searching locations across India...</span>
+                  </div>
+                )}
+                {!searching && searchResults.length === 0 && searchQuery && (
+                  <div style={{ padding: '30px', textAlign: 'center', color: '#64748B', fontSize: '0.9rem' }}>
+                    No locations found for "{searchQuery}". Try searching city, area, or landmark name.
+                  </div>
+                )}
+                {searchResults.map((result: any, idx: number) => {
+                  const mainName = result.name || result.display_name.split(',')[0];
+                  const subName = result.display_name;
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectResult(result)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '16px 20px',
+                        borderBottom: '1px solid #F1F5F9',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', flex: 1, overflow: 'hidden' }}>
+                        <span style={{ fontSize: '1.2rem', color: '#64748B', marginTop: '2px' }}>📍</span>
+                        <div style={{ flex: 1, overflow: 'hidden' }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#1E293B', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {mainName}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {subName}
+                          </div>
+                        </div>
+                      </div>
+                      <span style={{ color: '#94A3B8', fontSize: '1.2rem', marginLeft: '12px', fontWeight: 600 }}>↗</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

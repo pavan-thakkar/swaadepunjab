@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:geolocator/geolocator.dart';
 import '../providers/cart_provider.dart';
 import '../services/api_service.dart';
 import 'order_tracking_screen.dart';
+import 'location_picker_screen.dart';
 import '../models/order.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -21,20 +21,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _customerEmail = '';
   String _customerPhone = '';
   String _deliveryAddress = '';
-  String _city = 'Amritsar';
+  String _city = 'Gandhinagar';
   String _apartmentNo = '';
   String _apartmentName = '';
   String _specialInstructions = '';
   String _pickupTime = '';
 
-  String _orderType = 'delivery'; // delivery, dine_in, takeaway
-  String _paymentMethod = 'cash_on_delivery'; // cash_on_delivery, card, razorpay
+  String _orderType = 'delivery';
+  String _paymentMethod = 'cash_on_delivery';
   bool _isPlacing = false;
   String _errorMessage = '';
 
-  double? _latitude;
-  double? _longitude;
-  bool _fetchingLocation = false;
+  // location mode: 'my_location' or 'someone_else'
+  String _locationMode = 'my_location';
+
+  // Controllers for address fields so we can programmatically set them
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _cityController = TextEditingController();
 
   @override
   void initState() {
@@ -43,68 +46,72 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _customerPhone = cart.userPhone ?? '';
     _customerName = cart.userName ?? '';
     _customerEmail = cart.userEmail ?? '';
-    _deliveryAddress = cart.userAddress ?? '';
-    _city = cart.userCity ?? 'Amritsar';
-    _latitude = cart.userLatitude;
-    _longitude = cart.userLongitude;
+
+    // If someone else mode was set from location picker, honour it
+    if (cart.isForSomeoneElse) {
+      _locationMode = 'someone_else';
+      _deliveryAddress = cart.deliveryAddress ?? '';
+      _city = cart.deliveryCity ?? 'Gandhinagar';
+    } else {
+      _locationMode = 'my_location';
+      _deliveryAddress = cart.userAddress ?? '';
+      _city = cart.userCity ?? 'Gandhinagar';
+    }
+
+    _addressController.text = _deliveryAddress;
+    _cityController.text = _city;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_deliveryAddress.isNotEmpty) {
-        _triggerFeeCalculation();
-      }
+      _triggerFeeCalculation();
     });
   }
 
-  Future<void> _fetchGPSCoordinates() async {
-    setState(() => _fetchingLocation = true);
-    try {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
+  @override
+  void dispose() {
+    _addressController.dispose();
+    _cityController.dispose();
+    super.dispose();
+  }
 
-      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-        Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-        setState(() {
-          _latitude = position.latitude;
-          _longitude = position.longitude;
-          _fetchingLocation = false;
-        });
-
-        // Trigger dynamic distance and fee lookup
-        _triggerFeeCalculation();
+  void _switchLocationMode(String mode) {
+    final cart = context.read<CartProvider>();
+    setState(() {
+      _locationMode = mode;
+      if (mode == 'my_location') {
+        _deliveryAddress = cart.userAddress ?? '';
+        _city = cart.userCity ?? 'Gandhinagar';
+        cart.clearSomeoneElseDelivery();
       } else {
-        setState(() {
-          _errorMessage = 'Location permission denied. Using address matching.';
-          _fetchingLocation = false;
-        });
+        _deliveryAddress = cart.deliveryAddress ?? cart.userAddress ?? '';
+        _city = cart.deliveryCity ?? cart.userCity ?? 'Gandhinagar';
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to fetch GPS coordinates. Using address matching.';
-        _fetchingLocation = false;
-      });
-    }
+      _addressController.text = _deliveryAddress;
+      _cityController.text = _city;
+    });
+    _triggerFeeCalculation();
   }
 
   void _triggerFeeCalculation() {
     if (_orderType != 'delivery' || _deliveryAddress.isEmpty) return;
+    final cart = context.read<CartProvider>();
+
+    double? lat;
+    double? lng;
+    if (_locationMode == 'my_location') {
+      lat = cart.userLatitude;
+      lng = cart.userLongitude;
+    } else {
+      lat = cart.deliveryLatitude;
+      lng = cart.deliveryLongitude;
+    }
 
     final fullAddress = [
       if (_apartmentNo.isNotEmpty) 'Apt/Flat: $_apartmentNo',
-      if (_apartmentName.isNotEmpty) 'Building/Landmark: $_apartmentName',
-      _deliveryAddress
+      if (_apartmentName.isNotEmpty) 'Building: $_apartmentName',
+      _deliveryAddress,
     ].join(', ');
 
-    // Call Provider to fetch calculated distance and fee dynamically in background
-    context.read<CartProvider>().calculateDeliveryFee(
-          fullAddress,
-          _city,
-          _latitude,
-          _longitude,
-        );
+    cart.calculateDeliveryFee(fullAddress, _city, lat, lng);
   }
 
   Future<void> _submitOrder(CartProvider cart) async {
@@ -116,11 +123,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _errorMessage = '';
     });
 
+    double? lat;
+    double? lng;
+    if (_locationMode == 'my_location') {
+      lat = cart.userLatitude;
+      lng = cart.userLongitude;
+    } else {
+      lat = cart.deliveryLatitude;
+      lng = cart.deliveryLongitude;
+    }
+
     final fullAddress = _orderType == 'delivery'
         ? [
             if (_apartmentNo.isNotEmpty) 'Apt/Flat: $_apartmentNo',
-            if (_apartmentName.isNotEmpty) 'Building/Landmark: $_apartmentName',
-            _deliveryAddress
+            if (_apartmentName.isNotEmpty) 'Building: $_apartmentName',
+            _deliveryAddress,
           ].join(', ')
         : (_orderType == 'dine_in' ? 'Dine In' : 'Take Away');
 
@@ -129,33 +146,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       'customer_email': _customerEmail,
       'customer_phone': _customerPhone,
       'delivery_address': fullAddress,
-      'city': _orderType == 'delivery' ? _city : 'Amritsar',
+      'city': _orderType == 'delivery' ? _city : 'Gandhinagar',
       'payment_method': _paymentMethod,
       'order_type': _orderType,
-      'latitude': _orderType == 'delivery' ? _latitude : null,
-      'longitude': _orderType == 'delivery' ? _longitude : null,
+      'latitude': _orderType == 'delivery' ? lat : null,
+      'longitude': _orderType == 'delivery' ? lng : null,
       'special_instructions': _specialInstructions,
       'pickup_time': _orderType != 'delivery' ? _pickupTime : null,
       'table_number': null,
       'items': cart.items.map((i) => {
-            'menu_item_id': i.menuItem.id,
-            'quantity': i.quantity,
-          }).toList(),
+        'menu_item_id': i.menuItem.id,
+        'quantity': i.quantity,
+      }).toList(),
     };
 
     final result = await ApiService.placeOrder(payload);
-
     setState(() => _isPlacing = false);
 
     if (result['success'] == true) {
       final order = result['order'] as Order;
-      
-      // Save auth detail to prefs
       await cart.loginUser(_customerPhone, _customerName);
-      
-      // Clear cart
       cart.clearCart();
       cart.resetDistanceFee();
+      cart.clearSomeoneElseDelivery();
 
       if (mounted) {
         Navigator.pushReplacement(
@@ -239,44 +252,66 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Delivery Address section
+              // Delivery Address Section
               if (_orderType == 'delivery') ...[
                 _buildSectionHeader('📍 Delivery Address'),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _latitude != null 
-                            ? 'GPS Coordinates captured successfully!'
-                            : 'Set coordinate matching for precise distance calculation.',
-                        style: TextStyle(
-                          color: _latitude != null ? Colors.green : const Color(0xFF7A6040),
-                          fontSize: 12,
+
+                // Location Mode Selector (My Location vs Someone Else)
+                _buildLocationModeSelector(cart),
+                const SizedBox(height: 12),
+
+                // Change Location Button
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LocationPickerScreen(
+                          isForSomeoneElse: _locationMode == 'someone_else',
                         ),
                       ),
-                    ),
-                    TextButton.icon(
-                      onPressed: _fetchingLocation ? null : _fetchGPSCoordinates,
-                      icon: _fetchingLocation 
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE6A817)))
-                          : const Icon(Icons.my_location, size: 16, color: Color(0xFFE6A817)),
-                      label: Text(
-                        _latitude != null ? 'Recapture' : 'Locate Me',
-                        style: const TextStyle(color: Color(0xFFE6A817), fontSize: 12),
-                      ),
-                    ),
-                  ],
+                    );
+                    // Refresh address from provider after picker
+                    if (mounted) {
+                      final c = context.read<CartProvider>();
+                      setState(() {
+                        if (_locationMode == 'someone_else' && c.isForSomeoneElse) {
+                          _deliveryAddress = c.deliveryAddress ?? '';
+                          _city = c.deliveryCity ?? 'Gandhinagar';
+                        } else {
+                          _deliveryAddress = c.userAddress ?? '';
+                          _city = c.userCity ?? 'Gandhinagar';
+                        }
+                        _addressController.text = _deliveryAddress;
+                        _cityController.text = _city;
+                      });
+                      _triggerFeeCalculation();
+                    }
+                  },
+                  icon: const Icon(Icons.edit_location_alt, color: Color(0xFFE6A817), size: 18),
+                  label: Text(
+                    'Change Location',
+                    style: GoogleFonts.outfit(color: const Color(0xFFE6A817), fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFE6A817)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
-                const SizedBox(height: 8),
-                _buildTextField(
-                  label: 'Street Address / Location *',
+                const SizedBox(height: 12),
+
+                // Address text field (editable)
+                TextFormField(
+                  controller: _addressController,
+                  style: const TextStyle(color: Color(0xFF1A0F00)),
                   validator: (val) => val == null || val.isEmpty ? 'Required' : null,
                   onChanged: (val) {
                     _deliveryAddress = val;
                     _triggerFeeCalculation();
                   },
                   onSaved: (val) => _deliveryAddress = val ?? '',
+                  decoration: _inputDecoration('Street Address / Location *'),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -284,10 +319,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Expanded(
                       child: _buildTextField(
                         label: 'Flat / Apt No',
-                        onChanged: (val) {
-                          _apartmentNo = val;
-                          _triggerFeeCalculation();
-                        },
+                        onChanged: (val) { _apartmentNo = val; _triggerFeeCalculation(); },
                         onSaved: (val) => _apartmentNo = val ?? '',
                       ),
                     ),
@@ -295,29 +327,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     Expanded(
                       child: _buildTextField(
                         label: 'Building / Landmark',
-                        onChanged: (val) {
-                          _apartmentName = val;
-                          _triggerFeeCalculation();
-                        },
+                        onChanged: (val) { _apartmentName = val; _triggerFeeCalculation(); },
                         onSaved: (val) => _apartmentName = val ?? '',
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
+                TextFormField(
+                  controller: _cityController,
+                  style: const TextStyle(color: Color(0xFF1A0F00)),
+                  onChanged: (val) { _city = val; _triggerFeeCalculation(); },
+                  onSaved: (val) => _city = val ?? 'Gandhinagar',
+                  decoration: _inputDecoration('City'),
+                ),
+                const SizedBox(height: 12),
                 _buildTextField(
-                  label: 'City',
-                  initialValue: _city,
-                  onChanged: (val) {
-                    _city = val;
-                    _triggerFeeCalculation();
-                  },
-                  onSaved: (val) => _city = val ?? 'Amritsar',
+                  label: 'Special Instructions (Optional)',
+                  onSaved: (val) => _specialInstructions = val ?? '',
                 ),
                 const SizedBox(height: 24),
               ],
 
-              // Takeaway / Dine In Details
+              // Dine In / Takeaway time fields
               if (_orderType == 'dine_in') ...[
                 _buildSectionHeader('🍽️ Dine In Details'),
                 const SizedBox(height: 12),
@@ -340,10 +372,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               _buildSectionHeader('💳 Payment Method'),
               const SizedBox(height: 12),
               _buildPaymentTile('cash_on_delivery', '💵 Cash on Delivery / Pay at Counter'),
-              _buildPaymentTile('razorpay', '💳 Pay Online (Razorpay Cards/UPI)'),
+              _buildPaymentTile('razorpay', '💳 Pay Online (Razorpay / UPI)'),
               const SizedBox(height: 24),
 
-              // Order Summary display
+              // Order Summary
               _buildSectionHeader('🧾 Order Summary'),
               const SizedBox(height: 12),
               Container(
@@ -359,31 +391,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     if (_orderType == 'delivery' && cart.distanceKm != null) ...[
                       const Divider(color: Color(0xFFEDE0C4)),
                       _buildSummaryRow(
-                        'Calculated Distance', 
-                        '${cart.distanceKm!.toStringAsFixed(1)} KM',
-                        valueColor: const Color(0xFFFF6B00)
+                        'Distance',
+                        '${cart.distanceKm!.toStringAsFixed(1)} km',
+                        valueColor: const Color(0xFFFF6B00),
                       ),
                     ],
                     if (_orderType == 'delivery') ...[
                       const Divider(color: Color(0xFFEDE0C4)),
-                      _buildSummaryRow('Delivery Charge', '₹${activeDeliveryFee.toStringAsFixed(0)}'),
+                      _buildSummaryRow(
+                        'Delivery Charge',
+                        cart.isCalculatingFee
+                            ? 'Calculating...'
+                            : (activeDeliveryFee == 0 ? 'FREE' : '₹${activeDeliveryFee.toStringAsFixed(0)}'),
+                        valueColor: activeDeliveryFee == 0 && !cart.isCalculatingFee
+                            ? const Color(0xFF2E7D32)
+                            : const Color(0xFF1A0F00),
+                      ),
                     ],
                     const Divider(color: Color(0xFFEDE0C4), thickness: 1.2),
                     _buildSummaryRow(
-                      'Total Amount', 
+                      'Total Amount',
                       '₹${grandTotal.toStringAsFixed(0)}',
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      valueColor: const Color(0xFFFF6B00)
+                      valueColor: const Color(0xFFFF6B00),
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 24),
 
-              // Error messages
-              if (_errorMessage.isNotEmpty || cart.distanceError.isNotEmpty) ...[
+              // Error message (only show actual errors, NOT distance errors)
+              if (_errorMessage.isNotEmpty) ...[
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
@@ -393,18 +432,18 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '⚠️ ${_errorMessage.isNotEmpty ? _errorMessage : cart.distanceError}',
+                    '⚠️ $_errorMessage',
                     style: const TextStyle(color: Colors.redAccent, fontSize: 13),
                   ),
                 ),
                 const SizedBox(height: 24),
               ],
 
-              // Submit Button
+              // Place Order Button — NOT blocked by distance error
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isPlacing || cart.distanceError.isNotEmpty ? null : () => _submitOrder(cart),
+                  onPressed: _isPlacing ? null : () => _submitOrder(cart),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE6A817),
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -422,8 +461,101 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ),
                 ),
               ),
+              const SizedBox(height: 32),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLocationModeSelector(CartProvider cart) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFEDE0C4)),
+      ),
+      child: Column(
+        children: [
+          // My Location option
+          _buildLocationOption(
+            mode: 'my_location',
+            icon: Icons.my_location,
+            title: 'My Location',
+            subtitle: cart.userAddress?.isNotEmpty == true
+                ? '${cart.userAddress}, ${cart.userCity ?? ''}'
+                : 'Tap "Change Location" to set your address',
+            color: const Color(0xFFE6A817),
+          ),
+          const Divider(height: 1, color: Color(0xFFEDE0C4)),
+          // Someone else option
+          _buildLocationOption(
+            mode: 'someone_else',
+            icon: Icons.people_alt_outlined,
+            title: 'Order for Someone Else',
+            subtitle: cart.isForSomeoneElse && cart.deliveryAddress?.isNotEmpty == true
+                ? '${cart.deliveryAddress}, ${cart.deliveryCity ?? ''}'
+                : 'Tap "Change Location" to set their address',
+            color: const Color(0xFF4CAF50),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationOption({
+    required String mode,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    final isSelected = _locationMode == mode;
+    return InkWell(
+      onTap: () => _switchLocationMode(mode),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected ? color.withOpacity(0.12) : const Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: isSelected ? color : const Color(0xFF9A7A50), size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.outfit(
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 14,
+                      color: isSelected ? const Color(0xFF1A0F00) : const Color(0xFF7A6040),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.outfit(fontSize: 11, color: const Color(0xFF9A7A50)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Radio<String>(
+              value: mode,
+              groupValue: _locationMode,
+              onChanged: (v) => _switchLocationMode(v!),
+              activeColor: color,
+            ),
+          ],
         ),
       ),
     );
@@ -434,10 +566,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return Expanded(
       child: OutlinedButton(
         onPressed: () {
-          setState(() {
-            _orderType = type;
-            _errorMessage = '';
-          });
+          setState(() { _orderType = type; _errorMessage = ''; });
           _triggerFeeCalculation();
         },
         style: OutlinedButton.styleFrom(
@@ -471,9 +600,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         groupValue: _paymentMethod,
         title: Text(label, style: GoogleFonts.outfit(color: const Color(0xFF2C1A00), fontSize: 14)),
         activeColor: const Color(0xFFE6A817),
-        onChanged: (val) {
-          setState(() => _paymentMethod = val!);
-        },
+        onChanged: (val) => setState(() => _paymentMethod = val!),
       ),
     );
   }
@@ -481,10 +608,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
-      style: GoogleFonts.outfit(
-        color: const Color(0xFF1A0F00),
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
+      style: GoogleFonts.outfit(color: const Color(0xFF1A0F00), fontSize: 16, fontWeight: FontWeight.bold),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF7A6040), fontSize: 13),
+      filled: true,
+      fillColor: const Color(0xFFFFF8E7),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFEDE0C4)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFFE6A817)),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red),
       ),
     );
   }
@@ -504,20 +652,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       onSaved: onSaved,
       onChanged: onChanged,
       style: const TextStyle(color: Color(0xFF1A0F00)),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFF7A6040), fontSize: 13),
-        filled: true,
-        fillColor: const Color(0xFFFFF8E7),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFEDE0C4)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFFE6A817)),
-        ),
-      ),
+      decoration: _inputDecoration(label),
     );
   }
 
@@ -532,14 +667,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: GoogleFonts.outfit(color: const Color(0xFF7A6040), fontSize: fontSize)),
-          Text(
-            value,
-            style: GoogleFonts.outfit(
-              color: valueColor,
-              fontSize: fontSize,
-              fontWeight: fontWeight,
-            ),
-          ),
+          Text(value, style: GoogleFonts.outfit(color: valueColor, fontSize: fontSize, fontWeight: fontWeight)),
         ],
       ),
     );
