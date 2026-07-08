@@ -2,7 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['*'],
-  // output: 'export', // Commented out to allow dynamic routing for order tracking IDs
+  output: 'export',       // Static HTML export for Apache server deployment
+  trailingSlash: true,    // Generates /page/index.html — needed for Apache routing
   images: {
     unoptimized: true,
   },
