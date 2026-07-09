@@ -553,32 +553,30 @@ export default function CheckoutPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '0.5rem' }}>
                 <button 
                   type="button" 
-                  className={`payment-option${orderType === 'delivery' ? ' selected' : ''}`}
+                  className={`payment-option service-type-btn${orderType === 'delivery' ? ' selected' : ''}`}
                   onClick={() => setOrderType('delivery')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', gap: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
                 >
                   <span style={{ fontSize: '1.5rem' }}>🛵</span>
                   <strong>Delivery</strong>
                 </button>
                 <button 
                   type="button" 
-                  className={`payment-option${orderType === 'dine_in' ? ' selected' : ''}`}
+                  className={`payment-option service-type-btn${orderType === 'dine_in' ? ' selected' : ''}`}
                   onClick={() => setOrderType('dine_in')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', gap: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
                 >
                   <span style={{ fontSize: '1.5rem' }}>🍽️</span>
                   <strong>Dine In</strong>
                 </button>
                 <button 
                   type="button" 
-                  className={`payment-option${orderType === 'takeaway' ? ' selected' : ''}`}
+                  className={`payment-option service-type-btn${orderType === 'takeaway' ? ' selected' : ''}`}
                   onClick={() => setOrderType('takeaway')}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', gap: '6px', fontSize: '0.85rem', cursor: 'pointer' }}
                 >
                   <span style={{ fontSize: '1.5rem' }}>🛍️</span>
                   <strong>Take Away</strong>
                 </button>
               </div>
+
             </div>
 
             <div className="checkout-section">

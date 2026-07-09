@@ -185,6 +185,7 @@ img { max-width: 100%; display: block; }
 }
 .search-bar input {
   flex: 1;
+  min-width: 0; /* Let it shrink on small screens */
   background: none;
   border: none;
   outline: none;
@@ -202,6 +203,7 @@ img { max-width: 100%; display: block; }
   font-size: 1rem;
   cursor: pointer;
   transition: var(--transition);
+  flex-shrink: 0; /* Prevent the button from shrinking or getting clipped */
 }
 .search-btn:hover { background: var(--primary-dark); }
 
@@ -858,6 +860,15 @@ img { max-width: 100%; display: block; }
   background: var(--bg-elevated);
   color: var(--text-muted);
 }
+.payment-option.service-type-btn {
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 12px 10px !important;
+  gap: 6px !important;
+  font-size: 0.85rem !important;
+  text-align: center !important;
+}
 .payment-option:hover, .payment-option.selected {
   border-color: var(--primary);
   color: var(--text);
@@ -1459,6 +1470,20 @@ footer {
     width: 30px !important;
     height: 30px !important;
     font-size: 1rem !important;
+  }
+
+  /* Checkout page layout optimizations */
+  .checkout-section {
+    padding: 1rem !important;
+  }
+  .payment-options {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .payment-option.service-type-btn {
+    padding: 10px 4px !important;
+    font-size: 0.76rem !important;
+    gap: 4px !important;
   }
 }
 
