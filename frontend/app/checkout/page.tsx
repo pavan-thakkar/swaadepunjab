@@ -457,7 +457,7 @@ export default function CheckoutPage() {
         return false;
       }
       dispatch({ type: 'CLEAR' });
-      router.push(`/track/${data.data.order_number}`);
+      router.push(`/track/${data.data.order_number}/`);
       return true;
     } catch {
       setError('Network error. Check karein ki backend chal raha hai ya nahi.');

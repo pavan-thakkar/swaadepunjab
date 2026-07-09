@@ -104,7 +104,20 @@ const renderOrderNumber = (num: string) => {
 };
 
 export default function TrackOrderPage() {
-  const { id } = useParams<{ id: string }>();
+  // In static export + .htaccess routing, useParams() may return the build-time
+  // param (e.g. 'demo') instead of the real URL segment. Read pathname as fallback.
+  const params = useParams<{ id: string }>();
+  const [id, setId] = useState<string>('');
+
+  useEffect(() => {
+    // Always extract from the actual browser URL — most reliable in static export
+    const pathParts = window.location.pathname.split('/').filter(Boolean);
+    const trackIdx = pathParts.findIndex(p => p === 'track');
+    const urlId = trackIdx !== -1 ? pathParts[trackIdx + 1] : '';
+    // Prefer URL-derived id over params (params may be stale in .htaccess fallback)
+    setId(urlId || params?.id || '');
+  }, [params]);
+
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -150,11 +163,13 @@ export default function TrackOrderPage() {
   }, [order]);
 
   const fetchOrder = useCallback(async () => {
+    if (!id) return; // wait until id is resolved from URL
     try {
       const res = await fetch(`${API}/orders/${id}`, { cache: 'no-store' });
-      if (!res.ok) { setError('Order not found.'); return; }
+      if (!res.ok) { setError('Order not found.'); setLoading(false); return; }
       const data = await res.json();
       setOrder(data.data);
+      setError('');
     } catch {
       setError('Cannot connect to server. Is the backend running?');
     } finally {
@@ -163,10 +178,11 @@ export default function TrackOrderPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!id) return;
     fetchOrder();
     const interval = setInterval(fetchOrder, 5000); // poll every 5s
     return () => clearInterval(interval);
-  }, [fetchOrder]);
+  }, [fetchOrder, id]);
 
   const handlePostReview = async (menuItemId: number) => {
     if (!reviewName.trim() || !reviewComment.trim()) {
