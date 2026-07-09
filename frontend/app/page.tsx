@@ -425,6 +425,9 @@ export default function HomePage() {
 
 function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item: MenuItem; onAdd: (i: MenuItem) => void; delay: number; categoryEmoji: Record<string, string>; categoryLabels: Record<string, string> }) {
   const router = require('next/navigation').useRouter();
+  const { state, dispatch } = useCart();
+  const cartItem = state.items.find(i => i.menu_item_id === item.id);
+  const quantity = cartItem ? cartItem.quantity : 0;
 
   const getFirstImage = (imageField: any) => {
     if (!imageField) return null;
@@ -481,17 +484,46 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
         <span className="food-card-price" style={{ fontSize: '1.15rem', fontWeight: 800 }}>
           ₹{Number(item.price).toFixed(0)}
         </span>
-        <button 
-          className="add-btn" 
-          onClick={(e) => {
-            e.stopPropagation();
-            onAdd(item);
-          }} 
-          title="Cart mein add karein"
-        >
-          +
-        </button>
+        {quantity > 0 ? (
+          <div className="quantity-control-card" onClick={(e) => e.stopPropagation()}>
+            <button 
+              type="button" 
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'DECREMENT', id: item.id });
+              }}
+              className="qty-control-btn"
+              title="Quantity kam karein"
+            >
+              −
+            </button>
+            <span className="qty-control-val">{quantity}</span>
+            <button 
+              type="button" 
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'INCREMENT', id: item.id });
+              }}
+              className="qty-control-btn"
+              title="Quantity badhayein"
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <button 
+            className="add-btn" 
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdd(item);
+            }} 
+            title="Cart mein add karein"
+          >
+            +
+          </button>
+        )}
       </div>
     </div>
   );
 }
+
