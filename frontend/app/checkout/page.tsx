@@ -599,7 +599,7 @@ export default function CheckoutPage() {
 
             {orderType === 'delivery' && (
               <div className="checkout-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '1.2rem', paddingBottom: '10px', borderBottom: '1px solid var(--border)' }}>
                   <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', border: 'none', padding: 0 }}>📍 Delivery Address</h3>
                   <button
                     type="button"
@@ -631,7 +631,7 @@ export default function CheckoutPage() {
                     borderRadius: '12px',
                     position: 'relative'
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
                       <span style={{
                         background: '#F43F5E',
                         color: '#fff',
