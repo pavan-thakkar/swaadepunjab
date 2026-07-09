@@ -31,8 +31,10 @@ const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
 export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { dispatch } = useCart();
+  const { state, dispatch } = useCart();
   const [item, setItem] = useState<MenuItem | null>(null);
+  const cartItem = item ? state.items.find(i => i.menu_item_id === item.id) : null;
+  const quantity = cartItem ? cartItem.quantity : 0;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -441,23 +443,47 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
 
-                <button 
-                  onClick={handleAddToCart}
-                  disabled={!item.is_available}
-                  className="btn-primary" 
-                  style={{ 
-                    padding: '14px 32px', 
-                    fontSize: '1.05rem', 
-                    fontWeight: 800,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    opacity: item.is_available ? 1 : 0.6,
-                    cursor: item.is_available ? 'pointer' : 'not-allowed'
-                  }}
-                >
-                  <span>🛒</span> Add to Cart
-                </button>
+                {quantity > 0 ? (
+                  <div className="quantity-control-card large" style={{ height: '48px', minWidth: '130px', padding: '6px 16px' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => dispatch({ type: 'DECREMENT', id: item.id })}
+                      className="qty-control-btn"
+                      style={{ fontSize: '1.4rem' }}
+                      title="Quantity kam karein"
+                    >
+                      −
+                    </button>
+                    <span className="qty-control-val" style={{ fontSize: '1.1rem' }}>{quantity}</span>
+                    <button 
+                      type="button" 
+                      onClick={() => dispatch({ type: 'INCREMENT', id: item.id })}
+                      className="qty-control-btn"
+                      style={{ fontSize: '1.4rem' }}
+                      title="Quantity badhayein"
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={handleAddToCart}
+                    disabled={!item.is_available}
+                    className="btn-primary" 
+                    style={{ 
+                      padding: '14px 32px', 
+                      fontSize: '1.05rem', 
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      opacity: item.is_available ? 1 : 0.6,
+                      cursor: item.is_available ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    <span>🛒</span> Add to Cart
+                  </button>
+                )}
               </div>
             </div>
           </div>
