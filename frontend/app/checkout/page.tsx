@@ -14,7 +14,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 export default function CheckoutPage() {
-  const { state, dispatch, total, deliveryFee, userPhone, userName } = useCart();
+  const { state, dispatch, total, deliveryFee, userPhone, userEmail, userName } = useCart();
   const router = useRouter();
   const [payment, setPayment] = useState<'cash_on_delivery' | 'card' | 'razorpay'>('cash_on_delivery');
   const [loading, setLoading] = useState(false);
@@ -131,12 +131,7 @@ export default function CheckoutPage() {
     return () => clearTimeout(timer);
   }, [searchQuery, modalScreen]);
 
-  useEffect(() => {
-    if (orderType === 'delivery' && !form.delivery_address) {
-      setShowAddressModal(true);
-      setModalScreen('form');
-    }
-  }, [orderType]);
+  // Remove auto-open address modal useEffect to prevent unexpected popup on login/load
 
   const [mapLoaded, setMapLoaded] = useState(false);
   const mapRef = useRef<any>(null);
@@ -286,16 +281,43 @@ export default function CheckoutPage() {
     }
   }, [mapLoaded, showAddressModal, modalScreen]);
 
-  // Pre-fill user contact info if logged in
+  // Pre-fill user contact info & saved address if logged in
   useEffect(() => {
-    if (userPhone) {
+    if (userPhone || userEmail) {
       setForm(prev => ({
         ...prev,
-        customer_phone: prev.customer_phone || userPhone,
+        customer_phone: prev.customer_phone || userPhone || '',
+        customer_email: prev.customer_email || userEmail || '',
         customer_name: prev.customer_name || (userName && userName !== 'Customer' ? userName : ''),
       }));
     }
-  }, [userPhone, userName]);
+
+    // Load saved address from localStorage if exists
+    if (typeof window !== 'undefined') {
+      const savedAddressStr = localStorage.getItem('swaad_user_address');
+      if (savedAddressStr) {
+        try {
+          const savedAddress = JSON.parse(savedAddressStr);
+          if (savedAddress && savedAddress.delivery_address) {
+            setForm(prev => ({
+              ...prev,
+              delivery_address: savedAddress.delivery_address || '',
+              apartment_no: savedAddress.apartment_no || '',
+              apartment_name: savedAddress.apartment_name || '',
+              city: savedAddress.city || 'Amritsar',
+              state: savedAddress.state || 'Punjab',
+              pincode: savedAddress.pincode || '',
+            }));
+            if (savedAddress.coordinates) {
+              setCoordinates(savedAddress.coordinates);
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to load saved address from localStorage", e);
+        }
+      }
+    }
+  }, [userPhone, userEmail, userName]);
 
   const activeDeliveryFee = orderType === 'delivery' ? (customDeliveryFee !== null ? customDeliveryFee : deliveryFee) : 0;
   const grandTotal = total + activeDeliveryFee;
@@ -424,6 +446,13 @@ export default function CheckoutPage() {
   };
 
   const placeOrder = async (isPaid: boolean = false) => {
+    if (orderType === 'delivery' && !form.delivery_address) {
+      setError('Please add a delivery address to complete your order.');
+      setShowAddressModal(true);
+      setModalScreen('form');
+      return false;
+    }
+
     setLoading(true);
     setError('');
 
@@ -645,7 +674,9 @@ export default function CheckoutPage() {
                         {form.address_type || 'Home'}
                       </span>
                       <strong style={{ fontSize: '0.96rem', color: '#1E293B' }}>{form.customer_name || 'Customer'}</strong>
-                      <span style={{ color: '#64748B', fontSize: '0.85rem' }}>({form.customer_phone})</span>
+                      {form.customer_phone && (
+                        <span style={{ color: '#64748B', fontSize: '0.85rem' }}>({form.customer_phone})</span>
+                      )}
                       {form.is_default && (
                         <span style={{ fontSize: '0.75rem', background: '#E2E8F0', color: '#475569', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>Default</span>
                       )}
@@ -1349,6 +1380,19 @@ export default function CheckoutPage() {
                       form.pincode ? `PIN: ${form.pincode}` : '',
                       form.state ? `State: ${form.state}` : ''
                     ].filter(Boolean).join(', ');
+                    
+                    // Save address details to localStorage for reuse
+                    const addressObject = {
+                      apartment_no: form.apartment_no,
+                      apartment_name: form.apartment_name,
+                      delivery_address: form.delivery_address,
+                      city: form.city,
+                      state: form.state,
+                      pincode: form.pincode,
+                      coordinates: coordinates
+                    };
+                    localStorage.setItem('swaad_user_address', JSON.stringify(addressObject));
+
                     updateDeliveryDistanceAndFee(fullAddress, form.city);
                   }}
                   style={{

@@ -168,18 +168,31 @@ class OrderController extends Controller
     }
 
     /**
-     * Get order history by phone number.
+     * Get order history by phone number or email address.
      */
     public function history(Request $request): JsonResponse
     {
         $request->validate([
-            'phone' => 'required|string|max:30',
+            'phone' => 'nullable|string|max:30',
+            'email' => 'nullable|string|email|max:100',
         ]);
 
-        $orders = Order::with('items')
-            ->where('customer_phone', $request->phone)
-            ->latest()
-            ->get();
+        if (!$request->phone && !$request->email) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Phone or Email is required.'
+            ], 422);
+        }
+
+        $query = Order::with('items');
+
+        if ($request->phone) {
+            $query->where('customer_phone', $request->phone);
+        } else {
+            $query->where('customer_email', $request->email);
+        }
+
+        $orders = $query->latest()->get();
 
         return response()->json([
             'data' => $orders,

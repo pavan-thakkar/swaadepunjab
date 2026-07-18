@@ -56,7 +56,7 @@ interface Order {
 }
 
 export default function HistoryPage() {
-  const { userPhone, userName } = useCart();
+  const { userPhone, userEmail, userName } = useCart();
   const router = useRouter();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -64,6 +64,7 @@ export default function HistoryPage() {
   const [error, setError] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
   const [activePhone, setActivePhone] = useState<string | null>(null);
+  const [activeEmail, setActiveEmail] = useState<string | null>(null);
 
   const [reviewingOrderId, setReviewingOrderId] = useState<number | null>(null);
   const [reviewingItemId, setReviewingItemId] = useState<number | null>(null);
@@ -75,9 +76,10 @@ export default function HistoryPage() {
 
   const [userReviews, setUserReviews] = useState<Record<number, any>>({});
   
-  const fetchUserReviews = async (phone: string) => {
+  const fetchUserReviews = async (phone: string | null, email: string | null) => {
     try {
-      const res = await fetch(`${API}/reviews/history?phone=${encodeURIComponent(phone)}`);
+      const queryParam = phone ? `phone=${encodeURIComponent(phone)}` : `email=${encodeURIComponent(email || '')}`;
+      const res = await fetch(`${API}/reviews/history?${queryParam}`);
       if (res.ok) {
         const json = await res.json();
         const map: Record<number, any> = {};
@@ -94,30 +96,33 @@ export default function HistoryPage() {
   };
 
   useEffect(() => {
-    if (activePhone) {
-      fetchUserReviews(activePhone);
+    if (activePhone || activeEmail) {
+      fetchUserReviews(activePhone, activeEmail);
     }
-  }, [activePhone]);
+  }, [activePhone, activeEmail]);
 
   // Redirect to login if user not authenticated
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedPhone = localStorage.getItem('user_phone');
-      if (!storedPhone) {
+      const storedEmail = localStorage.getItem('user_email');
+      if (!storedPhone && !storedEmail) {
         router.push('/login?redirect=/history');
       } else {
         setActivePhone(storedPhone);
+        setActiveEmail(storedEmail);
         setAuthChecked(true);
       }
     }
-  }, [userPhone, router]);
+  }, [userPhone, userEmail, router]);
 
   useEffect(() => {
-    if (!authChecked || !activePhone) return;
+    if (!authChecked || (!activePhone && !activeEmail)) return;
 
     const fetchHistory = async () => {
       try {
-        const res = await fetch(`${API}/orders/history?phone=${encodeURIComponent(activePhone)}`, {
+        const queryParam = activePhone ? `phone=${encodeURIComponent(activePhone)}` : `email=${encodeURIComponent(activeEmail || '')}`;
+        const res = await fetch(`${API}/orders/history?${queryParam}`, {
           cache: 'no-store'
         });
         if (!res.ok) {
@@ -151,6 +156,7 @@ export default function HistoryPage() {
         body: JSON.stringify({
           customer_name: userName || 'Customer',
           customer_phone: activePhone || null,
+          customer_email: activeEmail || null,
           rating: reviewRating,
           comment: reviewComment,
         }),
@@ -205,7 +211,7 @@ export default function HistoryPage() {
           <div>
             <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text)' }}>📜 My Orders</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: '0.25rem' }}>
-              Order history matching phone: <strong>{userPhone}</strong>
+              Order history matching: <strong>{activePhone || activeEmail}</strong>
             </p>
           </div>
           <Link href="/" className="btn-primary" style={{ padding: '10px 20px', fontSize: '0.9rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>

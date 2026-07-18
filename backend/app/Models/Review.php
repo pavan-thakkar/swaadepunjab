@@ -12,6 +12,7 @@ class Review extends Model
         'menu_item_id',
         'customer_name',
         'customer_phone',
+        'customer_email',
         'rating',
         'comment',
         'is_approved',

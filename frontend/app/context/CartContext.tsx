@@ -106,8 +106,9 @@ const CartContext = createContext<{
   deliveryFee: number;
   freeDeliveryThreshold: number;
   userPhone: string | null;
+  userEmail: string | null;
   userName: string | null;
-  loginUser: (phone: string, name: string) => void;
+  loginUser: (phone: string | null, email: string | null, name: string) => void;
   logoutUser: () => void;
 } | null>(null);
 
@@ -115,12 +116,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(cartReducer, initialState);
   const [deliverySettings, setDeliverySettings] = useState<DeliveryTier[]>([]);
   const [userPhone, setUserPhone] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
     // Load auth and cart items from localStorage on mount
     if (typeof window !== 'undefined') {
       setUserPhone(localStorage.getItem('user_phone'));
+      setUserEmail(localStorage.getItem('user_email'));
       setUserName(localStorage.getItem('user_name'));
       const savedCart = localStorage.getItem('swaad_cart_items');
       if (savedCart) {
@@ -143,17 +146,31 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [state.items]);
 
-  const loginUser = (phone: string, name: string) => {
-    localStorage.setItem('user_phone', phone);
+  const loginUser = (phone: string | null, email: string | null, name: string) => {
+    if (phone) {
+      localStorage.setItem('user_phone', phone);
+      setUserPhone(phone);
+    } else {
+      localStorage.removeItem('user_phone');
+      setUserPhone(null);
+    }
+    if (email) {
+      localStorage.setItem('user_email', email);
+      setUserEmail(email);
+    } else {
+      localStorage.removeItem('user_email');
+      setUserEmail(null);
+    }
     localStorage.setItem('user_name', name);
-    setUserPhone(phone);
     setUserName(name);
   };
 
   const logoutUser = () => {
     localStorage.removeItem('user_phone');
+    localStorage.removeItem('user_email');
     localStorage.removeItem('user_name');
     setUserPhone(null);
+    setUserEmail(null);
     setUserName(null);
   };
 
@@ -213,7 +230,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const freeDeliveryThreshold = getFreeDeliveryThreshold();
 
   return (
-    <CartContext.Provider value={{ state, dispatch, total, itemCount, deliveryFee, freeDeliveryThreshold, userPhone, userName, loginUser, logoutUser }}>
+    <CartContext.Provider value={{ state, dispatch, total, itemCount, deliveryFee, freeDeliveryThreshold, userPhone, userEmail, userName, loginUser, logoutUser }}>
       {children}
     </CartContext.Provider>
   );

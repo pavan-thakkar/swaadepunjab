@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -55,4 +56,10 @@ Route::get('/categories', function () {
             ->get()
     ]);
 });
+
+// Authentication & OTP routes
+Route::post('/otp/send', [AuthController::class, 'sendOtp']);
+Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
+Route::post('/auth/google', [AuthController::class, 'googleLogin']);
+
 

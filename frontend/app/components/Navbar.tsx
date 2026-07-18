@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 export default function Navbar() {
-  const { dispatch, itemCount, userPhone, userName, logoutUser } = useCart();
+  const { dispatch, itemCount, userPhone, userEmail, userName, logoutUser } = useCart();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -17,7 +17,7 @@ export default function Navbar() {
       
       {/* Desktop Navbar Actions */}
       <div className="navbar-actions desktop-nav">
-        {userPhone ? (
+        {userPhone || userEmail ? (
           <>
             <span className="navbar-welcome nav-btn-text" style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'inline-block', marginRight: '6px' }}>
               Hi, {userName || 'Customer'} 👋
@@ -81,7 +81,7 @@ export default function Navbar() {
       {menuOpen && (
         <div className="mobile-menu-overlay" onClick={() => setMenuOpen(false)}>
           <div className="mobile-menu-content" onClick={(e) => e.stopPropagation()}>
-            {userPhone && (
+            {(userPhone || userEmail) && (
               <div className="mobile-welcome">
                 Hi, {userName || 'Customer'} 👋
               </div>
@@ -90,7 +90,7 @@ export default function Navbar() {
               <span>🏠</span> Home
             </Link>
             
-            {userPhone ? (
+            {userPhone || userEmail ? (
               <>
                 <Link href="/history" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
                   <span>📜</span> My Orders
