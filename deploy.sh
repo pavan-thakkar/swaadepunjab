@@ -10,7 +10,7 @@ set -e
 SSH_USER="u360309011"
 SSH_HOST="145.79.209.51"
 SSH_PORT="65002"
-SSH_PASS="Thakkar@1999"
+SSH_PASS="Swaadepunjab@2026"
 REMOTE_FRONTEND="/home/u360309011/domains/swaadepunjab.com/public_html"
 LOCAL_PROJECT="$(cd "$(dirname "$0")" && pwd)"
 FRONTEND_DIR="$LOCAL_PROJECT/frontend"
