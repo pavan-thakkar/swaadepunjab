@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\MenuController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PlacesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -61,5 +62,13 @@ Route::get('/categories', function () {
 Route::post('/otp/send', [AuthController::class, 'sendOtp']);
 Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
 Route::post('/auth/google', [AuthController::class, 'googleLogin']);
+Route::post('/auth/firebase', [AuthController::class, 'firebaseLogin']);
+
+// Google Places API proxy routes (keeps API key secure on the server)
+Route::get('/places/autocomplete', [PlacesController::class, 'autocomplete']);
+Route::get('/places/geocode', [PlacesController::class, 'geocode']);
+Route::get('/places/reverse', [PlacesController::class, 'reverse']);
+
+
 
 

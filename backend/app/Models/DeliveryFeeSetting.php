@@ -60,8 +60,8 @@ class DeliveryFeeSetting extends Model
         if (empty($apiKey)) {
             if ($latitude !== null && $longitude !== null) {
                 $earthRadius = 6371; // in KM
-                $lat1 = 23.1854; // Outlet latitude (Mapple 99 Food County)
-                $lon1 = 72.6395; // Outlet longitude
+                $lat1 = 23.1648274; // Swaad E Punjab — Maple 99 Food County, GIFT City, Gujarat
+                $lon1 = 72.6826934; // Exact GPS coordinates
                 
                 $dLat = deg2rad($latitude - $lat1);
                 $dLon = deg2rad($longitude - $lon1);

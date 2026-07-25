@@ -25,8 +25,8 @@ export default function CheckoutPage() {
     customer_email: '',
     customer_phone: '',
     delivery_address: '',
-    city: 'Amritsar',
-    state: 'Punjab',
+    city: 'Gandhinagar',
+    state: 'Gujarat',
     pincode: '',
     apartment_no: '',
     apartment_name: '',
@@ -118,10 +118,10 @@ export default function CheckoutPage() {
       setSearching(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&limit=12&q=${encodeURIComponent(searchQuery)}&addressdetails=1&countrycodes=in`
+          `${API}/places/autocomplete?query=${encodeURIComponent(searchQuery)}`
         );
         const data = await res.json();
-        setSearchResults(data || []);
+        setSearchResults(data.predictions || []);
       } catch (e) {
         console.error("Search error:", e);
       } finally {
@@ -177,6 +177,15 @@ export default function CheckoutPage() {
       }
     }
 
+    // Load Google Maps JS API (for Leaflet map tiles only — API calls go through backend proxy)
+    if (!document.getElementById('google-maps-js')) {
+      const gmScript = document.createElement('script');
+      gmScript.id = 'google-maps-js';
+      gmScript.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyAPYRCJO5CNfxInjk-CHgmqI2J8ibhbCns&libraries=places`;
+      gmScript.async = true;
+      document.body.appendChild(gmScript);
+    }
+
     // Load Razorpay JS SDK dynamically
     if (!document.getElementById('razorpay-js')) {
       const rpScript = document.createElement('script');
@@ -198,15 +207,18 @@ export default function CheckoutPage() {
   const reverseGeocode = async (lat: number, lng: number) => {
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`
+        `${API}/places/reverse?lat=${lat}&lng=${lng}`
       );
       const data = await res.json();
-      if (data && data.address) {
-        const addr = data.display_name || '';
-        const city = data.address.city || data.address.town || data.address.village || data.address.state_district || '';
-        const pincode = data.address.postcode || '';
-        const state = data.address.state || 'Punjab';
-        const locality = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || '';
+      if (data.status === 'OK' && data.results && data.results.length > 0) {
+        const result = data.results[0];
+        const addr = result.formatted_address || '';
+        const components = result.address_components || [];
+        const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+        const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('sublocality_level_1') || '';
+        const pincode = getComp('postal_code') || '';
+        const state = getComp('administrative_area_level_1') || 'Punjab';
+        const locality = getComp('sublocality_level_1') || getComp('sublocality_level_2') || getComp('route') || '';
         setForm(prev => ({
           ...prev,
           delivery_address: addr,
@@ -217,7 +229,7 @@ export default function CheckoutPage() {
         }));
       }
     } catch (e) {
-      console.error("Reverse geocoding error:", e);
+      console.error("Google Reverse geocoding error:", e);
     }
   };
 
@@ -272,8 +284,8 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (mapLoaded && showAddressModal && (modalScreen === 'form' || modalScreen === 'map_picker')) {
-      const defaultLat = coordinates ? coordinates.lat : 23.0225; // Default Ahmedabad/Vastral Lat
-      const defaultLng = coordinates ? coordinates.lng : 72.5714; // Default Lng
+      const defaultLat = coordinates ? coordinates.lat : 23.1648274; // Swaad E Punjab — GIFT City, Gandhinagar
+      const defaultLng = coordinates ? coordinates.lng : 72.6826934; // Exact GPS
       const timer = setTimeout(() => {
         initMap(defaultLat, defaultLng);
       }, 150);
@@ -327,37 +339,58 @@ export default function CheckoutPage() {
     setSearching(true);
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(searchQuery)}&addressdetails=1`
+        `${API}/places/autocomplete?query=${encodeURIComponent(searchQuery)}`
       );
       const data = await res.json();
-      setSearchResults(data || []);
+      setSearchResults(data.predictions || []);
     } catch {
-      alert("Error searching address. Network check karein.");
+      alert("Error searching address. Please check your network.");
     } finally {
       setSearching(false);
     }
   };
 
-  const handleSelectResult = (result: any) => {
-    const addr = result.display_name || '';
-    const city = result.address?.city || result.address?.town || result.address?.village || result.address?.suburb || result.address?.state || '';
-    const pincode = result.address?.postcode || '';
-    const state = result.address?.state || 'Punjab';
-    const locality = result.address?.suburb || result.address?.neighbourhood || result.address?.residential || result.address?.road || '';
-    const lat = parseFloat(result.lat);
-    const lon = parseFloat(result.lon);
+  const handleSelectResult = async (result: any) => {
+    // Google Places result has place_id, description
+    const placeId = result.place_id;
+    const description = result.description || '';
 
-    setCoordinates({ lat, lng: lon });
-    if (mapRef.current && markerRef.current) {
-      mapRef.current.setView([lat, lon], 15);
-      markerRef.current.setLatLng([lat, lon]);
-    } else if (mapLoaded) {
-      initMap(lat, lon);
+    // Get lat/lng from place_id via Google Geocoding API
+    let lat = 0, lon = 0;
+    let city = '', pincode = '', state = 'Punjab', locality = '';
+    try {
+      const geoRes = await fetch(
+        `${API}/places/geocode?place_id=${placeId}`
+      );
+      const geoData = await geoRes.json();
+      if (geoData.status === 'OK' && geoData.results?.length > 0) {
+        const loc = geoData.results[0].geometry.location;
+        lat = loc.lat;
+        lon = loc.lng;
+        const components = geoData.results[0].address_components || [];
+        const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+        city = getComp('locality') || getComp('administrative_area_level_2') || '';
+        pincode = getComp('postal_code') || '';
+        state = getComp('administrative_area_level_1') || 'Punjab';
+        locality = getComp('sublocality_level_1') || getComp('sublocality_level_2') || getComp('route') || '';
+      }
+    } catch (e) {
+      console.error("Google Place geocoding error:", e);
+    }
+
+    if (lat && lon) {
+      setCoordinates({ lat, lng: lon });
+      if (mapRef.current && markerRef.current) {
+        mapRef.current.setView([lat, lon], 15);
+        markerRef.current.setLatLng([lat, lon]);
+      } else if (mapLoaded) {
+        initMap(lat, lon);
+      }
     }
 
     setForm(prev => ({
       ...prev,
-      delivery_address: addr,
+      delivery_address: description,
       city: city || prev.city || 'Amritsar',
       pincode: pincode || prev.pincode,
       state: state || prev.state || 'Punjab',
@@ -390,29 +423,33 @@ export default function CheckoutPage() {
         }
 
         try {
+          // Use Google Geocoding API for accurate reverse geocoding
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+            `${API}/places/reverse?lat=${latitude}&lng=${longitude}`
           );
           const data = await res.json();
-          if (data && data.address) {
-            const addr = data.display_name || '';
-            const city = data.address.city || data.address.town || data.address.village || data.address.state_district || '';
-            const pincode = data.address.postcode || '';
-            const state = data.address.state || 'Punjab';
-            const locality = data.address.suburb || data.address.neighbourhood || data.address.residential || data.address.road || '';
+          if (data.status === 'OK' && data.results?.length > 0) {
+            const result = data.results[0];
+            const addr = result.formatted_address || '';
+            const components = result.address_components || [];
+            const getComp = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name || '';
+            const city = getComp('locality') || getComp('administrative_area_level_2') || getComp('sublocality_level_1') || '';
+            const pincode = getComp('postal_code') || '';
+            const state = getComp('administrative_area_level_1') || 'Punjab';
+            const locality = getComp('sublocality_level_1') || getComp('sublocality_level_2') || getComp('route') || '';
             setForm(prev => ({
               ...prev,
               delivery_address: addr,
-              city: city || prev.city || 'Amritsar',
+              city: city || prev.city || 'Gandhinagar',
               pincode: pincode || prev.pincode,
-              state: state || prev.state || 'Punjab',
+              state: state || prev.state || 'Gujarat',
               apartment_name: locality || prev.apartment_name,
             }));
           } else {
-            alert("Location mil gayi, par address read nahi ho paya. Kripya manually fill karein.");
+            alert("Location found, but could not read address. Please fill manually.");
           }
         } catch {
-          alert("Network error! Address fetch nahi ho saka.");
+          alert("Network error! Could not fetch address.");
         } finally {
           setLocating(false);
         }
@@ -1769,8 +1806,9 @@ export default function CheckoutPage() {
                   </div>
                 )}
                 {searchResults.map((result: any, idx: number) => {
-                  const mainName = result.name || result.display_name.split(',')[0];
-                  const subName = result.display_name;
+                  // Google Places: use structured_formatting for clean display
+                  const mainName = result.structured_formatting?.main_text || result.description?.split(',')[0] || '';
+                  const subName = result.structured_formatting?.secondary_text || result.description || '';
                   return (
                     <div
                       key={idx}
