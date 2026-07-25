@@ -54,6 +54,11 @@ sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$S
   cp database/database.sqlite /tmp/db_bak_$(date +%s).sqlite 2>/dev/null || true
   git fetch https://github.com/pavan-thakkar/swaadepunjab.git main
   git checkout FETCH_HEAD -- backend/
+  cp -r backend/* .
+  cp backend/.user.ini . 2>/dev/null || true
+  cp backend/public/.user.ini public/ 2>/dev/null || true
+  cp backend/php.ini . 2>/dev/null || true
+  rm -rf backend
   cp $(ls -t /tmp/env_bak_* | head -1) .env
   php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
   php artisan migrate --force
