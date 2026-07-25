@@ -115,7 +115,7 @@ class MenuImportService
     protected function importPdf(string $filePath): int
     {
         $ocrExecutable = base_path('ocr_pdf');
-        $swiftSource = base_path('ocr_pdf.swift');
+        $swiftSource   = base_path('ocr_pdf.swift');
 
         // Compile Swift OCR tool on the fly if needed
         if (!file_exists($ocrExecutable) && file_exists($swiftSource)) {
@@ -126,141 +126,146 @@ class MenuImportService
             throw new Exception("Native OCR tool could not be compiled. Please check Swift installation.");
         }
 
-        // Run the OCR tool
-        $command = escapeshellcmd($ocrExecutable) . ' ' . escapeshellarg($filePath);
-        $output = shell_exec($command);
+        // Write OCR output to a temp file to avoid shell_exec buffer limits
+        $tmpOut = tempnam(sys_get_temp_dir(), 'ocr_') . '.json';
+        $tmpErr = tempnam(sys_get_temp_dir(), 'ocr_err_') . '.txt';
 
-        if (empty($output)) {
-            throw new Exception("OCR tool returned empty result.");
+        $cmd = escapeshellcmd($ocrExecutable)
+             . ' ' . escapeshellarg($filePath)
+             . ' > ' . escapeshellarg($tmpOut)
+             . ' 2> ' . escapeshellarg($tmpErr);
+
+        $exitCode = null;
+        system($cmd, $exitCode);
+
+        $stderr = file_exists($tmpErr) ? trim(file_get_contents($tmpErr)) : '';
+        @unlink($tmpErr);
+
+        if (!file_exists($tmpOut) || filesize($tmpOut) === 0) {
+            throw new Exception("OCR tool returned empty result." . ($stderr ? " Error: $stderr" : ''));
+        }
+
+        // Read JSON from the temp file
+        $output = file_get_contents($tmpOut);
+        @unlink($tmpOut);
+
+        if (empty(trim($output))) {
+            throw new Exception("OCR output file was empty." . ($stderr ? " Error: $stderr" : ''));
+        }
+
+        // Strip any leading non-JSON content (e.g. debug lines printed before JSON)
+        $jsonStart = strpos($output, '[');
+        if ($jsonStart === false) {
+            throw new Exception("OCR output does not contain valid JSON array. Output starts with: " . substr($output, 0, 200));
+        }
+        if ($jsonStart > 0) {
+            $output = substr($output, $jsonStart);
         }
 
         $pages = json_decode($output, true);
-        if (json_last_error() !== JSON_ERROR_NONE || empty($pages)) {
-            throw new Exception("Failed to parse OCR results: " . json_last_error_msg());
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($pages)) {
+            throw new Exception("Failed to parse OCR JSON: " . json_last_error_msg() . ". Output length: " . strlen($output) . " chars.");
         }
 
+        $noiseRegex = '/^(we\'re|we accept|swad-e|100%|punja|phone|\+91|zomato|swiggy|available|page|\d+\/\d+|\=\s*\d+)/i';
         $importedCount = 0;
-        $skipKeywords = [
-            'menu', 'pure', 'veg', 'swad-e', 'punjab', 'party', 'order', 'orders', 
-            'accept', 'zomato', 'swiggy', 'available', 'onion', 'chhas', 'papad', 
-            'salad', 'chutney', 'chole', 'bhature', 'pcs', 'flaky', 'bread', 'gravies', 
-            'finished', 'butter', 'finish', 'stretches', 'perfect', 'scoop', 'rich', 
-            'ultra-thin', 'crispy', 'indian', 'hand-stretched', 'with', 'and', 'also',
-            'phone', '+91', 'call', 'contact', 'accepts', "we're", 'thali', 'pure veg', 'swad-e punjab'
-        ];
 
-        // Process page by page
         foreach ($pages as $page) {
             $lines = $page['lines'] ?? [];
-            $names = [];
-            $prices = [];
+            if (empty($lines)) continue;
+
+            $priceTokens = [];
+            $textLines   = [];
 
             foreach ($lines as $line) {
                 $text = trim($line['text'] ?? '');
-                if (empty($text)) continue;
+                if (empty($text) || preg_match($noiseRegex, $text)) continue;
 
-                // Check for trailing price in line (e.g. "Veg Pulao ... 109")
-                list($cleanedText, $trailingPrice) = $this->extractTrailingPrice($text);
-                if ($trailingPrice !== null && $this->isValidName($cleanedText, $skipKeywords)) {
-                    $names[] = [
-                        'text' => $cleanedText,
-                        'x' => floatval($line['x']),
-                        'y' => floatval($line['y']),
-                        'w' => floatval($line['width']),
-                        'h' => floatval($line['height']),
+                // Check trailing price inside string (e.g. "Paneer Butter Masala 199")
+                list($cleaned, $trailingPrice) = $this->extractTrailingPrice($text);
+                if ($trailingPrice !== null && $this->isValidName($cleaned)) {
+                    $textLines[] = [
+                        'text'         => $cleaned,
+                        'x'            => floatval($line['x']),
+                        'y'            => floatval($line['y']),
                         'direct_price' => $trailingPrice
                     ];
                     continue;
                 }
 
-                $pVal = $this->cleanPrice($text);
-                if ($pVal !== null) {
-                    $prices[] = [
-                        'val' => $pVal,
-                        'x' => floatval($line['x']),
-                        'y' => floatval($line['y']),
-                        'w' => floatval($line['width']),
-                        'h' => floatval($line['height'])
+                // Check standalone price line (e.g. "199", "199/-", "₹199")
+                $standalonePrice = $this->cleanPrice($text);
+                if ($standalonePrice !== null) {
+                    $priceTokens[] = [
+                        'val' => $standalonePrice,
+                        'x'   => floatval($line['x']),
+                        'y'   => floatval($line['y'])
                     ];
-                } elseif ($this->isValidName($text, $skipKeywords)) {
-                    $names[] = [
-                        'text' => $text,
-                        'x' => floatval($line['x']),
-                        'y' => floatval($line['y']),
-                        'w' => floatval($line['width']),
-                        'h' => floatval($line['height']),
+                } elseif ($this->isValidName($text)) {
+                    $textLines[] = [
+                        'text'         => $text,
+                        'x'            => floatval($line['x']),
+                        'y'            => floatval($line['y']),
                         'direct_price' => null
                     ];
                 }
             }
 
-            // Pair names with prices
-            foreach ($names as $name) {
-                $resolvedPrice = null;
+            // Pair text lines to price tokens
+            $pairedDishes = [];
+            foreach ($textLines as $item) {
+                $price = $item['direct_price'];
 
-                if ($name['direct_price'] !== null) {
-                    $resolvedPrice = $name['direct_price'];
-                } else {
-                    $bestPrice = null;
-                    $minScore = INF;
+                if ($price === null) {
+                    // Match price on exact same row (y difference <= 12, price is to the right)
+                    $bestToken = null;
+                    $minDist   = INF;
 
-                    foreach ($prices as $price) {
-                        $yDiff = abs($name['y'] - $price['y']);
-                        $xDiff = $price['x'] - $name['x'];
-
-                        // Scenario A: Horizontal layout (price is on same row to the right)
-                        if ($yDiff <= 15 && $xDiff > 0) {
-                            $score = $xDiff + $yDiff * 3;
-                            if ($score < $minScore) {
-                                $minScore = $score;
-                                $bestPrice = $price;
-                            }
-                        }
-                        // Scenario B: Vertical layout (price is directly below, same column)
-                        elseif ($yDiff > 0 && $price['y'] < $name['y'] && $yDiff <= 120 && abs($price['x'] - $name['x']) <= 50) {
-                            $score = $yDiff * 2 + abs($price['x'] - $name['x']) * 1.5;
-                            if ($score < $minScore) {
-                                $minScore = $score;
-                                $bestPrice = $price;
+                    foreach ($priceTokens as $pt) {
+                        $yDiff = abs($pt['y'] - $item['y']);
+                        $xDiff = $pt['x'] - $item['x'];
+                        if ($yDiff <= 12 && $xDiff > 0 && $xDiff <= 250) {
+                            if ($yDiff < $minDist) {
+                                $minDist   = $yDiff;
+                                $bestToken = $pt;
                             }
                         }
                     }
-
-                    if ($bestPrice !== null && $minScore < 400) {
-                        $resolvedPrice = $bestPrice['val'];
+                    if ($bestToken !== null) {
+                        $price = $bestToken['val'];
                     }
                 }
 
-                if ($resolvedPrice !== null) {
-                    $cleanName = trim(preg_replace('/\s+/', ' ', $name['text']), " .-_~:/|+•= ");
-                    
-                    // Simple description extraction: find lines directly below this item in the same slot
-                    $descriptionLines = [];
-                    foreach ($names as $other) {
-                        if ($other === $name) continue;
-                        $xDiff = abs($other['x'] - $name['x']);
-                        $yDiff = $name['y'] - $other['y'];
-                        if ($xDiff <= 35 && $yDiff > 0 && $yDiff <= 45 && $other['direct_price'] === null) {
-                            $descriptionLines[] = $other['text'];
-                        }
+                if ($price !== null) {
+                    $cleanName = trim(preg_replace('/\s+/', ' ', $item['text']), " .-_~:/|+•=");
+                    if ($this->isValidName($cleanName)) {
+                        $pairedDishes[] = [
+                            'name'  => $cleanName,
+                            'price' => $price,
+                            'x'     => $item['x'],
+                            'y'     => $item['y']
+                        ];
                     }
-                    $description = !empty($descriptionLines) ? implode(' ', $descriptionLines) : null;
-                    $category = $this->resolveCategory('', $cleanName);
-
-                    MenuItem::create([
-                        'name'         => $cleanName,
-                        'description'  => $description,
-                        'category'     => $category,
-                        'price'        => $resolvedPrice,
-                        'prep_time'    => 20,
-                        'rating'       => 4.5,
-                        'is_available' => true,
-                        'is_featured'  => false,
-                        'image'        => null,
-                    ]);
-
-                    $importedCount++;
                 }
+            }
+
+            // Insert into database
+            foreach ($pairedDishes as $dish) {
+                $category = $this->resolveCategory('', $dish['name']);
+
+                MenuItem::create([
+                    'name'         => $dish['name'],
+                    'description'  => null,
+                    'category'     => $category,
+                    'price'        => $dish['price'],
+                    'prep_time'    => 20,
+                    'rating'       => 4.5,
+                    'is_available' => true,
+                    'is_featured'  => false,
+                    'image'        => null,
+                ]);
+
+                $importedCount++;
             }
         }
 
@@ -268,14 +273,20 @@ class MenuImportService
     }
 
     /**
+
      * Parse trailing price from text.
      */
     protected function extractTrailingPrice(string $text): array
     {
-        if (preg_match('/[\s\.\-\~]+(\d+)\s*(?:\/-)?$/', trim($text), $matches, PREG_OFFSET_CAPTURE)) {
+        if (preg_match('/(?:[\s\.\-\~_\:\|]+|(?:rs\.?|₹|inr)\s*)(\d{2,4}(?:\.\d{1,2})?)\s*(?:\/-|\/)?$/i', trim($text), $matches, PREG_OFFSET_CAPTURE)) {
             $val = floatval($matches[1][0]);
-            if ($val >= 10 && $val <= 2000) {
-                $cleanedText = trim(substr($text, 0, $matches[0][1]), " .-_~:/|+");
+            // Fix OCR artifact where 1 is prepended: 1159 -> 159
+            if ($val > 1000 && $val < 2000 && (str_starts_with((string)$val, '11') || str_starts_with((string)$val, '10'))) {
+                $fix = floatval(substr((string)intval($val), 1));
+                if ($fix >= 30 && $fix <= 500) $val = $fix;
+            }
+            if ($val >= 10 && $val <= 1500) {
+                $cleanedText = trim(substr($text, 0, $matches[0][1]), " .-_~:/|+•=");
                 return [$cleanedText, $val];
             }
         }
@@ -287,18 +298,18 @@ class MenuImportService
      */
     protected function cleanPrice(string $text): ?float
     {
-        $textClean = trim(str_replace(['/-', '-'], '', $text));
-        if (preg_match('/^\d+(\.\d+)?$/', $textClean)) {
-            $val = floatval($textClean);
-            if ($val >= 10 && $val <= 2000) {
-                return $val;
+        $textClean = trim(preg_replace('/[\/\-\=\s]/', '', $text));
+        if (preg_match('/^\d{2,4}(\.\d{1,2})?$/', $textClean, $m)) {
+            $val = floatval($m[0]);
+            if ($val > 1000 && $val < 2000 && (str_starts_with((string)$val, '11') || str_starts_with((string)$val, '10'))) {
+                $fix = floatval(substr((string)intval($val), 1));
+                if ($fix >= 30 && $fix <= 500) $val = $fix;
             }
+            if ($val >= 10 && $val <= 1500) return $val;
         }
-        if (preg_match('/^(?:rs\.?|₹|inr)?\s*(\d+(?:\.\d+)?)$/i', $textClean, $matches)) {
+        if (preg_match('/^(?:rs\.?|₹|inr)?\s*(\d{2,4}(?:\.\d{1,2})?)$/i', trim($text), $matches)) {
             $val = floatval($matches[1]);
-            if ($val >= 10 && $val <= 2000) {
-                return $val;
-            }
+            if ($val >= 10 && $val <= 1500) return $val;
         }
         return null;
     }
@@ -306,34 +317,22 @@ class MenuImportService
     /**
      * Validate name against noise words.
      */
-    protected function isValidName(string $text, array $skipKeywords): bool
+    protected function isValidName(string $text): bool
     {
-        $textClean = strtolower(trim($text));
-        if (empty($textClean)) {
-            return false;
+        $clean = trim($text);
+        if (strlen($clean) < 3) return false;
+        if (preg_match('/^[\.\s\d\-\,\_\:\/\\\|\+\=\•]+$/', $clean)) return false;
+        if (!preg_match('/[a-zA-Z]/', $clean)) return false;
+
+        $lower = strtolower($clean);
+        $noisePhrases = [
+            'swad-e', 'punjab', 'we\'re also available', 'party orders', 
+            'zomato & swiggy', '100% pure', 'page ', 'contact:', '+91'
+        ];
+        foreach ($noisePhrases as $np) {
+            if (str_contains($lower, $np)) return false;
         }
-        if (!preg_match('/[a-zA-Z]/', $textClean)) {
-            return false;
-        }
-        if (strlen($textClean) < 3) { // Use strlen in PHP
-            return false;
-        }
-        if (preg_match('/^[\d\s\-\.\:\,\/\\\|\+]+$/', $textClean)) {
-            return false;
-        }
-        
-        $words = preg_split('/[^a-z]+/', $textClean, -1, PREG_SPLIT_NO_EMPTY);
-        $skipCount = 0;
-        foreach ($words as $word) {
-            if (in_array($word, $skipKeywords)) {
-                $skipCount++;
-            }
-        }
-        
-        if ($skipCount > 0 && $skipCount === count($words)) {
-            return false;
-        }
-        
+
         return true;
     }
 
@@ -345,53 +344,36 @@ class MenuImportService
         $rawCategory = strtolower(trim($rawCategory));
         $searchText = strtolower($searchText);
 
-        // Explicit match
-        if (str_contains($rawCategory, 'combo') || str_contains($rawCategory, 'thali')) {
-            if (str_contains($rawCategory, 'sabji') || str_contains($rawCategory, 'paneer')) {
-                return 'sabji_combo';
-            }
-            if (str_contains($rawCategory, 'aloo')) {
-                return 'aloo_combo';
-            }
-            if (str_contains($rawCategory, 'rice') || str_contains($rawCategory, 'pulao')) {
-                return 'rice_combo';
-            }
-            return 'special_combo';
-        }
-        if (str_contains($rawCategory, 'naan')) {
+        // Chur Chur Naan
+        if (str_contains($searchText, 'chur chur') || str_contains($searchText, 'chur_chur') || str_contains($rawCategory, 'chur chur')) {
             return 'chur_chur_naan';
         }
-        if (str_contains($rawCategory, 'sabji') || str_contains($rawCategory, 'paneer') || str_contains($rawCategory, 'dal')) {
-            return 'punjabi_sabji';
-        }
-        if (str_contains($rawCategory, 'aloo')) {
-            return 'aloo_combo';
-        }
-        if (str_contains($rawCategory, 'rice') || str_contains($rawCategory, 'pulao') || str_contains($rawCategory, 'khichadi')) {
+
+        // Rice Combos / Biryani / Khichadi / Pulao
+        if (str_contains($searchText, 'pulao') || str_contains($searchText, 'khichadi') || str_contains($searchText, 'khichdi') || str_contains($searchText, 'biryani') || (str_contains($searchText, 'rice') && !str_contains($searchText, 'curry') && !str_contains($searchText, 'dal'))) {
             return 'rice_combo';
         }
 
-        // Keyword lookup in item name/description
-        if (str_contains($searchText, 'chur chur') || str_contains($searchText, 'chur_chur')) {
-            return 'chur_chur_naan';
-        }
-        if (str_contains($searchText, 'pulao') || str_contains($searchText, 'khichadi') || str_contains($searchText, 'khichdi') || (str_contains($searchText, 'rice') && !str_contains($searchText, 'curry') && !str_contains($searchText, 'dal'))) {
-            return 'rice_combo';
-        }
-        if (str_contains($searchText, 'aloo') && (str_contains($searchText, 'roti') || str_contains($searchText, 'puri') || str_contains($searchText, 'chaas') || str_contains($searchText, 'matar'))) {
+        // Aloo Combos
+        if (str_contains($searchText, 'aloo') && (str_contains($searchText, 'roti') || str_contains($searchText, 'puri') || str_contains($searchText, 'chaas') || str_contains($searchText, 'chass') || str_contains($searchText, 'matar'))) {
             return 'aloo_combo';
         }
-        if (str_contains($searchText, 'thali') || str_contains($searchText, 'combo lunch') || str_contains($searchText, 'delux') || str_contains($searchText, 'special punjabi thali')) {
+
+        // Special Combos / Thali
+        if (str_contains($searchText, 'thali') || str_contains($searchText, 'combo lunch') || str_contains($searchText, 'delux') || str_contains($searchText, 'special punjabi') || str_contains($searchText, 'amritsar fix')) {
             return 'special_combo';
         }
-        if (str_contains($searchText, 'naan') && (str_contains($searchText, 'dal makhani') || str_contains($searchText, 'paneer'))) {
+
+        // Sabji Combos (e.g. Kaju Curry with Naan, Cheese Butter Masala with Chur Chur, Amritsari Paneer with Garlic Naan)
+        if ((str_contains($searchText, 'curry with') || str_contains($searchText, 'masala with') || str_contains($searchText, 'paneer with') || str_contains($searchText, 'combo')) && (str_contains($searchText, 'naan') || str_contains($searchText, 'roti') || str_contains($searchText, 'garlic'))) {
             return 'sabji_combo';
         }
-        if (str_contains($searchText, 'paneer') || str_contains($searchText, 'dal') || str_contains($searchText, 'sabji') || str_contains($searchText, 'kofta') || str_contains($searchText, 'kolhapuri')) {
+
+        // Punjabi Sabji / Paneer / Dal / Rotis / Starters / Papad
+        if (str_contains($searchText, 'paneer') || str_contains($searchText, 'dal') || str_contains($searchText, 'sabji') || str_contains($searchText, 'kofta') || str_contains($searchText, 'kolhapuri') || str_contains($searchText, 'roti') || str_contains($searchText, 'naan') || str_contains($searchText, 'paratha') || str_contains($searchText, 'papad') || str_contains($searchText, 'roll') || str_contains($searchText, 'kabab') || str_contains($searchText, 'fries') || str_contains($searchText, 'chole') || str_contains($searchText, 'chana')) {
             return 'punjabi_sabji';
         }
 
-        // Default category
         return 'punjabi_sabji';
     }
 }

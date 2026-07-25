@@ -18,7 +18,7 @@ class ListMenuItems extends ListRecords
                 ->label('Import Menu')
                 ->icon('heroicon-m-arrow-up-tray')
                 ->color('info')
-                ->url(MenuItemResource::getUrl('import')),
+                ->url('/admin/menu-import'),
         ];
     }
 }

@@ -41,177 +41,128 @@
 if (typeof window._orderAlarmInitialized === 'undefined') {
     window._orderAlarmInitialized = true;
 
-    // ── Audio state management
-    window._audioUnlocked = false;
-    window._pendingAlarm  = false;
-    window._alarmInterval = null;
-    window._alarmRunning  = false;
-    
-    let _beepAudio1 = null;
-    let _beepAudio2 = null;
+    // ── State
+    window._audioCtx       = null;
+    window._alarmInterval  = null;
+    window._alarmRunning   = false;
+    window._pendingAlarm   = false;
+    window._audioUnlocked  = false;
 
-    // Helper to generate a WAV beep in memory as a Base64 Data URL
-    function generateBeepDataUrl(frequency, durationSeconds) {
-        const sampleRate = 8000;
-        const numSamples = sampleRate * durationSeconds;
-        const buffer = new Uint8Array(44 + numSamples);
-        
-        // "RIFF" chunk descriptor
-        buffer[0] = 0x52; buffer[1] = 0x49; buffer[2] = 0x46; buffer[3] = 0x46; 
-        const fileSize = 36 + numSamples;
-        buffer[4] = fileSize & 0xff;
-        buffer[5] = (fileSize >> 8) & 0xff;
-        buffer[6] = (fileSize >> 16) & 0xff;
-        buffer[7] = (fileSize >> 24) & 0xff;
-        
-        // "WAVE" format
-        buffer[8] = 0x57; buffer[9] = 0x41; buffer[10] = 0x56; buffer[11] = 0x45; 
-        // "fmt " sub-chunk
-        buffer[12] = 0x66; buffer[13] = 0x6d; buffer[14] = 0x74; buffer[15] = 0x20; 
-        
-        buffer[16] = 16; buffer[17] = 0; buffer[18] = 0; buffer[19] = 0; // Subchunk1Size
-        buffer[20] = 1; buffer[21] = 0; // AudioFormat (PCM = 1)
-        buffer[22] = 1; buffer[23] = 0; // NumChannels (Mono = 1)
-        
-        // SampleRate
-        buffer[24] = sampleRate & 0xff;
-        buffer[25] = (sampleRate >> 8) & 0xff;
-        buffer[26] = (sampleRate >> 16) & 0xff;
-        buffer[27] = (sampleRate >> 24) & 0xff;
-        
-        // ByteRate
-        buffer[28] = sampleRate & 0xff;
-        buffer[29] = (sampleRate >> 8) & 0xff;
-        buffer[30] = (sampleRate >> 16) & 0xff;
-        buffer[31] = (sampleRate >> 24) & 0xff;
-        
-        buffer[32] = 1; buffer[33] = 0; // BlockAlign
-        buffer[34] = 8; buffer[35] = 0; // BitsPerSample
-        
-        // "data" sub-chunk
-        buffer[36] = 0x64; buffer[37] = 0x61; buffer[38] = 0x74; buffer[39] = 0x61; 
-        buffer[40] = numSamples & 0xff;
-        buffer[41] = (numSamples >> 8) & 0xff;
-        buffer[42] = (numSamples >> 16) & 0xff;
-        buffer[43] = (numSamples >> 24) & 0xff;
-        
-        // Generate sine wave samples
-        for (let i = 0; i < numSamples; i++) {
-            const t = i / sampleRate;
-            const sample = Math.round(128 + 127 * Math.sin(2 * Math.PI * frequency * t));
-            buffer[44 + i] = sample;
+    // Create / resume AudioContext (must be called inside a user gesture)
+    function getAudioCtx() {
+        if (!window._audioCtx) {
+            window._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
-        
-        let binary = '';
-        for (let i = 0; i < buffer.byteLength; i++) {
-            binary += String.fromCharCode(buffer[i]);
+        if (window._audioCtx.state === 'suspended') {
+            window._audioCtx.resume();
         }
-        return 'data:audio/wav;base64,' + btoa(binary);
+        return window._audioCtx;
     }
 
-    function initAudio() {
-        if (_beepAudio1) return;
-        try {
-            const beepUrl1 = generateBeepDataUrl(950, 0.15);
-            const beepUrl2 = generateBeepDataUrl(1200, 0.25);
-            _beepAudio1 = new Audio(beepUrl1);
-            _beepAudio2 = new Audio(beepUrl2);
-            console.log('HTML5 Audio loaded');
-        } catch(e) {
-            console.error('Audio init error:', e);
-        }
-    }
-
-    function unlockAudio() {
-        if (window._audioUnlocked) return;
-        
-        initAudio();
-        
-        if (_beepAudio1 && _beepAudio2) {
-            window._audioUnlocked = true;
-            console.log('Audio unlocked via gesture');
-            
-            // Trigger a quick silent play to satisfy autoplay policies
-            _beepAudio1.play().then(() => {
-                _beepAudio1.pause();
-                _beepAudio1.currentTime = 0;
-            }).catch(() => {});
-
-            // If alarm was waiting, start the loop now
-            if (window._pendingAlarm) {
-                window._pendingAlarm = false;
-                window._startAlarmLoop();
-            }
-        }
-    }
-
-    // Capture interaction to unlock audio instantly
-    ['click','touchstart','keydown','mousedown'].forEach(evt => {
-        document.addEventListener(evt, unlockAudio, true);
-    });
-
-    window.unlockAndTestAlarm = function() {
-        initAudio();
-        if (_beepAudio1 && _beepAudio2) {
-            window._audioUnlocked = true;
-            
-            // Direct playback trigger
-            _playChime();
-            
-            if (window._alarmRunning) return;
-            window._startAlarmLoop();
-        } else {
-            alert("Your browser does not support HTML5 Audio tags.");
-        }
-    };
-
+    // Play one "ding-dong" chime using oscillator nodes
     function _playChime() {
         try {
-            if (!_beepAudio1 || !_beepAudio2) {
-                initAudio();
-            }
-            if (_beepAudio1 && _beepAudio2) {
-                _beepAudio1.currentTime = 0;
-                _beepAudio1.play().catch(e => console.warn('Beep 1 blocked:', e));
-                
-                setTimeout(() => {
-                    if (_beepAudio2) {
-                        _beepAudio2.currentTime = 0;
-                        _beepAudio2.play().catch(e => console.warn('Beep 2 blocked:', e));
-                    }
-                }, 180);
-            }
-        } catch (e) { 
-            console.error('Alarm play error:', e); 
+            const ctx = getAudioCtx();
+            const now = ctx.currentTime;
+
+            // ── Note 1: high ping (800 Hz, 0.18 s)
+            const osc1  = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(900, now);
+            gain1.gain.setValueAtTime(0.8, now);
+            gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+            osc1.start(now);
+            osc1.stop(now + 0.35);
+
+            // ── Note 2: mid ping (660 Hz, 0.28 s) — 250 ms later
+            const osc2  = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(660, now + 0.25);
+            gain2.gain.setValueAtTime(0.7, now + 0.25);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+            osc2.start(now + 0.25);
+            osc2.stop(now + 0.65);
+
+            // ── Note 3: low dong (440 Hz, 0.4 s) — 550 ms later
+            const osc3  = ctx.createOscillator();
+            const gain3 = ctx.createGain();
+            osc3.connect(gain3);
+            gain3.connect(ctx.destination);
+            osc3.type = 'sine';
+            osc3.frequency.setValueAtTime(440, now + 0.55);
+            gain3.gain.setValueAtTime(0.6, now + 0.55);
+            gain3.gain.exponentialRampToValueAtTime(0.001, now + 1.05);
+            osc3.start(now + 0.55);
+            osc3.stop(now + 1.05);
+
+        } catch(e) {
+            console.error('Alarm chime error:', e);
         }
     }
 
     window._startAlarmLoop = function() {
-        if (window._alarmInterval) return;
+        if (window._alarmRunning) return;
         window._alarmRunning = true;
         _playChime();
-        window._alarmInterval = setInterval(_playChime, 2800);
+        window._alarmInterval = setInterval(_playChime, 3000);
     };
 
-    window.playOrderAlarm = function () {
-        if (window._alarmRunning) return;
-        
-        if (!window._audioUnlocked) {
-            window._pendingAlarm = true;
-            console.log('Alarm queued — click screen to enable');
-            return;
-        }
-        window._startAlarmLoop();
-    };
-
-    window.stopOrderAlarm = function () {
-        window._alarmRunning  = false;
-        window._pendingAlarm  = false;
+    window.stopOrderAlarm = function() {
+        window._alarmRunning = false;
+        window._pendingAlarm = false;
         if (window._alarmInterval) {
             clearInterval(window._alarmInterval);
             window._alarmInterval = null;
         }
     };
+
+    window.playOrderAlarm = function() {
+        if (window._alarmRunning) return;
+        if (!window._audioUnlocked) {
+            window._pendingAlarm = true;
+            return;
+        }
+        window._startAlarmLoop();
+    };
+
+    // Called from "Tap to Unmute" button — runs inside user gesture so AudioContext unlocks
+    window.unlockAndTestAlarm = function() {
+        try {
+            window._audioUnlocked = true;
+            window._pendingAlarm  = false;
+            _playChime(); // immediate test tone
+            if (!window._alarmRunning) {
+                window._startAlarmLoop();
+            }
+            // Update warning banner
+            const w = document.getElementById('audio-unlock-warning');
+            if (w) w.style.display = 'none';
+        } catch(e) {
+            alert('Sound error: ' + e.message);
+        }
+    };
+
+    // Auto-unlock on any user interaction (so alarm fires without needing to click the button)
+    function _autoUnlock() {
+        if (window._audioUnlocked) return;
+        try {
+            getAudioCtx(); // just resume/create the ctx
+            window._audioUnlocked = true;
+            if (window._pendingAlarm) {
+                window._pendingAlarm = false;
+                window._startAlarmLoop();
+            }
+        } catch(e) {}
+    }
+    ['click','touchstart','keydown','mousedown'].forEach(function(ev) {
+        document.addEventListener(ev, _autoUnlock, { once: false, capture: true });
+    });
 }
 </script>
 
