@@ -8,6 +8,9 @@ import CartDrawer from '../components/CartDrawer';
 import Link from 'next/link';
 import Script from 'next/script';
 
+import { auth } from '../firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 // Use process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID or placeholder
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '1017482487441-testplaceholdermockid.apps.googleusercontent.com';
@@ -23,6 +26,10 @@ export default function LoginPage() {
   const [devOtp, setDevOtp] = useState(''); // OTP code returned by backend for easy dev copy-paste
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Firebase phone auth states
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
+  const [isFirebasePhone, setIsFirebasePhone] = useState(false);
 
   // If already logged in, redirect to correct page
   useEffect(() => {
@@ -41,86 +48,185 @@ export default function LoginPage() {
     }
   }, [router]);
 
-  // Request OTP code
+  // Setup invisible reCAPTCHA container dynamically (recreates element to prevent "already rendered" errors)
+  const initRecaptcha = () => {
+    if (typeof window === 'undefined') return null;
+    
+    const existing = document.getElementById('recaptcha-container');
+    if (existing) {
+      existing.remove();
+    }
+    
+    const div = document.createElement('div');
+    div.id = 'recaptcha-container';
+    document.body.appendChild(div);
+    
+    try {
+      return new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {}
+      });
+    } catch (err) {
+      console.error('reCAPTCHA init error:', err);
+      return null;
+    }
+  };
+
+  // Request OTP code (Automatically routes to Firebase for Phone, or Laravel for Email)
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!identifier.trim()) {
+    const idVal = identifier.trim();
+    if (!idVal) {
       setToast('⚠️ Phone number or Email is required!');
       return;
     }
 
     setLoading(true);
-    try {
-      const res = await fetch(`${API}/otp/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: identifier.trim() })
-      });
-      const data = await res.json();
+    const isEmail = idVal.includes('@');
+
+    if (!isEmail) {
+      // 📱 Firebase Phone Auth Flow
+      setIsFirebasePhone(true);
       
-      if (res.ok) {
-        setOtpSent(true);
-        if (data.otp) {
-          setDevOtp(data.otp);
-          setToast(`🔑 OTP Sent! Development Code: ${data.otp}`);
-        } else {
-          setToast('📩 Verification code sent successfully!');
-        }
-      } else {
-        setToast(`❌ Error: ${data.message || 'Failed to send OTP'}`);
+      // Auto-format to E.164 (assume +91 if 10 digits without + prefix)
+      let formattedPhone = idVal;
+      const digits = idVal.replace(/\D/g, '');
+      if (digits.length === 10 && !idVal.startsWith('+')) {
+        formattedPhone = `+91${digits}`;
+      } else if (!idVal.startsWith('+')) {
+        formattedPhone = `+${digits}`;
       }
-    } catch (err) {
-      setToast('❌ Connection error. Is the backend server running?');
-    } finally {
-      setLoading(false);
+
+      try {
+        const appVerifier = initRecaptcha();
+        if (!appVerifier) {
+          throw new Error('reCAPTCHA initialization failed.');
+        }
+
+        const confirmRes = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
+        setConfirmationResult(confirmRes);
+        setOtpSent(true);
+        setToast('📩 Verification SMS sent via Firebase!');
+      } catch (err: any) {
+        console.error('Firebase SMS send error:', err);
+        setToast(`❌ SMS Error: ${err.message || 'Failed to send verification code'}`);
+        setIsFirebasePhone(false);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // ✉️ Standard Laravel Email OTP Flow
+      setIsFirebasePhone(false);
+      try {
+        const res = await fetch(`${API}/otp/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: idVal })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+          setOtpSent(true);
+          if (data.otp) {
+            setDevOtp(data.otp);
+            setToast(`🔑 OTP Sent! Development Code: ${data.otp}`);
+          } else {
+            setToast('📩 Verification code sent successfully!');
+          }
+        } else {
+          setToast(`❌ Error: ${data.message || 'Failed to send OTP'}`);
+        }
+      } catch (err) {
+        setToast('❌ Connection error. Is the backend server running?');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   // Verify OTP code and Login
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otpCode.trim()) {
+    const codeVal = otpCode.trim();
+    if (!codeVal) {
       setToast('⚠️ Verification code is required!');
       return;
     }
 
     setLoading(true);
-    try {
-      const res = await fetch(`${API}/otp/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: identifier.trim(),
-          code: otpCode.trim()
-        })
-      });
-      const data = await res.json();
 
-      if (res.ok) {
-        const isEmail = data.is_email;
-        const phoneParam = isEmail ? null : identifier.trim();
-        const emailParam = isEmail ? identifier.trim() : null;
-        const resolvedName = name.trim() || data.name || 'Customer';
+    if (isFirebasePhone && confirmationResult) {
+      // 📱 Firebase SMS Code Verification
+      try {
+        const userCredential = await confirmationResult.confirm(codeVal);
+        const idToken = await userCredential.user.getIdToken();
 
-        loginUser(phoneParam, emailParam, resolvedName);
-        setToast('✅ Login Successful!');
-        
-        setTimeout(() => {
-          let targetPath = '/';
-          const params = new URLSearchParams(window.location.search);
-          const redirectParam = params.get('redirect');
-          if (redirectParam) {
-            targetPath = redirectParam;
-          }
-          router.push(targetPath);
-        }, 500);
-      } else {
-        setToast(`❌ Verification failed: ${data.message}`);
+        // Validate token on Laravel backend
+        const res = await fetch(`${API}/auth/firebase`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_token: idToken })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          const resolvedName = name.trim() || data.name || 'Customer';
+          loginUser(data.phone || identifier.trim(), null, resolvedName);
+          setToast('✅ Login Successful!');
+          
+          setTimeout(() => {
+            let targetPath = '/';
+            const params = new URLSearchParams(window.location.search);
+            const redirectParam = params.get('redirect');
+            if (redirectParam) {
+              targetPath = redirectParam;
+            }
+            router.push(targetPath);
+          }, 500);
+        } else {
+          setToast(`❌ Backend verification failed: ${data.message}`);
+        }
+      } catch (err: any) {
+        console.error('Firebase confirm error:', err);
+        setToast(`❌ Invalid code: ${err.message || 'Verification failed'}`);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setToast('❌ Connection error during verification.');
-    } finally {
-      setLoading(false);
+    } else {
+      // ✉️ Standard Laravel Email Verification Flow
+      try {
+        const res = await fetch(`${API}/otp/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: identifier.trim(),
+            code: codeVal
+          })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          const resolvedName = name.trim() || data.name || 'Customer';
+          loginUser(null, identifier.trim(), resolvedName);
+          setToast('✅ Login Successful!');
+          
+          setTimeout(() => {
+            let targetPath = '/';
+            const params = new URLSearchParams(window.location.search);
+            const redirectParam = params.get('redirect');
+            if (redirectParam) {
+              targetPath = redirectParam;
+            }
+            router.push(targetPath);
+          }, 500);
+        } else {
+          setToast(`❌ Verification failed: ${data.message}`);
+        }
+      } catch (err) {
+        setToast('❌ Connection error during verification.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

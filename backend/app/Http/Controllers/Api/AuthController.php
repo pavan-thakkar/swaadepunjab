@@ -193,4 +193,69 @@ class AuthController extends Controller
             'message' => 'Failed to verify Google ID Token.'
         ], 422);
     }
+
+    /**
+     * Handle Firebase Token verification.
+     */
+    public function firebaseLogin(Request $request): JsonResponse
+    {
+        $request->validate([
+            'id_token' => 'required|string',
+        ]);
+
+        $idToken = $request->id_token;
+        $firebaseApiKey = env('FIREBASE_API_KEY', 'AIzaSyBSV_slCr9YUXMuZiXqyXeOHd8gFSU_5Sw');
+
+        try {
+            $response = Http::post("https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={$firebaseApiKey}", [
+                'idToken' => $idToken
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $user = $data['users'][0] ?? null;
+
+                if ($user) {
+                    $phoneNumber = $user['phoneNumber'] ?? null;
+                    $email = $user['email'] ?? null;
+                    $name = 'Customer';
+
+                    // Look up latest order name for this phone/email to greet them
+                    $latestOrder = null;
+                    if ($phoneNumber) {
+                        $cleanPhone = preg_replace('/^\+91/', '', $phoneNumber);
+                        $cleanPhone2 = preg_replace('/^\+/', '', $phoneNumber);
+                        $latestOrder = Order::where('customer_phone', $cleanPhone)
+                            ->orWhere('customer_phone', $cleanPhone2)
+                            ->orWhere('customer_phone', $phoneNumber)
+                            ->latest()
+                            ->first();
+                    } elseif ($email) {
+                        $latestOrder = Order::where('customer_email', $email)->latest()->first();
+                    }
+
+                    if ($latestOrder) {
+                        $name = $latestOrder->customer_name;
+                    }
+
+                    return response()->json([
+                        'status' => 'success',
+                        'phone' => $phoneNumber,
+                        'email' => $email,
+                        'name' => $name
+                    ]);
+                }
+            } else {
+                Log::error("Firebase Token verify failed: " . $response->body());
+            }
+        } catch (\Exception $e) {
+            Log::error("Firebase Token verify exception: " . $e->getMessage());
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to verify Firebase ID Token.'
+        ], 422);
+    }
 }
+
