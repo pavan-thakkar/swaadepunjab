@@ -43,25 +43,33 @@ npm run build
 [ -f .env.local.bak ] && mv .env.local.bak .env.local
 echo -e "${GREEN}  ✅ Build complete${NC}"
 
-# ── STEP 3: Deploy backend from GitHub ─────────────────────
+# ── STEP 3: Deploy backend DIRECTLY from local ──────────────
 echo ""
-echo -e "${BLUE}${BOLD}[3/4] 🔧 Deploying backend...${NC}"
+echo -e "${BLUE}${BOLD}[3/4] 🔧 Uploading backend directly from local...${NC}"
+
+# Sync files directly from local backend to remote backend (exclude node_modules, storage logs/sessions, env and database)
+sshpass -p "$SSH_PASS" rsync -az --delete \
+  --exclude='.DS_Store' \
+  --exclude='.git' \
+  --exclude='.env' \
+  --exclude='storage/app/public/*' \
+  --exclude='storage/framework/cache/data/*' \
+  --exclude='storage/framework/views/*' \
+  --exclude='storage/framework/sessions/*' \
+  --exclude='storage/logs/*' \
+  --exclude='database/database.sqlite' \
+  -e "ssh -o StrictHostKeyChecking=no -p $SSH_PORT" \
+  "$LOCAL_PROJECT/backend/" \
+  "$SSH_USER@$SSH_HOST:/home/u360309011/domains/swaadepunjab.com/public_html/backend/"
+
+# Clear cache and dump autoload on live server
 sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST << 'ENDSSH'
   set -e
   BDIR="/home/u360309011/domains/swaadepunjab.com/public_html/backend"
   cd "$BDIR"
-  cp .env /tmp/env_bak_$(date +%s)
-  cp database/database.sqlite /tmp/db_bak_$(date +%s).sqlite 2>/dev/null || true
-  git fetch https://github.com/pavan-thakkar/swaadepunjab.git main
-  git checkout FETCH_HEAD -- backend/
-  cp -r backend/* .
-  cp backend/.user.ini . 2>/dev/null || true
-  cp backend/public/.user.ini public/ 2>/dev/null || true
-  cp backend/php.ini . 2>/dev/null || true
-  rm -rf backend
-  cp $(ls -t /tmp/env_bak_* | head -1) .env
   php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
   php artisan migrate --force
+  composer dump-autoload --optimize
   echo "Backend OK"
 ENDSSH
 echo -e "${GREEN}  ✅ Backend deployed${NC}"
