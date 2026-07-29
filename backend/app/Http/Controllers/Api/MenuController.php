@@ -44,10 +44,6 @@ class MenuController extends Controller
      */
     public function show(MenuItem $menuItem): JsonResponse
     {
-        if (! $menuItem->is_available) {
-            return response()->json(['message' => 'Item is not available'], 404);
-        }
-
         return response()->json(['data' => $menuItem]);
     }
 }
