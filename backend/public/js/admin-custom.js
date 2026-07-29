@@ -1,5 +1,5 @@
 // ============================================================
-// SWAAD E PUNJAB — Admin Custom JS  v3.0
+// SWAAD E PUNJAB — Admin Custom JS  v4.0
 // Runs on EVERY admin page, independent of Livewire/Alpine
 // ============================================================
 
@@ -33,19 +33,71 @@ document.addEventListener('DOMContentLoaded', () => {
 (function () {
     'use strict';
 
-    // ── State
+    // ── Audio state
     let audioCtx      = null;
     let alarmInterval = null;
     let alarmRunning  = false;
     let alarmNeeded   = false;
     let audioUnlocked = false;
 
-    // ── Per-device mute (sessionStorage — resets on tab close)
-    // If muted, this device won't ring until next new order comes in
-    let deviceMuted = sessionStorage.getItem('swaad_alarm_muted') === '1';
+    // ── Tracking
+    let lastPendingCount   = -1;   // -1 = first load
+    let notifSent          = false; // prevent duplicate notifications per order batch
+    let activeNotification = null;  // keep reference to close old one
 
-    // ── Last seen pending count (to detect NEW orders for mute-reset)
-    let lastPendingCount = 0;
+    // ─────────────────────────────────────────────
+    // STEP 1: REQUEST BROWSER NOTIFICATION PERMISSION
+    // (works across ALL pages, ALL tabs, even when minimized)
+    // ─────────────────────────────────────────────
+    function requestNotifPermission() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+            // Ask permission silently — shown once ever per browser
+            Notification.requestPermission();
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // STEP 2: SHOW BROWSER NOTIFICATION
+    // Works even when admin is on a different page or tab
+    // ─────────────────────────────────────────────
+    function showBrowserNotification(count) {
+        if (!('Notification' in window)) return;
+        if (Notification.permission !== 'granted') return;
+        if (notifSent) return; // don't spam
+
+        // Close previous notification
+        if (activeNotification) {
+            try { activeNotification.close(); } catch(e) {}
+        }
+
+        activeNotification = new Notification('🔔 New Order — Swaad E Punjab', {
+            body: `${count} new order${count > 1 ? 's' : ''} waiting for your action!`,
+            icon: '/favicon.ico',
+            tag: 'swaad-new-order',   // replaces previous same notification
+            requireInteraction: true, // stays visible until admin clicks
+            silent: false,
+        });
+
+        activeNotification.onclick = function () {
+            // Focus the admin tab and navigate to dashboard
+            window.focus();
+            if (!window.location.pathname.startsWith('/admin')) {
+                window.location.href = '/admin';
+            }
+            activeNotification.close();
+        };
+
+        notifSent = true;
+    }
+
+    function clearBrowserNotification() {
+        if (activeNotification) {
+            try { activeNotification.close(); } catch(e) {}
+            activeNotification = null;
+        }
+        notifSent = false;
+    }
 
     // ─────────────────────────────────────────────
     // AUDIO CONTEXT
@@ -60,10 +112,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return audioCtx;
     }
 
-    // Resume audio when tab becomes visible again (fixes background-tab suspend)
+    // Resume when tab comes back from background
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && audioCtx && audioCtx.state === 'suspended') {
             audioCtx.resume();
+        }
+        // If alarm needed and tab just became visible, try to show UI
+        if (!document.hidden && alarmNeeded) {
+            updateUI();
         }
     });
 
@@ -95,11 +151,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // ALARM START / STOP
     // ─────────────────────────────────────────────
     function startAlarm() {
-        if (alarmRunning || deviceMuted) return;
+        if (alarmRunning) return;
         alarmRunning = true;
         playChime();
         alarmInterval = setInterval(playChime, 2500);
-        console.log('[Alarm] 🔔 STARTED');
         updateUI();
     }
 
@@ -108,69 +163,62 @@ document.addEventListener('DOMContentLoaded', () => {
         alarmNeeded  = false;
         clearInterval(alarmInterval);
         alarmInterval = null;
-        console.log('[Alarm] 🔕 STOPPED');
+        clearBrowserNotification();
+        hideSetupOverlay();
         updateUI();
     }
 
     // ─────────────────────────────────────────────
-    // AUDIO UNLOCK (browser requires one user gesture per page load)
+    // AUDIO UNLOCK (one click required per page load — browser rule)
     // ─────────────────────────────────────────────
     function unlockAudio() {
         if (audioUnlocked) return;
         try {
             getCtx();
             audioUnlocked = true;
-            console.log('[Alarm] ✅ Audio unlocked');
             hideSetupOverlay();
-            // Start alarm if it was waiting
-            if (alarmNeeded && !alarmRunning && !deviceMuted) {
-                startAlarm();
-            }
+            if (alarmNeeded && !alarmRunning) startAlarm();
         } catch (e) {}
     }
 
-    // Listen for ANY interaction to auto-unlock
     ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'mousemove', 'pointerdown']
         .forEach(ev => document.addEventListener(ev, unlockAudio, { capture: true, passive: true }));
 
     // ─────────────────────────────────────────────
-    // SETUP OVERLAY (shown once per page load until clicked)
-    // Ensures admin clicks once so audio stays unlocked for whole session
+    // SETUP OVERLAY — shown when there's a pending order
+    // and audio is not yet unlocked on this page
     // ─────────────────────────────────────────────
     function showSetupOverlay() {
+        if (audioUnlocked) return;
         if (document.getElementById('alarm-setup-overlay')) return;
+
         const el = document.createElement('div');
         el.id = 'alarm-setup-overlay';
         el.innerHTML = `
-            <div style="
-                position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+            <div onclick="window.activateAlarmSound()" style="
+                position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
                 z-index:99999;
-                background:linear-gradient(135deg,#1e293b,#0f172a);
-                border:2px solid #f59e0b;
+                background:linear-gradient(135deg,#dc2626,#991b1b);
+                border:2px solid #fca5a5;
                 border-radius:16px;
                 padding:14px 24px;
                 display:flex; align-items:center; gap:16px;
-                box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 0 20px rgba(245,158,11,0.3);
+                box-shadow:0 8px 32px rgba(220,38,38,0.6);
                 cursor:pointer;
-                animation: slideUpBanner 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
-            " onclick="window.activateAlarmSound()" id="alarm-setup-inner">
-                <span style="font-size:28px;">🔔</span>
+                animation: pulseRed 1s ease infinite alternate, slideUpBanner 0.4s ease both;
+                white-space:nowrap;
+            ">
+                <span style="font-size:28px;animation:bellShake 0.4s ease infinite alternate;display:inline-block;">🔔</span>
                 <div>
-                    <div style="color:#f59e0b;font-size:14px;font-weight:900;letter-spacing:0.3px;">CLICK HERE ONCE TO ENABLE ORDER ALARM</div>
-                    <div style="color:#94a3b8;font-size:11px;margin-top:2px;">Browser requires one click to allow alarm sounds on this device</div>
+                    <div style="color:#fff;font-size:14px;font-weight:900;">NEW ORDER! CLICK TO ENABLE ALARM</div>
+                    <div style="color:#fca5a5;font-size:11px;margin-top:2px;">Tap once to enable alarm sound on this device</div>
                 </div>
-                <span style="
-                    background:#f59e0b; color:#1e293b;
-                    padding:8px 18px; border-radius:99px;
-                    font-size:13px; font-weight:900;
-                    white-space:nowrap;
-                ">Enable →</span>
+                <span style="background:#fff;color:#dc2626;padding:8px 18px;border-radius:99px;font-size:13px;font-weight:900;">Enable 🔊</span>
             </div>
             <style>
-                @keyframes slideUpBanner {
-                    from { opacity:0; transform:translateX(-50%) translateY(40px); }
-                    to   { opacity:1; transform:translateX(-50%) translateY(0); }
-                }
+                @keyframes slideUpBanner{from{opacity:0;transform:translateX(-50%) translateY(50px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
+                @keyframes pulseRed{from{box-shadow:0 8px 32px rgba(220,38,38,0.4);}to{box-shadow:0 8px 48px rgba(220,38,38,0.9);}}
+                @keyframes bellShake{from{transform:rotate(-20deg);}to{transform:rotate(20deg);}}
             </style>
         `;
         document.body.appendChild(el);
@@ -182,154 +230,140 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ─────────────────────────────────────────────
-    // PER-DEVICE MUTE CONTROLS
-    // ─────────────────────────────────────────────
-    function muteThisDevice() {
-        deviceMuted = true;
-        sessionStorage.setItem('swaad_alarm_muted', '1');
-        stopAlarm();
-        alarmNeeded = true; // keep tracking, just don't ring HERE
-        updateUI();
-        console.log('[Alarm] 🔇 Device muted');
-    }
-
-    function unmuteThisDevice() {
-        deviceMuted = false;
-        sessionStorage.removeItem('swaad_alarm_muted');
-        updateUI();
-        // If there are still pending orders, ring again
-        if (alarmNeeded && audioUnlocked) {
-            startAlarm();
-        }
-        console.log('[Alarm] 🔊 Device unmuted');
-    }
-
-    // ─────────────────────────────────────────────
-    // FLOATING MUTE BAR UI (shown when alarm is ringing)
+    // FLOATING STATUS BAR (bottom of admin — any page)
     // ─────────────────────────────────────────────
     function updateUI() {
-        // Hide/show the mute bar
         let bar = document.getElementById('alarm-mute-bar');
 
-        if (alarmNeeded && audioUnlocked) {
+        // Hide the blade widget's unmute-banner (handled here instead)
+        const widgetBanner = document.getElementById('unmute-banner');
+        if (widgetBanner) widgetBanner.style.display = 'none';
+
+        if (alarmNeeded && alarmRunning) {
             if (!bar) {
                 bar = document.createElement('div');
                 bar.id = 'alarm-mute-bar';
-                bar.style.cssText = `
-                    position:fixed; bottom:0; left:0; right:0; z-index:99998;
-                    background:linear-gradient(90deg,#1e293b,#0f172a);
-                    border-top:2px solid #f59e0b;
-                    padding:10px 20px;
-                    display:flex; align-items:center; justify-content:space-between;
-                    gap:12px; flex-wrap:wrap;
-                    box-shadow:0 -4px 20px rgba(0,0,0,0.4);
-                `;
                 document.body.appendChild(bar);
             }
-            if (deviceMuted) {
-                bar.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:20px;">🔇</span>
-                        <span style="color:#94a3b8;font-size:13px;font-weight:700;">Alarm silenced on this device — pending orders still exist</span>
+            bar.style.cssText = `
+                position:fixed;bottom:0;left:0;right:0;z-index:99998;
+                background:linear-gradient(90deg,#1e293b,#0f172a);
+                border-top:2px solid #f59e0b;
+                padding:10px 20px;
+                display:flex;align-items:center;justify-content:space-between;
+                gap:12px;flex-wrap:wrap;
+                box-shadow:0 -4px 20px rgba(0,0,0,0.5);
+            `;
+            bar.innerHTML = `
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <span style="font-size:22px;display:inline-block;animation:bellRing 0.35s ease infinite alternate;">🔔</span>
+                    <div>
+                        <div style="color:#fbbf24;font-size:13px;font-weight:900;">NEW ORDER RINGING — Action required on Dashboard</div>
+                        <a href="/admin" style="color:#94a3b8;font-size:11px;text-decoration:underline;">→ Go to Dashboard to Accept/Reject</a>
                     </div>
-                    <button onclick="window.unmuteDevice()" style="
-                        background:#f59e0b;color:#1e293b;border:none;
-                        padding:8px 18px;border-radius:99px;
-                        font-size:13px;font-weight:900;cursor:pointer;
-                    ">🔔 Re-enable Alarm</button>
-                `;
-            } else if (alarmRunning) {
-                bar.innerHTML = `
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:20px;animation:ring 0.4s ease infinite alternate;display:inline-block;">🔔</span>
-                        <span style="color:#fbbf24;font-size:13px;font-weight:800;">NEW ORDER ALARM RINGING — Accept or Reject the order above</span>
-                    </div>
-                    <button onclick="window.muteDevice()" style="
-                        background:#374151;color:#f1f5f9;border:1px solid #4b5563;
-                        padding:8px 18px;border-radius:99px;
-                        font-size:13px;font-weight:700;cursor:pointer;
-                    ">🔇 Silence on this device</button>
-                    <style>@keyframes ring{from{transform:rotate(-15deg);}to{transform:rotate(15deg);}}</style>
-                `;
-            }
+                </div>
+                <button onclick="window.muteDevice()" style="
+                    background:#374151;color:#f1f5f9;border:1px solid #4b5563;
+                    padding:8px 18px;border-radius:99px;font-size:13px;font-weight:700;cursor:pointer;
+                ">🔇 Silence on this device</button>
+                <style>@keyframes bellRing{from{transform:rotate(-15deg);}to{transform:rotate(15deg);}}</style>
+            `;
+        } else if (alarmNeeded && !alarmRunning && !audioUnlocked) {
+            // Waiting for audio unlock — show setup overlay instead
+            showSetupOverlay();
         } else {
-            // No pending orders — hide the bar
             if (bar) bar.remove();
-        }
-
-        // Hide the unmute-banner (from blade widget) if audio is unlocked
-        const unmuteBanner = document.getElementById('unmute-banner');
-        if (unmuteBanner) {
-            unmuteBanner.style.display = 'none';
         }
     }
 
     // ─────────────────────────────────────────────
-    // GLOBAL FUNCTIONS (called from blade buttons)
+    // PER-DEVICE MUTE
+    // ─────────────────────────────────────────────
+    function muteThisDevice() {
+        sessionStorage.setItem('swaad_alarm_muted', '1');
+        if (alarmRunning) {
+            clearInterval(alarmInterval);
+            alarmInterval = null;
+            alarmRunning = false;
+        }
+        const bar = document.getElementById('alarm-mute-bar');
+        if (bar) bar.innerHTML = `
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:20px;">🔇</span>
+                <span style="color:#94a3b8;font-size:13px;font-weight:700;">Alarm silenced on this device</span>
+            </div>
+            <button onclick="window.unmuteDevice()" style="
+                background:#f59e0b;color:#1e293b;border:none;
+                padding:8px 18px;border-radius:99px;font-size:13px;font-weight:900;cursor:pointer;
+            ">🔔 Re-enable Alarm</button>
+        `;
+    }
+
+    function unmuteThisDevice() {
+        sessionStorage.removeItem('swaad_alarm_muted');
+        if (alarmNeeded && audioUnlocked) startAlarm();
+    }
+
+    // ─────────────────────────────────────────────
+    // GLOBAL FUNCTIONS
     // ─────────────────────────────────────────────
     window.activateAlarmSound = function () {
         unlockAudio();
-        hideSetupOverlay();
     };
-
     window.manualStartAlarm = function () {
         unlockAudio();
-        alarmNeeded   = true;
-        deviceMuted   = false;
-        sessionStorage.removeItem('swaad_alarm_muted');
+        alarmNeeded = true;
         if (audioUnlocked) startAlarm();
     };
-
     window.muteDevice   = muteThisDevice;
     window.unmuteDevice = unmuteThisDevice;
 
     // ─────────────────────────────────────────────
     // BACKEND POLLING — every 3 seconds
+    // Works on ANY admin page
     // ─────────────────────────────────────────────
     function pollPendingOrders() {
         fetch('/admin/alarm/pending-count', { credentials: 'same-origin' })
             .then(r => r.json())
             .then(data => {
                 const count = data.count || 0;
+                const isMuted = sessionStorage.getItem('swaad_alarm_muted') === '1';
 
-                // If a NEW order arrived (count went up), auto-reset device mute
-                // so this device rings again for the new order
-                if (count > lastPendingCount && lastPendingCount >= 0) {
-                    deviceMuted = false;
+                // Detect NEW order (count increased) → reset mute, reset notif
+                if (lastPendingCount >= 0 && count > lastPendingCount) {
                     sessionStorage.removeItem('swaad_alarm_muted');
-                    console.log('[Alarm] 🆕 New order detected — device unmuted');
+                    notifSent = false; // allow new notification
+                    console.log('[Alarm] 🆕 New order! Resetting mute & notif state');
                 }
                 lastPendingCount = count;
 
                 if (count > 0) {
                     alarmNeeded = true;
 
-                    // Show the one-time setup overlay if audio not yet unlocked
-                    if (!audioUnlocked) {
-                        showSetupOverlay();
-                    }
+                    // ── Show browser notification (works on any page/tab)
+                    showBrowserNotification(count);
 
-                    // Ring if audio is unlocked and not muted
-                    if (audioUnlocked && !alarmRunning && !deviceMuted) {
+                    // ── Audio alarm (works on current page if unlocked)
+                    const currentlyMuted = sessionStorage.getItem('swaad_alarm_muted') === '1';
+                    if (!audioUnlocked) {
+                        showSetupOverlay(); // prompt to click once
+                    } else if (!currentlyMuted && !alarmRunning) {
                         startAlarm();
                     }
 
                     updateUI();
+
                 } else {
-                    // No pending orders
-                    alarmNeeded = false;
-                    deviceMuted = false;
-                    sessionStorage.removeItem('swaad_alarm_muted');
+                    // No pending orders — stop everything
                     stopAlarm();
-                    hideSetupOverlay();
-                    updateUI();
                 }
             })
-            .catch(() => {}); // silently ignore network errors
+            .catch(() => {});
     }
 
-    // Start polling after page loads
+    // Request notification permission first, then start polling
     setTimeout(() => {
+        requestNotifPermission();
         pollPendingOrders();
         setInterval(pollPendingOrders, 3000);
     }, 1200);
