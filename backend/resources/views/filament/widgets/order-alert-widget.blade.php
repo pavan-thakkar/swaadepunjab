@@ -6,39 +6,24 @@
         decrement(id) { this.prepTimes[id] = Math.max(this.getPrepTime(id) - 1, 13); }
     }"
     x-init="
-        const currentCount = {{ count($pendingOrderCards) }};
-        const currentIds   = [{{ implode(',', array_column($pendingOrderCards, 'id')) }}];
+        const pendingCount = {{ count($pendingOrderCards) }};
 
-        // Store seen IDs in localStorage so we detect truly NEW ones across polls
-        const seenKey  = 'swaad_seen_order_ids';
-        let   seenIds  = JSON.parse(localStorage.getItem(seenKey) || '[]');
-
-        // Find order IDs we have NOT seen before
-        const newIds = currentIds.filter(id => !seenIds.includes(id));
-
-        // Merge and save
-        const mergedIds = [...new Set([...seenIds, ...currentIds])];
-        localStorage.setItem(seenKey, JSON.stringify(mergedIds));
-
-        if (newIds.length > 0) {
-            // Genuinely new orders → trigger alarm
+        if (pendingCount > 0) {
+            // There are pending orders — alarm MUST ring
             window._alarmNeeded = true;
-            window.tryStartAlarm();
-        }
-
-        if (currentCount === 0) {
+            window.tryStartAlarm(); // fires immediately if audio already unlocked
+        } else {
+            // No pending orders — stop alarm
             window.stopOrderAlarm();
-            // Clean up seen IDs when queue is empty so future orders alert properly
-            localStorage.removeItem(seenKey);
         }
 
-        // Show/hide unmute banner based on unlock state
+        // Update unmute banner visibility
         setTimeout(() => {
-            const bannerEl = document.getElementById('unmute-banner');
-            if (bannerEl) {
-                bannerEl.style.display = (currentCount > 0 && !window._audioUnlocked) ? 'flex' : 'none';
+            const banner = document.getElementById('unmute-banner');
+            if (banner) {
+                banner.style.display = (pendingCount > 0 && !window._audioUnlocked) ? 'flex' : 'none';
             }
-        }, 200);
+        }, 150);
     "
     wire:poll.4s="checkForNewOrders"
 >
@@ -64,15 +49,14 @@ if (typeof window._orderAlarmInitialized === 'undefined') {
         return window._audioCtx;
     }
 
-    // 3-note restaurant bell chime
+    // 3-note restaurant bell: ding dong ding
     function _playChime() {
         try {
             const ctx = _getCtx();
             const now = ctx.currentTime;
-
-            [[900, 0,    0.8, 0.4],
-             [660, 0.28, 0.7, 0.7],
-             [440, 0.58, 0.6, 1.1]].forEach(([freq, delay, vol, dur]) => {
+            [[900, 0,    0.9, 0.4],
+             [660, 0.28, 0.8, 0.7],
+             [440, 0.58, 0.7, 1.1]].forEach(([freq, delay, vol, dur]) => {
                 const osc  = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.connect(gain);
@@ -84,7 +68,14 @@ if (typeof window._orderAlarmInitialized === 'undefined') {
                 osc.start(now + delay);
                 osc.stop(now + delay + dur);
             });
-        } catch(e) { console.error('Chime error:', e); }
+        } catch(e) { console.warn('Chime error:', e); }
+    }
+
+    function _startAlarmLoop() {
+        if (window._alarmRunning) return;
+        window._alarmRunning = true;
+        _playChime(); // ring immediately
+        window._alarmInterval = setInterval(_playChime, 2500); // then every 2.5s
     }
 
     window.stopOrderAlarm = function() {
@@ -96,44 +87,43 @@ if (typeof window._orderAlarmInitialized === 'undefined') {
         }
     };
 
-    function _startAlarmLoop() {
-        if (window._alarmRunning) return;
-        window._alarmRunning = true;
-        _playChime();
-        window._alarmInterval = setInterval(_playChime, 2500);
-    }
-
-    // Try to start alarm — safe to call anytime
+    // Called by x-init every poll — starts alarm if audio is ready
     window.tryStartAlarm = function() {
         if (!window._alarmNeeded) return;
-        if (!window._audioUnlocked) return; // wait for user interaction
+        if (!window._audioUnlocked) return; // still waiting for user gesture
         _startAlarmLoop();
     };
 
-    // Called from the unmute button (inside user gesture = guaranteed to work)
+    // Called by "Click here to ring" button — ALWAYS works (inside user gesture)
     window.unlockAndStartAlarm = function() {
         window._audioUnlocked = true;
         window._alarmNeeded   = true;
         try { _getCtx(); } catch(e) {}
-        _startAlarmLoop();
+        // Force restart even if already running (re-trigger)
+        if (!window._alarmRunning) {
+            _startAlarmLoop();
+        }
         const banner = document.getElementById('unmute-banner');
         if (banner) banner.style.display = 'none';
     };
 
-    // Auto-unlock on ANY user interaction with the page
-    function _autoUnlock(e) {
+    // Auto-unlock the moment admin interacts with ANYTHING on the page
+    // (scroll, mouse move, click — browser allows AudioContext after any of these)
+    function _autoUnlock() {
         if (window._audioUnlocked) return;
         try {
             _getCtx();
             window._audioUnlocked = true;
-            window.tryStartAlarm(); // fire pending alarm immediately
-        } catch(err) {}
+            console.log('[Alarm] Audio unlocked via user interaction');
+            window.tryStartAlarm(); // start immediately if needed
+        } catch(err) { console.warn('[Alarm] Unlock failed:', err); }
     }
-    ['click','touchstart','keydown','mousedown','scroll','mousemove'].forEach(function(ev) {
+    ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'mousemove', 'pointerdown'].forEach(function(ev) {
         document.addEventListener(ev, _autoUnlock, { capture: true, passive: true });
     });
 }
 </script>
+
 
 
 
