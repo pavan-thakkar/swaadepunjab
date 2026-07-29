@@ -104,9 +104,6 @@ const renderOrderNumber = (num: string) => {
 };
 
 export default function TrackOrderPage() {
-  // In static export + .htaccess routing, useParams() may return the build-time
-  // param (e.g. 'demo') instead of the real URL segment. Read pathname as fallback.
-  const params = useParams<{ id: string }>();
   const [id, setId] = useState<string>('');
 
   useEffect(() => {
@@ -114,9 +111,8 @@ export default function TrackOrderPage() {
     const pathParts = window.location.pathname.split('/').filter(Boolean);
     const trackIdx = pathParts.findIndex(p => p === 'track');
     const urlId = trackIdx !== -1 ? pathParts[trackIdx + 1] : '';
-    // Prefer URL-derived id over params (params may be stale in .htaccess fallback)
-    setId(urlId || params?.id || '');
-  }, [params]);
+    setId(urlId || '');
+  }, []);
 
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);

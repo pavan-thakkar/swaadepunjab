@@ -29,8 +29,19 @@ const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function ItemDetailPage() {
-  const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const [id, setId] = useState<string>('');
+
+  useEffect(() => {
+    // Next.js static export + Apache rewrite serves /item/1 for all items, 
+    // causing useParams() to wrongly return '1'. 
+    // We must extract the real ID from the URL.
+    const parts = window.location.pathname.split('/');
+    if (parts[1] === 'item' && parts[2]) {
+      setId(parts[2]);
+    }
+  }, []);
+
   const { state, dispatch } = useCart();
   const [item, setItem] = useState<MenuItem | null>(null);
   const cartItem = item ? state.items.find(i => i.menu_item_id === item.id) : null;
