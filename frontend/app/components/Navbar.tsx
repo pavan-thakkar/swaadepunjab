@@ -12,7 +12,7 @@ export default function Navbar() {
   return (
     <nav className="navbar">
       <Link href="/" className="navbar-brand">
-        🍛 <span>Swaad <span style={{ color: 'var(--primary)' }}>E Punjab</span></span>
+        <img src="/logo.png" alt="Swaad E Punjab" style={{ height: '50px', width: 'auto', objectFit: 'contain' }} />
       </Link>
       
       {/* Desktop Navbar Actions */}
