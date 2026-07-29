@@ -1,8 +1,6 @@
 import ItemClient from './ItemClient';
 
-export function generateStaticParams() {
-  return Array.from({ length: 300 }, (_, i) => ({ id: String(i + 1) }));
-}
+export const dynamic = 'force-dynamic';
 
 export default function ItemPage() {
   return <ItemClient />;
