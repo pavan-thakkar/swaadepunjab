@@ -102,6 +102,7 @@ export default function ItemDetailPage() {
 
   useEffect(() => {
     const fetchItem = async () => {
+      setError(''); // Clear any previous errors
       try {
         const res = await fetch(`${API}/menu/${id}`, { cache: 'no-store' });
         if (!res.ok) {
@@ -117,7 +118,9 @@ export default function ItemDetailPage() {
       }
     };
 
-    fetchItem();
+    if (id) {
+      fetchItem();
+    }
   }, [id]);
 
   useEffect(() => {
