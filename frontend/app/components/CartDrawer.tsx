@@ -22,7 +22,7 @@ export default function CartDrawer() {
     router.push('/checkout');
   };
 
-  const showFloatingButton = itemCount > 0 && !state.isOpen && pathname !== '/checkout';
+  const showFloatingButton = itemCount > 0 && !state.isOpen && !pathname.startsWith('/checkout');
 
   return (
     <>
