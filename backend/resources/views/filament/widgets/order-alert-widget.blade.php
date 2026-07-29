@@ -5,133 +5,13 @@
         increment(id) { this.prepTimes[id] = Math.min(this.getPrepTime(id) + 1, 120); },
         decrement(id) { this.prepTimes[id] = Math.max(this.getPrepTime(id) - 1, 13); }
     }"
-    x-init="
-        const pendingCount = {{ count($pendingOrderCards) }};
-
-        if (pendingCount > 0) {
-            // There are pending orders — alarm MUST ring
-            window._alarmNeeded = true;
-            window.tryStartAlarm(); // fires immediately if audio already unlocked
-        } else {
-            // No pending orders — stop alarm
-            window.stopOrderAlarm();
-        }
-
-        // Update unmute banner visibility
-        setTimeout(() => {
-            const banner = document.getElementById('unmute-banner');
-            if (banner) {
-                banner.style.display = (pendingCount > 0 && !window._audioUnlocked) ? 'flex' : 'none';
-            }
-        }, 150);
-    "
     wire:poll.4s="checkForNewOrders"
 >
-
-{{-- ── ALARM SCRIPT ── --}}
-<script>
-if (typeof window._orderAlarmInitialized === 'undefined') {
-    window._orderAlarmInitialized = true;
-
-    window._audioCtx      = null;
-    window._alarmInterval = null;
-    window._alarmRunning  = false;
-    window._alarmNeeded   = false;
-    window._audioUnlocked = false;
-
-    function _getCtx() {
-        if (!window._audioCtx) {
-            window._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (window._audioCtx.state === 'suspended') {
-            window._audioCtx.resume();
-        }
-        return window._audioCtx;
-    }
-
-    // 3-note restaurant bell: ding dong ding
-    function _playChime() {
-        try {
-            const ctx = _getCtx();
-            const now = ctx.currentTime;
-            [[900, 0,    0.9, 0.4],
-             [660, 0.28, 0.8, 0.7],
-             [440, 0.58, 0.7, 1.1]].forEach(([freq, delay, vol, dur]) => {
-                const osc  = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, now + delay);
-                gain.gain.setValueAtTime(vol, now + delay);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + delay + dur);
-                osc.start(now + delay);
-                osc.stop(now + delay + dur);
-            });
-        } catch(e) { console.warn('Chime error:', e); }
-    }
-
-    function _startAlarmLoop() {
-        if (window._alarmRunning) return;
-        window._alarmRunning = true;
-        _playChime(); // ring immediately
-        window._alarmInterval = setInterval(_playChime, 2500); // then every 2.5s
-    }
-
-    window.stopOrderAlarm = function() {
-        window._alarmRunning = false;
-        window._alarmNeeded  = false;
-        if (window._alarmInterval) {
-            clearInterval(window._alarmInterval);
-            window._alarmInterval = null;
-        }
-    };
-
-    // Called by x-init every poll — starts alarm if audio is ready
-    window.tryStartAlarm = function() {
-        if (!window._alarmNeeded) return;
-        if (!window._audioUnlocked) return; // still waiting for user gesture
-        _startAlarmLoop();
-    };
-
-    // Called by "Click here to ring" button — ALWAYS works (inside user gesture)
-    window.unlockAndStartAlarm = function() {
-        window._audioUnlocked = true;
-        window._alarmNeeded   = true;
-        try { _getCtx(); } catch(e) {}
-        // Force restart even if already running (re-trigger)
-        if (!window._alarmRunning) {
-            _startAlarmLoop();
-        }
-        const banner = document.getElementById('unmute-banner');
-        if (banner) banner.style.display = 'none';
-    };
-
-    // Auto-unlock the moment admin interacts with ANYTHING on the page
-    // (scroll, mouse move, click — browser allows AudioContext after any of these)
-    function _autoUnlock() {
-        if (window._audioUnlocked) return;
-        try {
-            _getCtx();
-            window._audioUnlocked = true;
-            console.log('[Alarm] Audio unlocked via user interaction');
-            window.tryStartAlarm(); // start immediately if needed
-        } catch(err) { console.warn('[Alarm] Unlock failed:', err); }
-    }
-    ['click', 'touchstart', 'keydown', 'mousedown', 'scroll', 'mousemove', 'pointerdown'].forEach(function(ev) {
-        document.addEventListener(ev, _autoUnlock, { capture: true, passive: true });
-    });
-}
-</script>
-
-
-
-
 
 {{-- ── PENDING ORDER CARDS ──────────────────────────────── --}}
 @if(count($pendingOrderCards) > 0)
 
-    {{-- 🔊 Unmute Banner — shown when audio is not yet unlocked --}}
+    {{-- 🔊 Unmute Banner — shown by admin-custom.js polling when audio not yet unlocked --}}
     <div id="unmute-banner" style="
         display: none;
         align-items: center; justify-content: center;
@@ -143,13 +23,13 @@ if (typeof window._orderAlarmInitialized === 'undefined') {
         animation: flashBanner 1s ease infinite alternate;
         box-shadow: 0 4px 20px rgba(124,58,237,0.4);
         cursor: pointer;
-    " onclick="window.unlockAndStartAlarm()">
+    " onclick="window.manualStartAlarm()">
         <span style="font-size: 22px;">🔊</span>
         <div>
             <div style="color: #fff; font-size: 15px; font-weight: 900;">TAP HERE TO ENABLE ALARM SOUND</div>
-            <div style="color: rgba(255,255,255,0.8); font-size: 12px; margin-top: 2px;">Browser needs one click to allow sound — click anywhere on this page</div>
+            <div style="color: rgba(255,255,255,0.8); font-size: 12px; margin-top: 2px;">Browser needs one click to allow sound — tap anywhere on this page</div>
         </div>
-        <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 6px 16px; border-radius: 99px; font-size: 13px; font-weight: 800; border: 1px solid rgba(255,255,255,0.3);">Unmute →</span>
+        <span style="background: rgba(255,255,255,0.2); color: #fff; padding: 6px 16px; border-radius: 99px; font-size: 13px; font-weight: 800; border: 1px solid rgba(255,255,255,0.3);">🔔 Unmute →</span>
     </div>
 
     {{-- Alert banner --}}
@@ -168,10 +48,10 @@ if (typeof window._orderAlarmInitialized === 'undefined') {
                 </div>
                 <button
                     type="button"
-                    onclick="window.unlockAndStartAlarm()"
+                    onclick="window.manualStartAlarm()"
                     style="color:#fff; font-size:12px; margin-top:6px; font-weight:800; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.4); padding:5px 14px; border-radius:8px; cursor:pointer; display:inline-flex; align-items:center; gap:5px;"
                 >
-                    🔊 Click here to start alarm ring
+                    🔊 Click here to ring alarm
                 </button>
             </div>
         </div>
