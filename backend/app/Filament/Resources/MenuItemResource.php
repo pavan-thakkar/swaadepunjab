@@ -56,6 +56,7 @@ class MenuItemResource extends Resource
                     ->suffix('min')
                     ->default(20),
                 Forms\Components\TextInput::make('rating')
+                    ->required()
                     ->numeric()
                     ->minValue(1)
                     ->maxValue(5)
