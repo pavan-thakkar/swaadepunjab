@@ -92,7 +92,7 @@ export default function ItemDetailPage() {
   useEffect(() => {
     const fetchItem = async () => {
       try {
-        const res = await fetch(`${API}/menu/${id}`);
+        const res = await fetch(`${API}/menu/${id}`, { cache: 'no-store' });
         if (!res.ok) {
           setError('Dish not found in our kitchen!');
           return;
@@ -148,7 +148,7 @@ export default function ItemDetailPage() {
 
   const fetchReviews = async () => {
     try {
-      const res = await fetch(`${API}/menu/${id}/reviews`);
+      const res = await fetch(`${API}/menu/${id}/reviews`, { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         setReviews(json.data || []);

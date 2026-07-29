@@ -155,7 +155,7 @@ export default function HomePage() {
       const params = new URLSearchParams();
       if (cat !== 'all') params.set('category', cat);
       if (q) params.set('search', q);
-      const res = await fetch(`${API}/menu?${params}`);
+      const res = await fetch(`${API}/menu?${params}`, { cache: 'no-store' });
       const data = await res.json();
       setItems(data.data || []);
     } catch {
