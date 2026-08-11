@@ -69,6 +69,7 @@ sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$S
   cd "$BDIR"
   php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
   php artisan migrate --force
+  php artisan menu:assign-images
   composer dump-autoload --optimize
   echo "Backend OK"
 ENDSSH

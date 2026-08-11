@@ -90,14 +90,17 @@ class MenuImportService
             $prepTime = $prepTimeIdx !== false ? intval($row[$prepTimeIdx] ?? 20) : 20;
 
             $category = $this->resolveCategory($rawCategory, $name . ' ' . ($description ?? ''));
+            $defaultImage = $this->resolveItemImage($name, $category, $description);
 
             $existingItem = MenuItem::where('name', $name)->first();
 
             if ($existingItem) {
+                $hasImage = !empty($existingItem->image);
                 $existingItem->update([
                     'description'  => $description ?? $existingItem->description,
                     'category'     => $category,
                     'price'        => $price,
+                    'image'        => $hasImage ? $existingItem->image : $defaultImage,
                 ]);
             } else {
                 MenuItem::create([
@@ -109,7 +112,7 @@ class MenuImportService
                     'rating'       => 4.5,
                     'is_available' => true,
                     'is_featured'  => false,
-                    'image'        => null,
+                    'image'        => $defaultImage,
                 ]);
             }
 
@@ -403,5 +406,78 @@ class MenuImportService
         }
 
         return 'punjabi_sabji';
+    }
+
+    /**
+     * Resolve default high-quality image URL for a menu item based on name/category keywords.
+     */
+    public function resolveItemImage(string $name, string $category = '', ?string $description = ''): array
+    {
+        $text = strtolower($name . ' ' . $category . ' ' . ($description ?? ''));
+
+        // Biryani / Rice Combos
+        if (str_contains($text, 'biryani')) {
+            return ['https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'pulao') || str_contains($text, 'jeera rice') || str_contains($text, 'plain rice')) {
+            return ['https://images.unsplash.com/photo-1633945274405-b6c8069047b0?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'khichadi') || str_contains($text, 'khichdi')) {
+            return ['https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Thali & Combos
+        if (str_contains($text, 'thali') || str_contains($text, 'fix') || str_contains($text, 'special punjabi')) {
+            return ['https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Chur Chur Naan & Naan Combos
+        if (str_contains($text, 'chur chur') || str_contains($text, 'naan with') || str_contains($text, 'naan combo')) {
+            return ['https://images.unsplash.com/photo-1626074353765-517a681e40be?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Bread / Roti / Naan / Paratha / Kulcha
+        if (str_contains($text, 'naan') || str_contains($text, 'kulcha')) {
+            return ['https://images.unsplash.com/photo-1626074353765-517a681e40be?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'roti') || str_contains($text, 'paratha')) {
+            return ['https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Paneer Sabji & BBQ
+        if (str_contains($text, 'paneer tikka') || str_contains($text, 'bbq') || str_contains($text, 'tandoori pineapple')) {
+            return ['https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'paneer butter') || str_contains($text, 'paneer lababdar') || str_contains($text, 'shahi paneer') || str_contains($text, 'paneer angara')) {
+            return ['https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'paneer')) {
+            return ['https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Dal
+        if (str_contains($text, 'dal makhani')) {
+            return ['https://images.unsplash.com/photo-1546833998-877b37c2e5c6?w=800&auto=format&fit=crop&q=80'];
+        }
+        if (str_contains($text, 'dal')) {
+            return ['https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Aloo Dishes
+        if (str_contains($text, 'aloo') || str_contains($text, 'puri')) {
+            return ['https://images.unsplash.com/photo-1567188040759-fb8a883dc6d8?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Kaju & Kofta & Veg Sabji
+        if (str_contains($text, 'kaju') || str_contains($text, 'kofta') || str_contains($text, 'veg handi') || str_contains($text, 'mix veg') || str_contains($text, 'kolhapuri')) {
+            return ['https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        // Papad
+        if (str_contains($text, 'papad')) {
+            return ['https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&auto=format&fit=crop&q=80'];
+        }
+
+        return ['https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&auto=format&fit=crop&q=80'];
     }
 }
