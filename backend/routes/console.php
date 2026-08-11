@@ -8,17 +8,7 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Artisan::command('menu:assign-images', function () {
-    $service = new \App\Services\MenuImportService();
-    $items = \App\Models\MenuItem::all();
-    $count = 0;
-    foreach ($items as $item) {
-        $itemImage = $item->image;
-        if (empty($itemImage) || (is_array($itemImage) && count($itemImage) === 0)) {
-            $item->image = $service->resolveItemImage($item->name, $item->category ?? '', $item->description ?? '');
-            $item->save();
-            $count++;
-        }
-    }
-    $this->info("Successfully assigned images to {$count} menu items.");
-})->purpose('Assign default high quality food photos to menu items without images');
+    $count = \App\Models\MenuItem::query()->update(['image' => null]);
+    $this->info("Successfully cleared images from {$count} menu items.");
+})->purpose('Clear images from all menu items');
 

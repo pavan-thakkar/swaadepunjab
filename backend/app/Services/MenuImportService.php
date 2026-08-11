@@ -90,17 +90,14 @@ class MenuImportService
             $prepTime = $prepTimeIdx !== false ? intval($row[$prepTimeIdx] ?? 20) : 20;
 
             $category = $this->resolveCategory($rawCategory, $name . ' ' . ($description ?? ''));
-            $defaultImage = $this->resolveItemImage($name, $category, $description);
 
             $existingItem = MenuItem::where('name', $name)->first();
 
             if ($existingItem) {
-                $hasImage = !empty($existingItem->image);
                 $existingItem->update([
                     'description'  => $description ?? $existingItem->description,
                     'category'     => $category,
                     'price'        => $price,
-                    'image'        => $hasImage ? $existingItem->image : $defaultImage,
                 ]);
             } else {
                 MenuItem::create([
@@ -112,7 +109,7 @@ class MenuImportService
                     'rating'       => 4.5,
                     'is_available' => true,
                     'is_featured'  => false,
-                    'image'        => $defaultImage,
+                    'image'        => null,
                 ]);
             }
 
