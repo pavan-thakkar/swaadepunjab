@@ -21,8 +21,8 @@ class MenuImportService
         try {
             $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
 
-            // Remove all existing menu items so only the imported ones appear
-            MenuItem::query()->delete();
+            // We no longer delete all existing menu items so we can preserve images.
+            // MenuItem::query()->delete();
 
             if (in_array($extension, ['xlsx', 'xls', 'csv'])) {
                 return $this->importExcel($filePath);
@@ -91,17 +91,27 @@ class MenuImportService
 
             $category = $this->resolveCategory($rawCategory, $name . ' ' . ($description ?? ''));
 
-            MenuItem::create([
-                'name'         => $name,
-                'description'  => $description,
-                'category'     => $category,
-                'price'        => $price,
-                'prep_time'    => $prepTime > 0 ? $prepTime : 20,
-                'rating'       => 4.5,
-                'is_available' => true,
-                'is_featured'  => false,
-                'image'        => null,
-            ]);
+            $existingItem = MenuItem::where('name', $name)->first();
+
+            if ($existingItem) {
+                $existingItem->update([
+                    'description'  => $description ?? $existingItem->description,
+                    'category'     => $category,
+                    'price'        => $price,
+                ]);
+            } else {
+                MenuItem::create([
+                    'name'         => $name,
+                    'description'  => $description,
+                    'category'     => $category,
+                    'price'        => $price,
+                    'prep_time'    => $prepTime > 0 ? $prepTime : 20,
+                    'rating'       => 4.5,
+                    'is_available' => true,
+                    'is_featured'  => false,
+                    'image'        => null,
+                ]);
+            }
 
             $importedCount++;
         }
