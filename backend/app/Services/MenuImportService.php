@@ -341,8 +341,26 @@ class MenuImportService
      */
     protected function resolveCategory(string $rawCategory, string $searchText): string
     {
-        $rawCategory = strtolower(trim($rawCategory));
+        $originalRawCategory = trim($rawCategory);
+        $rawCategory = strtolower($originalRawCategory);
         $searchText = strtolower($searchText);
+
+        // If a category was provided in the CSV, dynamically create it if it doesn't exist
+        if (!empty($originalRawCategory)) {
+            $slug = \Illuminate\Support\Str::slug($originalRawCategory, '_');
+            
+            \App\Models\Category::firstOrCreate(
+                ['slug' => $slug],
+                [
+                    'name' => ucwords($originalRawCategory),
+                    'is_active' => true,
+                    'sort_order' => \App\Models\Category::max('sort_order') + 1,
+                    'emoji' => '🍽️',
+                ]
+            );
+            
+            return $slug;
+        }
 
         // Chur Chur Naan
         if (str_contains($searchText, 'chur chur') || str_contains($searchText, 'chur_chur') || str_contains($rawCategory, 'chur chur')) {
