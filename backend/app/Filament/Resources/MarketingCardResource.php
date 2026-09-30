@@ -53,9 +53,11 @@ class MarketingCardResource extends Resource
                         ->url(),
                     Forms\Components\FileUpload::make('image_path')
                         ->label('Fallback Banner Image')
+                        ->disk('public')
                         ->directory('marketing')
+                        ->visibility('public')
                         ->image()
-                        ->imageEditor()
+                        ->maxSize(10240)
                         ->columnSpanFull(),
                     Forms\Components\Toggle::make('is_active')
                         ->label('Visible on Home Page')

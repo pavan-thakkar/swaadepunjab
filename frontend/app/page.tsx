@@ -429,24 +429,27 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
   const cartItem = state.items.find(i => i.menu_item_id === item.id);
   const quantity = cartItem ? cartItem.quantity : 0;
 
-  const getFirstImage = (imageField: any) => {
-    if (!imageField) return null;
+  const [imgIdx, setImgIdx] = useState(0);
+
+  const getImagesList = (imageField: any): string[] => {
+    if (!imageField) return [];
     if (Array.isArray(imageField)) {
-      return imageField[0] || null;
+      return imageField.filter(Boolean);
     }
     if (typeof imageField === 'string') {
       try {
         const decoded = JSON.parse(imageField);
         if (Array.isArray(decoded)) {
-          return decoded[0] || null;
+          return decoded.filter(Boolean);
         }
       } catch {}
-      return imageField;
+      return [imageField];
     }
-    return null;
+    return [];
   };
 
-  const displayImage = getFirstImage(item.image);
+  const imagesList = getImagesList(item.image);
+  const currentImage = imagesList[imgIdx] || null;
 
   return (
     <div 
@@ -454,12 +457,12 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
       style={{ animationDelay: `${delay}ms`, cursor: 'pointer' }}
       onClick={() => router.push(`/item/${item.id}`)}
     >
-      <div className="food-card-image-wrap">
-        {displayImage ? (
+      <div className="food-card-image-wrap" style={{ position: 'relative' }}>
+        {currentImage ? (
           <img 
-            src={displayImage.startsWith('http://') || displayImage.startsWith('https://') 
-              ? displayImage 
-              : `${API.replace('/api', '/storage')}/${displayImage}`} 
+            src={currentImage.startsWith('http://') || currentImage.startsWith('https://') 
+              ? currentImage 
+              : `${API.replace('/api', '/storage')}/${currentImage}`} 
             alt={item.name} 
             className="food-card-image"
           />
@@ -468,6 +471,80 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
             {categoryEmoji[item.category] || '🍽️'}
           </div>
         )}
+
+        {/* Multi-Photo Arrows & Badge on Card */}
+        {imagesList.length > 1 && (
+          <>
+            <span style={{
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              background: 'rgba(0,0,0,0.7)',
+              color: '#fff',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '3px 8px',
+              borderRadius: '12px',
+              backdropFilter: 'blur(4px)',
+              zIndex: 2
+            }}>
+              📷 {imagesList.length} Photos
+            </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIdx((prev) => (prev - 1 + imagesList.length) % imagesList.length);
+              }}
+              style={{
+                position: 'absolute',
+                left: '6px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '26px',
+                height: '26px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 3
+              }}
+            >
+              ‹
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIdx((prev) => (prev + 1) % imagesList.length);
+              }}
+              style={{
+                position: 'absolute',
+                right: '6px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '26px',
+                height: '26px',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                zIndex: 3
+              }}
+            >
+              ›
+            </button>
+          </>
+        )}
+
         {item.is_featured && <span className="featured-badge">⭐ Special</span>}
       </div>
       <div className="food-card-body">

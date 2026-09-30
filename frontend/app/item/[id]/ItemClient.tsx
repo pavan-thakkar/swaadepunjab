@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCart, MenuItem } from '../../context/CartContext';
 import Navbar from '../../components/Navbar';
@@ -50,6 +50,7 @@ export default function ItemDetailPage() {
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const touchStartX = useRef<number | null>(null);
   const [suggestions, setSuggestions] = useState<MenuItem[]>([]);
 
   const [reviews, setReviews] = useState<any[]>([]);
@@ -238,101 +239,70 @@ export default function ItemDetailPage() {
               overflow: 'hidden'
             }}>
               {imagesList.length > 0 ? (
-                <>
-                  {/* Slider Images */}
-                  <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                    {imagesList.map((imgSrc, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: '100%',
-                          opacity: activeImageIdx === idx ? 1 : 0,
-                          transition: 'opacity 0.4s ease-in-out',
-                          pointerEvents: activeImageIdx === idx ? 'auto' : 'none'
-                        }}
-                      >
-                        <img 
-                          src={imgSrc.startsWith('http://') || imgSrc.startsWith('https://') 
-                            ? imgSrc 
-                            : `${API.replace('/api', '/storage')}/${imgSrc}`} 
-                          alt={`${item.name} ${idx + 1}`} 
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      </div>
-                    ))}
-                  </div>
+                <div
+                  style={{ width: '100%', height: '100%', position: 'relative', userSelect: 'none' }}
+                  onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX; }}
+                  onTouchEnd={(e) => {
+                    if (touchStartX.current === null) return;
+                    const diff = touchStartX.current - e.changedTouches[0].clientX;
+                    if (Math.abs(diff) > 40) {
+                      if (diff > 0) {
+                        setActiveImageIdx(prev => (prev + 1) % imagesList.length);
+                      } else {
+                        setActiveImageIdx(prev => (prev - 1 + imagesList.length) % imagesList.length);
+                      }
+                    }
+                    touchStartX.current = null;
+                  }}
+                  onMouseDown={(e) => { touchStartX.current = e.clientX; }}
+                  onMouseUp={(e) => {
+                    if (touchStartX.current === null) return;
+                    const diff = touchStartX.current - e.clientX;
+                    if (Math.abs(diff) > 50) {
+                      if (diff > 0) {
+                        setActiveImageIdx(prev => (prev + 1) % imagesList.length);
+                      } else {
+                        setActiveImageIdx(prev => (prev - 1 + imagesList.length) % imagesList.length);
+                      }
+                    }
+                    touchStartX.current = null;
+                  }}
+                >
+                  {/* Slide Images */}
+                  {imagesList.map((imgSrc, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        opacity: activeImageIdx === idx ? 1 : 0,
+                        transition: 'opacity 0.35s ease-in-out',
+                        pointerEvents: activeImageIdx === idx ? 'auto' : 'none'
+                      }}
+                    >
+                      <img
+                        src={imgSrc.startsWith('http://') || imgSrc.startsWith('https://')
+                          ? imgSrc
+                          : `${API.replace('/api', '/storage')}/${imgSrc}`}
+                        alt={`${item.name} ${idx + 1}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        draggable={false}
+                      />
+                    </div>
+                  ))}
 
-                  {/* Navigation Arrows if multiple images */}
-                  {imagesList.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => setActiveImageIdx(prev => (prev - 1 + imagesList.length) % imagesList.length)}
-                        style={{
-                          position: 'absolute',
-                          left: '1rem',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'rgba(255,255,255,0.85)',
-                          color: '#000',
-                          border: '1px solid var(--border)',
-                          borderRadius: '50%',
-                          width: '40px',
-                          height: '40px',
-                          fontSize: '1.25rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-                          zIndex: 10,
-                          transition: 'var(--transition)'
-                        }}
-                        className="carousel-nav-btn"
-                      >
-                        ‹
-                      </button>
-                      <button
-                        onClick={() => setActiveImageIdx(prev => (prev + 1) % imagesList.length)}
-                        style={{
-                          position: 'absolute',
-                          right: '1rem',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'rgba(255,255,255,0.85)',
-                          color: '#000',
-                          border: '1px solid var(--border)',
-                          borderRadius: '50%',
-                          width: '40px',
-                          height: '40px',
-                          fontSize: '1.25rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-                          zIndex: 10,
-                          transition: 'var(--transition)'
-                        }}
-                        className="carousel-nav-btn"
-                      >
-                        ›
-                      </button>
-                    </>
-                  )}
-
-                  {/* Dot Indicators if multiple images */}
+                  {/* Dot Indicators */}
                   {imagesList.length > 1 && (
                     <div style={{
                       position: 'absolute',
-                      bottom: '1rem',
+                      bottom: '14px',
                       left: '50%',
                       transform: 'translateX(-50%)',
                       display: 'flex',
-                      gap: '8px',
+                      gap: '7px',
                       zIndex: 10
                     }}>
                       {imagesList.map((_, idx) => (
@@ -340,21 +310,21 @@ export default function ItemDetailPage() {
                           key={idx}
                           onClick={() => setActiveImageIdx(idx)}
                           style={{
-                            width: '8px',
+                            width: activeImageIdx === idx ? '22px' : '8px',
                             height: '8px',
-                            borderRadius: '50%',
-                            background: activeImageIdx === idx ? 'var(--primary)' : 'rgba(255, 255, 255, 0.5)',
+                            borderRadius: '4px',
+                            background: activeImageIdx === idx ? 'var(--primary)' : 'rgba(255,255,255,0.65)',
                             border: 'none',
                             padding: 0,
                             cursor: 'pointer',
-                            transition: 'var(--transition)',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                            transition: 'all 0.25s ease',
+                            boxShadow: '0 1px 4px rgba(0,0,0,0.3)'
                           }}
                         />
                       ))}
                     </div>
                   )}
-                </>
+                </div>
               ) : (
                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <div style={{ fontSize: '8rem', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}>
@@ -362,7 +332,7 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
               )}
-              
+
               {item.is_featured && (
                 <span className="featured-badge" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', margin: 0, fontSize: '0.9rem', padding: '6px 14px', zIndex: 10 }}>
                   ⭐ Special Combo

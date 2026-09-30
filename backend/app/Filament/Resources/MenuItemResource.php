@@ -35,14 +35,18 @@ class MenuItemResource extends Resource
                     ->rows(3)
                     ->columnSpanFull(),
                 Forms\Components\FileUpload::make('image')
+                    ->label('Food Images (Multiple photos allowed)')
                     ->image()
+                    ->disk('public')
                     ->directory('menu-items')
+                    ->visibility('public')
                     ->multiple()
                     ->reorderable()
-                    ->imageEditor()
-                    ->maxSize(2048)
-                    ->columnSpanFull()
-                    ->label('Food Images'),
+                    ->appendFiles()
+                    ->openable()
+                    ->downloadable()
+                    ->maxSize(10240)
+                    ->columnSpanFull(),
             ])->columns(2),
 
             Forms\Components\Section::make('Pricing & Time')->schema([

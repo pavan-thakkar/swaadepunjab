@@ -80,7 +80,7 @@ echo ""
 echo -e "${BLUE}${BOLD}[4/4] 🌐 Uploading frontend...${NC}"
 sshpass -p "$SSH_PASS" rsync -az --delete \
   --exclude='.DS_Store' --exclude='*.apk' --exclude='backend/' \
-  --exclude='*.zip' --exclude='*.sql' \
+  --exclude='*.zip' --exclude='*.sql' --exclude='haveli*' \
   -e "ssh -o StrictHostKeyChecking=no -p $SSH_PORT" \
   "$FRONTEND_DIR/out/" \
   "$SSH_USER@$SSH_HOST:$REMOTE_FRONTEND/"
