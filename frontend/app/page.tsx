@@ -346,15 +346,40 @@ export default function HomePage() {
           <h2 className="section-title">Category se <span>Chunein</span></h2>
         </div>
         <div className="categories">
-          {categories.map(c => (
-            <button
-              key={c.key}
-              className={`category-chip${category === c.key ? ' active' : ''}`}
-              onClick={() => { setCategory(c.key); setSearchQuery(''); setSearch(''); }}
-            >
-              <span>{c.emoji}</span> {c.label}
-            </button>
-          ))}
+          {categories.map((c, i) => {
+            const isActive = category === c.key;
+            const gradients = [
+              'linear-gradient(135deg,#f97316,#ef4444)',
+              'linear-gradient(135deg,#f59e0b,#f97316)',
+              'linear-gradient(135deg,#eab308,#f59e0b)',
+              'linear-gradient(135deg,#22c55e,#16a34a)',
+              'linear-gradient(135deg,#a855f7,#7c3aed)',
+              'linear-gradient(135deg,#ec4899,#f43f5e)',
+              'linear-gradient(135deg,#06b6d4,#3b82f6)',
+              'linear-gradient(135deg,#f43f5e,#e11d48)',
+            ];
+            const gradient = gradients[i % gradients.length];
+            return (
+              <button
+                key={c.key}
+                className={`story-circle${isActive ? ' active' : ''}`}
+                onClick={() => { setCategory(c.key); setSearchQuery(''); setSearch(''); }}
+              >
+                <span
+                  className="story-ring"
+                  style={{ background: isActive ? gradient : 'transparent', borderColor: isActive ? 'transparent' : 'var(--border)' }}
+                >
+                  <span
+                    className="story-inner"
+                    style={{ background: isActive ? '#fff' : '#f9f5ee' }}
+                  >
+                    <span className="story-emoji">{c.emoji}</span>
+                  </span>
+                </span>
+                <span className={`story-label${isActive ? ' active' : ''}`}>{c.label}</span>
+              </button>
+            );
+          })}
         </div>
       </section>
 

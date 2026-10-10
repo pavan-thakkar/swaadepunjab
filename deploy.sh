@@ -63,16 +63,12 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
   "$SSH_USER@$SSH_HOST:/home/u360309011/domains/swaadepunjab.com/public_html/backend/"
 
 # Clear cache and dump autoload on live server
-sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST << 'ENDSSH'
-  set -e
-  BDIR="/home/u360309011/domains/swaadepunjab.com/public_html/backend"
-  cd "$BDIR"
-  php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear
-  php artisan migrate --force
-  php artisan menu:assign-images
-  composer dump-autoload --optimize
-  echo "Backend OK"
-ENDSSH
+sshpass -p "$SSH_PASS" ssh -tt -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
+  "cd /home/u360309011/domains/swaadepunjab.com/public_html/backend && \
+   php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear && \
+   php artisan migrate --force && \
+   composer dump-autoload --optimize && \
+   echo 'Backend OK'"
 echo -e "${GREEN}  ✅ Backend deployed${NC}"
 
 # ── STEP 4: Upload frontend ─────────────────────────────────
