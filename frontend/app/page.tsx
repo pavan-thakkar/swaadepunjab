@@ -500,21 +500,8 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
         {/* Multi-Photo Arrows & Badge on Card */}
         {imagesList.length > 1 && (
           <>
-            <span style={{
-              position: 'absolute',
-              top: '12px',
-              left: '12px',
-              background: 'rgba(0,0,0,0.7)',
-              color: '#fff',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: '3px 8px',
-              borderRadius: '12px',
-              backdropFilter: 'blur(4px)',
-              zIndex: 2
-            }}>
-              📷 {imagesList.length} Photos
-            </span>
+
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
