@@ -482,135 +482,115 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
       style={{ animationDelay: `${delay}ms`, cursor: 'pointer' }}
       onClick={() => router.push(`/item/${item.id}`)}
     >
-      <div className="food-card-image-wrap" style={{ position: 'relative' }}>
-        {currentImage ? (
-          <img 
-            src={currentImage.startsWith('http://') || currentImage.startsWith('https://') 
-              ? currentImage 
-              : `${API.replace('/api', '/storage')}/${currentImage}`} 
-            alt={item.name} 
-            className="food-card-image"
-          />
-        ) : (
-          <div className="food-card-image-placeholder">
-            {categoryEmoji[item.category] || '🍽️'}
-          </div>
-        )}
-
-        {/* Multi-Photo Arrows & Badge on Card */}
-        {imagesList.length > 1 && (
-          <>
-
-
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setImgIdx((prev) => (prev - 1 + imagesList.length) % imagesList.length);
-              }}
-              style={{
-                position: 'absolute',
-                left: '6px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'rgba(0,0,0,0.5)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '50%',
-                width: '26px',
-                height: '26px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 3
-              }}
-            >
-              ‹
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setImgIdx((prev) => (prev + 1) % imagesList.length);
-              }}
-              style={{
-                position: 'absolute',
-                right: '6px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'rgba(0,0,0,0.5)',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '50%',
-                width: '26px',
-                height: '26px',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                zIndex: 3
-              }}
-            >
-              ›
-            </button>
-          </>
-        )}
-
-        {item.is_featured && <span className="featured-badge">⭐ Special</span>}
-      </div>
+      {/* Details Side (Left on mobile, bottom on desktop) */}
       <div className="food-card-body">
-        <div className="food-card-category">{categoryLabels[item.category] || item.category}</div>
-        <div className="food-card-name">{item.name}</div>
-        <div className="food-card-desc">{item.description}</div>
-        <div className="food-card-meta">
-          <div className="food-card-info">
-            <span className="food-card-rating">★ {item.rating}</span>
+        <div className="food-card-top-meta">
+          <div className="veg-badge-icon" title="100% Pure Veg">
+            <span className="veg-badge-dot" />
           </div>
+          {item.is_featured && <span className="featured-badge-inline">⭐ Special</span>}
         </div>
-      </div>
-      <div className="food-card-footer">
-        <span className="food-card-price" style={{ fontSize: '1.15rem', fontWeight: 800 }}>
-          ₹{Number(item.price).toFixed(0)}
-        </span>
-        {quantity > 0 ? (
-          <div className="quantity-control-card" onClick={(e) => e.stopPropagation()}>
-            <button 
-              type="button" 
-              onClick={(e) => {
-                e.stopPropagation();
-                dispatch({ type: 'DECREMENT', id: item.id });
-              }}
-              className="qty-control-btn"
-              title="Quantity kam karein"
-            >
-              −
-            </button>
-            <span className="qty-control-val">{quantity}</span>
-            <button 
-              type="button" 
-              onClick={(e) => {
-                e.stopPropagation();
-                dispatch({ type: 'INCREMENT', id: item.id });
-              }}
-              className="qty-control-btn"
-              title="Quantity badhayein"
-            >
-              +
-            </button>
-          </div>
-        ) : (
-          <button 
-            className="add-btn" 
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdd(item);
-            }} 
-            title="Cart mein add karein"
-          >
-            +
-          </button>
+
+        <div className="food-card-name">{item.name}</div>
+
+        <div className="food-card-price-row">
+          <span className="food-card-price">₹{Number(item.price).toFixed(0)}</span>
+          {item.rating && (
+            <span className="food-card-rating">★ {item.rating}</span>
+          )}
+        </div>
+
+        {item.description && (
+          <div className="food-card-desc">{item.description}</div>
         )}
+      </div>
+
+      {/* Media & Action Side (Right on mobile, top on desktop) */}
+      <div className="food-card-media-side">
+        <div className="food-card-image-wrap">
+          {currentImage ? (
+            <img 
+              src={currentImage.startsWith('http://') || currentImage.startsWith('https://') 
+                ? currentImage 
+                : `${API.replace('/api', '/storage')}/${currentImage}`} 
+              alt={item.name} 
+              className="food-card-image"
+            />
+          ) : (
+            <div className="food-card-image-placeholder">
+              {categoryEmoji[item.category] || '🍽️'}
+            </div>
+          )}
+
+          {/* Multi-Photo Arrows on Card */}
+          {imagesList.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImgIdx((prev) => (prev - 1 + imagesList.length) % imagesList.length);
+                }}
+                className="food-card-img-nav-btn left"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImgIdx((prev) => (prev + 1) % imagesList.length);
+                }}
+                className="food-card-img-nav-btn right"
+              >
+                ›
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Floating Action Button */}
+        <div className="food-card-action-wrap" onClick={(e) => e.stopPropagation()}>
+          {quantity > 0 ? (
+            <div className="quantity-control-card">
+              <button 
+                type="button" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'DECREMENT', id: item.id });
+                }}
+                className="qty-control-btn"
+                title="Quantity kam karein"
+              >
+                −
+              </button>
+              <span className="qty-control-val">{quantity}</span>
+              <button 
+                type="button" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'INCREMENT', id: item.id });
+                }}
+                className="qty-control-btn"
+                title="Quantity badhayein"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button 
+              type="button"
+              className="swiggy-add-btn" 
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd(item);
+              }} 
+              title="Cart mein add karein"
+            >
+              ADD <span style={{ fontSize: '1rem', marginLeft: '2px', fontWeight: 900 }}>+</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

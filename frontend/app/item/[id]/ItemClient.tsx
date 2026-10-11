@@ -591,74 +591,89 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
       style={{ cursor: 'pointer', height: '100%' }}
       onClick={() => router.push(`/item/${item.id}`)}
     >
-      <div className="food-card-image-wrap">
-        {displayImage ? (
-          <img 
-            src={displayImage.startsWith('http://') || displayImage.startsWith('https://') 
-              ? displayImage 
-              : `${API.replace('/api', '/storage')}/${displayImage}`} 
-            alt={item.name} 
-            className="food-card-image"
-          />
-        ) : (
-          <div className="food-card-image-placeholder">
-            {categoryEmoji[item.category] || '🍽️'}
-          </div>
-        )}
-        {item.is_featured && <span className="featured-badge">⭐ Special</span>}
-      </div>
+      {/* Details Side */}
       <div className="food-card-body">
-        <div className="food-card-category">{categoryLabels[item.category] || item.category}</div>
-        <div className="food-card-name">{item.name}</div>
-        <div className="food-card-desc">{item.description}</div>
-        <div className="food-card-meta">
-          <div className="food-card-info">
-            <span className="food-card-rating">★ {item.rating}</span>
+        <div className="food-card-top-meta">
+          <div className="veg-badge-icon" title="100% Pure Veg">
+            <span className="veg-badge-dot" />
           </div>
+          {item.is_featured && <span className="featured-badge-inline">⭐ Special</span>}
         </div>
-      </div>
-      <div className="food-card-footer">
-        <span className="food-card-price" style={{ fontSize: '1.15rem', fontWeight: 800 }}>
-          ₹{Number(item.price).toFixed(0)}
-        </span>
-        {quantity > 0 ? (
-          <div className="quantity-control-card" onClick={(e) => e.stopPropagation()}>
-            <button 
-              type="button" 
-              onClick={(e) => {
-                e.stopPropagation();
-                dispatch({ type: 'DECREMENT', id: item.id });
-              }}
-              className="qty-control-btn"
-              title="Quantity kam karein"
-            >
-              −
-            </button>
-            <span className="qty-control-val">{quantity}</span>
-            <button 
-              type="button" 
-              onClick={(e) => {
-                e.stopPropagation();
-                dispatch({ type: 'INCREMENT', id: item.id });
-              }}
-              className="qty-control-btn"
-              title="Quantity badhayein"
-            >
-              +
-            </button>
-          </div>
-        ) : (
-          <button 
-            className="add-btn" 
-            onClick={(e) => {
-              e.stopPropagation();
-              onAdd(item);
-            }} 
-            title="Cart mein add karein"
-          >
-            +
-          </button>
+
+        <div className="food-card-name">{item.name}</div>
+
+        <div className="food-card-price-row">
+          <span className="food-card-price">₹{Number(item.price).toFixed(0)}</span>
+          {item.rating && (
+            <span className="food-card-rating">★ {item.rating}</span>
+          )}
+        </div>
+
+        {item.description && (
+          <div className="food-card-desc">{item.description}</div>
         )}
+      </div>
+
+      {/* Media & Action Side */}
+      <div className="food-card-media-side">
+        <div className="food-card-image-wrap">
+          {displayImage ? (
+            <img 
+              src={displayImage.startsWith('http://') || displayImage.startsWith('https://') 
+                ? displayImage 
+                : `${API.replace('/api', '/storage')}/${displayImage}`} 
+              alt={item.name} 
+              className="food-card-image"
+            />
+          ) : (
+            <div className="food-card-image-placeholder">
+              {categoryEmoji[item.category] || '🍽️'}
+            </div>
+          )}
+        </div>
+
+        {/* Floating Action Button */}
+        <div className="food-card-action-wrap" onClick={(e) => e.stopPropagation()}>
+          {quantity > 0 ? (
+            <div className="quantity-control-card">
+              <button 
+                type="button" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'DECREMENT', id: item.id });
+                }}
+                className="qty-control-btn"
+                title="Quantity kam karein"
+              >
+                −
+              </button>
+              <span className="qty-control-val">{quantity}</span>
+              <button 
+                type="button" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'INCREMENT', id: item.id });
+                }}
+                className="qty-control-btn"
+                title="Quantity badhayein"
+              >
+                +
+              </button>
+            </div>
+          ) : (
+            <button 
+              type="button"
+              className="swiggy-add-btn" 
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd(item);
+              }} 
+              title="Cart mein add karein"
+            >
+              ADD <span style={{ fontSize: '1rem', marginLeft: '2px', fontWeight: 900 }}>+</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
