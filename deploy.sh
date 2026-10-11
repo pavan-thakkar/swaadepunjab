@@ -39,7 +39,7 @@ echo -e "${BLUE}${BOLD}[2/4] 🔨 Building frontend (production)...${NC}"
 cd "$FRONTEND_DIR"
 [ -f .env.local ] && mv .env.local .env.local.bak
 rm -rf out/
-npm run build
+OPENSSL_CONF=/dev/null npm run build
 [ -f .env.local.bak ] && mv .env.local.bak .env.local
 echo -e "${GREEN}  ✅ Build complete${NC}"
 

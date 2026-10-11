@@ -342,16 +342,6 @@ export default function ItemDetailPage() {
 
             {/* Content Details */}
             <div style={{ padding: '2.5rem' }}>
-              <div style={{ 
-                color: 'var(--primary)', 
-                fontSize: '0.95rem', 
-                fontWeight: 700, 
-                textTransform: 'uppercase', 
-                letterSpacing: '0.05em',
-                marginBottom: '0.5rem' 
-              }}>
-                {categoryLabels[item.category] || item.category}
-              </div>
 
               <h1 style={{ 
                 fontSize: '2.25rem', 
