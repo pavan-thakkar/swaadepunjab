@@ -12,6 +12,57 @@ const CATEGORY_EMOJI: Record<string, string> = {
   rice_combo:     '🍚',
 };
 
+// Delivery Scooter SVG Icon (Zomato-style)
+function ScooterIcon({ size = 28, color = '#1a1a2e' }: { size?: number; color?: string }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 80 56"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      style={{ display: 'block', flexShrink: 0 }}
+    >
+      {/* Rear wheel */}
+      <circle cx="16" cy="42" r="9" stroke={color} strokeWidth="3" fill="none"/>
+      <circle cx="16" cy="42" r="3" fill={color}/>
+
+      {/* Front wheel */}
+      <circle cx="64" cy="42" r="9" stroke={color} strokeWidth="3" fill="none"/>
+      <circle cx="64" cy="42" r="3" fill={color}/>
+
+      {/* Axle/base connector */}
+      <line x1="25" y1="42" x2="55" y2="42" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+
+      {/* Body – rear scoop shape */}
+      <path d="M16 42 Q16 28 28 26 L44 24 L48 34 L20 36 Z" fill={color} opacity="0.85"/>
+
+      {/* Body – front panel */}
+      <path d="M44 24 L56 20 L62 28 L56 36 L48 34 Z" fill={color}/>
+
+      {/* Seat */}
+      <rect x="28" y="20" width="18" height="6" rx="3" fill={color}/>
+
+      {/* Handlebar stem */}
+      <line x1="56" y1="20" x2="60" y2="12" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+      {/* Handlebar */}
+      <line x1="56" y1="12" x2="66" y2="12" stroke={color} strokeWidth="3" strokeLinecap="round"/>
+
+      {/* Delivery box */}
+      <rect x="8" y="14" width="18" height="14" rx="3" fill="#E63946"/>
+      {/* Box lid highlight */}
+      <rect x="8" y="14" width="18" height="4" rx="3" fill="#c0392b"/>
+      {/* Box letter */}
+      <text x="13" y="25" fontSize="8" fill="white" fontWeight="bold" fontFamily="Arial, sans-serif">S</text>
+
+      {/* Exhaust puff */}
+      <circle cx="6" cy="40" r="2" fill={color} opacity="0.25"/>
+      <circle cx="2" cy="37" r="1.5" fill={color} opacity="0.15"/>
+    </svg>
+  );
+}
+
 export default function CartDrawer() {
   const { state, dispatch, total, itemCount } = useCart();
   const router = useRouter();
@@ -26,7 +77,7 @@ export default function CartDrawer() {
 
   return (
     <>
-      {/* Floating Sticky Cart Icon Button */}
+      {/* Floating Sticky Cart Button with Scooter Icon */}
       {showFloatingButton && (
         <button
           className="floating-cart-btn"
@@ -36,7 +87,7 @@ export default function CartDrawer() {
         >
           <div className="floating-cart-left">
             <div className="floating-cart-icon-wrapper">
-              <span className="floating-cart-icon">🛒</span>
+              <ScooterIcon size={28} color="#1a1a2e" />
               <span className="floating-cart-badge">{itemCount}</span>
             </div>
             <div className="floating-cart-info">
@@ -57,21 +108,29 @@ export default function CartDrawer() {
           <div className="cart-overlay" onClick={() => dispatch({ type: 'CLOSE_CART' })} />
           <div className="cart-drawer">
             <div className="cart-header">
-              <h2>🛒 Aapka Order <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>({itemCount} items)</span></h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <ScooterIcon size={26} color="#1a1a2e" />
+                Aapka Order{' '}
+                <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>
+                  ({itemCount} items)
+                </span>
+              </h2>
               <button className="cart-close-btn" onClick={() => dispatch({ type: 'CLOSE_CART' })}>✕</button>
             </div>
 
             <div className="cart-items">
               {state.items.length === 0 ? (
                 <div className="cart-empty">
-                  <div className="cart-empty-icon">🛒</div>
+                  <div className="cart-empty-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+                    <ScooterIcon size={60} color="#ccc" />
+                  </div>
                   <p>Cart khali hai</p>
                   <p style={{ fontSize: '0.85rem' }}>Kuch tasty add karein!</p>
                 </div>
               ) : (
                 state.items.map(item => (
                   <div key={item.menu_item_id} className="cart-item">
-                    <div 
+                    <div
                       className="cart-item-clickable"
                       onClick={() => {
                         dispatch({ type: 'CLOSE_CART' });
