@@ -66,7 +66,8 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
 # Clear cache and dump autoload on live server
 sshpass -p "$SSH_PASS" ssh -tt -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
   "cd /home/u360309011/domains/swaadepunjab.com/public_html/backend && \
-   { [ -L public/storage ] || [ ! -e public/storage ]; } && rm -f public/storage && php artisan storage:link && \
+   rm -f public/storage && \
+   ln -s /home/u360309011/domains/swaadepunjab.com/public_html/backend/storage/app/public public/storage 2>/dev/null || true && \
    php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear && \
    php artisan migrate --force && \
    composer dump-autoload --optimize && \
