@@ -66,6 +66,7 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
 # Clear cache and dump autoload on live server
 sshpass -p "$SSH_PASS" ssh -tt -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
   "cd /home/u360309011/domains/swaadepunjab.com/public_html/backend && \
+   (grep -q '^GOOGLE_CLIENT_ID=' .env || printf '\\nGOOGLE_CLIENT_ID=82292707740-slkcblrneb4jeckjbdjq85onu6pr3qgf.apps.googleusercontent.com\\n' >> .env) && \
    rm -f public/storage && \
    ln -s /home/u360309011/domains/swaadepunjab.com/public_html/backend/storage/app/public public/storage 2>/dev/null || true && \
    php artisan config:clear && php artisan route:clear && php artisan view:clear && php artisan cache:clear && \

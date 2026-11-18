@@ -18,6 +18,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Support\Assets\Js;
+use Filament\Navigation\MenuItem;
+use Filament\Navigation\NavigationItem;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -28,6 +30,20 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->profile(\App\Filament\Pages\Auth\EditProfile::class, isSimple: false)
+            ->userMenuItems([
+                'profile' => MenuItem::make()
+                    ->label('My Profile & Password')
+                    ->icon('heroicon-o-user-circle'),
+            ])
+            ->navigationItems([
+                NavigationItem::make('My Profile & Password')
+                    ->url(fn (): string => \App\Filament\Pages\Auth\EditProfile::getUrl())
+                    ->icon('heroicon-o-user-circle')
+                    ->group('Settings')
+                    ->sort(100)
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.auth.profile')),
+            ])
             ->brandName('Swaad E Punjab')
             ->colors([
                 'primary' => Color::Amber,

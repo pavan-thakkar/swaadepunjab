@@ -28,7 +28,16 @@ class Order extends Model
         'table_number',
         'pickup_time',
         'distance_km',
+        'edit_token',
+        'edited_at',
     ];
+
+    /** Customers may change their order for this many minutes after placing it. */
+    public const EDIT_WINDOW_MINUTES = 2;
+
+    protected $hidden = ['edit_token'];
+
+    protected $appends = ['editable_until', 'can_edit'];
 
     protected $casts = [
         'subtotal'              => 'decimal:2',
@@ -38,7 +47,25 @@ class Order extends Model
         'latitude'              => 'float',
         'longitude'             => 'float',
         'distance_km'           => 'float',
+        'edited_at'             => 'datetime',
     ];
+
+    public function getEditableUntilAttribute(): ?string
+    {
+        return $this->created_at?->copy()->addMinutes(self::EDIT_WINDOW_MINUTES)->toIso8601String();
+    }
+
+    public function getCanEditAttribute(): bool
+    {
+        return $this->status === 'pending'
+            && $this->created_at
+            && now()->lte($this->created_at->copy()->addMinutes(self::EDIT_WINDOW_MINUTES));
+    }
+
+    public function isPaidOnline(): bool
+    {
+        return ! in_array($this->payment_method, ['cash_on_delivery', null, ''], true);
+    }
 
     public function items(): HasMany
     {

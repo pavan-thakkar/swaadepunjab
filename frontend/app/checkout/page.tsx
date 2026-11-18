@@ -522,6 +522,10 @@ export default function CheckoutPage() {
         setError(data.message || 'Order place nahi ho saka. Dobara try karein.');
         return false;
       }
+      // Remember permission to change this order for the next 2 minutes (this device only)
+      try {
+        if (data.edit_token) localStorage.setItem(`order_edit_${data.data.order_number}`, data.edit_token);
+      } catch {}
       dispatch({ type: 'CLEAR' });
       router.push(`/track/${data.data.order_number}/`);
       return true;
@@ -614,6 +618,14 @@ export default function CheckoutPage() {
         <div className="checkout-page">
           {/* Left: Form */}
           <div>
+            <div className="checkout-section">
+              <h3 style={{ margin: '0 0 1rem 0' }}>📝 Special Instructions</h3>
+              <div className="form-group">
+                <label className="form-label">Instructions for the Chef (optional)</label>
+                <textarea name="special_instructions" className="form-input" placeholder="E.g. Make it extra spicy, less butter on naan..." rows={3} value={form.special_instructions} onChange={handleChange} style={{ resize: 'vertical' }} />
+              </div>
+            </div>
+
             <div className="checkout-section">
               <h3 style={{ margin: '0 0 1rem 0' }}>🍽️ Service Type</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '0.5rem' }}>
@@ -800,14 +812,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
             )}
-
-            <div className="checkout-section">
-              <h3 style={{ margin: '0 0 1rem 0' }}>📝 Special Instructions</h3>
-              <div className="form-group">
-                <label className="form-label">Instructions for the Chef (optional)</label>
-                <textarea name="special_instructions" className="form-input" placeholder="E.g. Make it extra spicy, less butter on naan..." rows={3} value={form.special_instructions} onChange={handleChange} style={{ resize: 'vertical' }} />
-              </div>
-            </div>
 
             <div className="checkout-section">
               <h3>💳 Payment Method</h3>

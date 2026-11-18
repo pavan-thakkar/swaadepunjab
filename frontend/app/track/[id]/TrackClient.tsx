@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Link from 'next/link';
+import EditOrderPanel from './EditOrderPanel';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -297,6 +298,9 @@ export default function TrackOrderPage() {
                 </div>
               </div>
             )}
+
+            {/* Change order within 2 minutes */}
+            <EditOrderPanel order={order} onUpdated={setOrder} />
 
             {/* Order Details */}
             <div className="tracking-card">

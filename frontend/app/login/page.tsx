@@ -12,8 +12,9 @@ import { auth } from '../firebase';
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-// Use process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID or placeholder
-const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '1017482487441-testplaceholdermockid.apps.googleusercontent.com';
+// Real Google OAuth Web Client ID (set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env.local / .env.production)
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const SHOW_MOCK_GOOGLE = !GOOGLE_CLIENT_ID && process.env.NODE_ENV !== 'production';
 
 export default function LoginPage() {
   const { loginUser, userPhone, userEmail, state } = useCart();
@@ -266,7 +267,7 @@ export default function LoginPage() {
   // Trigger Google script initialization
   const initGoogleSignIn = () => {
     try {
-      if (typeof window !== 'undefined' && (window as any).google) {
+      if (GOOGLE_CLIENT_ID && typeof window !== 'undefined' && (window as any).google) {
         const container = document.getElementById('google-signin-btn');
         const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 450;
         // Fallback calculation: Card has 2.5rem (40px) padding on each side on desktop/mobile
@@ -391,6 +392,7 @@ export default function LoginPage() {
               {/* Google Sign-in Buttons */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
                 <div id="google-signin-btn" style={{ width: '100%' }}></div>
+                {SHOW_MOCK_GOOGLE && (
                 <button
                   type="button"
                   onClick={handleMockGoogleLogin}
@@ -412,6 +414,7 @@ export default function LoginPage() {
                 >
                   🌐 Sign in with Google (Mock Mode)
                 </button>
+                )}
               </div>
             </form>
           ) : (

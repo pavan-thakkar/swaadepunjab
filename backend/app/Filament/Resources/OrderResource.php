@@ -43,6 +43,11 @@ class OrderResource extends Resource
                     Forms\Components\Placeholder::make('address')
                         ->label('Delivery/Dine/Takeaway Details')
                         ->content(fn (Order $record) => "📍 {$record->delivery_address}, {$record->city}"),
+                    Forms\Components\Placeholder::make('customer_edit_notice')
+                        ->label('Customer Changes')
+                        ->visible(fn (?Order $record) => (bool) $record?->edited_at)
+                        ->content(fn (Order $record) => new \Illuminate\Support\HtmlString("<span style='font-weight:800;background:#fef3c7;color:#92400e;padding:6px 12px;border-radius:6px;display:inline-block;'>✏️ Customer changed this order at " . e($record->edited_at?->timezone(config('app.timezone'))->format('h:i A')) . " — check items & note</span>"))
+                        ->columnSpanFull(),
                     Forms\Components\Placeholder::make('special_instructions')
                         ->label('Special Instructions')
                         ->content(fn (Order $record) => $record->special_instructions ?: 'None')
@@ -245,6 +250,7 @@ class OrderResource extends Resource
                     ->html()
                     ->formatStateUsing(fn (Order $record) => $record->highlighted_order_number_html)
                     ->url(fn (Order $record): string => static::getUrl('view', ['record' => $record]))
+                    ->description(fn (Order $record): string => $record->edited_at ? '✏️ Changed by customer at ' . $record->edited_at->timezone(config('app.timezone'))->format('h:i A') : '')
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('customer_name')

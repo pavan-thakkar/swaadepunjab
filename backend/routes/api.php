@@ -26,6 +26,7 @@ Route::prefix('orders')->group(function () {
     Route::get('/history', [OrderController::class, 'history']);
     Route::post('/', [OrderController::class, 'store']);
     Route::get('/{identifier}', [OrderController::class, 'show']);
+    Route::put('/{identifier}', [OrderController::class, 'update'])->middleware('throttle:20,1');
     Route::patch('/{order}/status', [OrderController::class, 'updateStatus']);
 });
 
@@ -35,6 +36,17 @@ Route::get('/marketing-cards', function () {
         'data' => App\Models\MarketingCard::where('is_active', true)
             ->orderBy('sort_order', 'asc')
             ->get()
+    ]);
+});
+
+// "What's New" cards strip (managed in admin)
+Route::get('/featured-cards', function () {
+    return response()->json([
+        'title'    => App\Models\SiteSetting::getValue('featured_section_title', "What's New"),
+        'subtitle' => App\Models\SiteSetting::getValue('featured_section_subtitle'),
+        'data'     => App\Models\FeaturedCard::where('is_active', true)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get(['id', 'title', 'badge', 'image_path', 'menu_item_id']),
     ]);
 });
 

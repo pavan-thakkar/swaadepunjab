@@ -11,3 +11,4 @@
 *.log
 backend-server.log
 deploy.sh.bak
+AuthController.php.bak

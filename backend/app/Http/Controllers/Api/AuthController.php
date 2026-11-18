@@ -134,6 +134,22 @@ class AuthController extends Controller
 
             if ($response->successful()) {
                 $payload = $response->json();
+
+                // Make sure the token was issued for OUR Google client
+                $expectedClientId = config('services.google.client_id');
+                if ($expectedClientId && ($payload['aud'] ?? null) !== $expectedClientId) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Google token was not issued for this app.'
+                    ], 401);
+                }
+                if (($payload['email_verified'] ?? 'false') !== 'true' && ($payload['email_verified'] ?? false) !== true) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Google email is not verified.'
+                    ], 401);
+                }
+
                 $email = $payload['email'] ?? null;
                 $name = $payload['name'] ?? 'Google User';
 
@@ -160,8 +176,14 @@ class AuthController extends Controller
             Log::error("Google Login verification exception: " . $e->getMessage());
         }
 
-        // Development/Offline Mock Mode fallback:
-        // Parse JWT payload locally if the Google endpoint fails or is blocked during local testing
+        // Development/Offline Mock Mode fallback — LOCAL ONLY.
+        // Never trust an unverified token on the live server.
+        if (!app()->environment('local') || config('services.google.client_id')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to verify Google ID Token.'
+            ], 422);
+        }
         try {
             $parts = explode('.', $credential);
             if (count($parts) === 3) {

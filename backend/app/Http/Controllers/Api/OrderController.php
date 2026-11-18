@@ -113,19 +113,121 @@ class OrderController extends Controller
             'latitude'             => $request->latitude ?? null,
             'longitude'            => $request->longitude ?? null,
             'distance_km'          => $distanceKm,
+            'edit_token'           => $editToken = \Illuminate\Support\Str::random(48),
         ]);
 
         $order->items()->createMany($orderItems);
 
         return response()->json([
-            'message' => 'Order placed successfully!',
-            'data'    => $order->load('items'),
+            'message'    => 'Order placed successfully!',
+            'data'       => $order->load('items'),
+            'edit_token' => $editToken,
         ], 201);
     }
 
     /**
      * Track a specific order by ID or order_number.
      */
+    /**
+     * Let the customer change items / special instructions within the edit window.
+     */
+    public function update(Request $request, string $identifier): JsonResponse
+    {
+        $validated = $request->validate([
+            'edit_token'           => 'required|string',
+            'special_instructions' => 'nullable|string|max:500',
+            'items'                => 'sometimes|array|min:1',
+            'items.*.menu_item_id' => 'required_with:items|exists:menu_items,id',
+            'items.*.quantity'     => 'required_with:items|integer|min:1|max:20',
+        ]);
+
+        $order = Order::with('items')
+            ->where('order_number', $identifier)
+            ->orWhere('id', $identifier)
+            ->firstOrFail();
+
+        if (! $order->edit_token || ! hash_equals($order->edit_token, $validated['edit_token'])) {
+            return response()->json(['message' => 'You can only change orders placed from this device.'], 403);
+        }
+
+        // Small grace period for slow networks
+        $deadline = $order->created_at->copy()->addMinutes(Order::EDIT_WINDOW_MINUTES)->addSeconds(10);
+        if ($order->status !== 'pending' || now()->gt($deadline)) {
+            return response()->json(['message' => 'Sorry, the time to change this order is over. Please call the restaurant.'], 422);
+        }
+
+        $itemsChanged = array_key_exists('items', $validated);
+
+        if ($itemsChanged && $order->isPaidOnline()) {
+            $current = $order->items->mapWithKeys(fn ($i) => [$i->menu_item_id => (int) $i->quantity])->sort()->all();
+            $wanted = [];
+            foreach ($validated['items'] as $i) {
+                $wanted[$i['menu_item_id']] = ($wanted[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
+            }
+            ksort($current); ksort($wanted);
+            if ($current != $wanted) {
+                return response()->json(['message' => 'This order is already paid online, so items cannot be changed. You can still update special instructions.'], 422);
+            }
+            $itemsChanged = false;
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($order, $validated, $itemsChanged) {
+            if ($itemsChanged) {
+                // Merge duplicate lines, recalculate from DB prices
+                $merged = [];
+                foreach ($validated['items'] as $i) {
+                    $merged[$i['menu_item_id']] = ($merged[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
+                }
+
+                $orderItems = [];
+                $subtotal = 0;
+                foreach ($merged as $menuItemId => $qty) {
+                    $menuItem = MenuItem::findOrFail($menuItemId);
+                    $alreadyInOrder = $order->items->contains('menu_item_id', $menuItemId);
+                    if (! $menuItem->is_available && ! $alreadyInOrder) {
+                        abort(response()->json(['message' => "{$menuItem->name} is currently unavailable."], 422));
+                    }
+                    $qty = min($qty, 20);
+                    $line = $menuItem->price * $qty;
+                    $subtotal += $line;
+                    $orderItems[] = [
+                        'menu_item_id' => $menuItem->id,
+                        'name'         => $menuItem->name,
+                        'price'        => $menuItem->price,
+                        'quantity'     => $qty,
+                        'subtotal'     => $line,
+                    ];
+                }
+
+                $deliveryFee = 0;
+                if (($order->order_type ?? 'delivery') === 'delivery') {
+                    $calc = \App\Models\DeliveryFeeSetting::calculateDistanceAndFee(
+                        $order->delivery_address ?? '', $order->city ?? 'Gandhinagar', $subtotal, $order->latitude, $order->longitude
+                    );
+                    $deliveryFee = $calc['error'] ? (float) $order->delivery_fee : $calc['fee'];
+                }
+
+                $order->items()->delete();
+                $order->items()->createMany($orderItems);
+                $order->subtotal = $subtotal;
+                $order->delivery_fee = $deliveryFee;
+                $order->total = $subtotal + $deliveryFee;
+            }
+
+            if (array_key_exists('special_instructions', $validated)) {
+                $order->special_instructions = $validated['special_instructions'];
+            }
+
+            $order->edited_at = now();
+            $order->save();
+        });
+
+        return response()->json([
+            'message' => 'Your order has been updated!',
+            'data'    => $order->fresh('items'),
+        ]);
+    }
+
     public function show(string $identifier): JsonResponse
     {
         $order = Order::with('items')

@@ -2,7 +2,8 @@
 
 import { useCart } from '../context/CartContext';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 // Delivery Scooter SVG Icon
 function ScooterIcon({ size = 26, color = '#1a1a2e' }: { size?: number; color?: string }) {
@@ -38,6 +39,8 @@ export default function Navbar() {
   const { dispatch, itemCount, userPhone, userEmail, userName, logoutUser } = useCart();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   return (
     <nav className="navbar">
@@ -149,7 +152,7 @@ export default function Navbar() {
         </div>
       )}
 
-      {showLogoutConfirm && (
+      {showLogoutConfirm && mounted && createPortal(
         <div style={{
           position: 'fixed',
           top: 0,
@@ -161,6 +164,8 @@ export default function Navbar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          padding: '16px',
+          overflowY: 'auto',
           zIndex: 10000
         }}>
           <div className="tracking-card" style={{
@@ -184,7 +189,7 @@ export default function Navbar() {
               <button 
                 onClick={() => setShowLogoutConfirm(false)}
                 className="btn-secondary"
-                style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', flex: 1, border: '1px solid var(--border)' }}
+                style={{ padding: '10px 20px', fontSize: '0.88rem', fontWeight: 700, cursor: 'pointer', flex: 1, border: '1px solid var(--border)', justifyContent: 'center', textAlign: 'center' }}
               >
                 Cancel
               </button>
@@ -202,14 +207,17 @@ export default function Navbar() {
                   background: 'var(--danger)', 
                   borderColor: 'var(--danger)',
                   color: '#fff',
-                  flex: 1 
+                  flex: 1,
+                  justifyContent: 'center',
+                  textAlign: 'center'
                 }}
               >
                 Yes, Logout
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </nav>
   );
