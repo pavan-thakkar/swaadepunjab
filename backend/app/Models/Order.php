@@ -33,6 +33,8 @@ class Order extends Model
         'discount',
         'offer_id',
         'offer_title',
+        'coupon_code',
+        'coupon_discount',
     ];
 
     /** Fallback if the admin setting is missing. */
@@ -68,6 +70,7 @@ class Order extends Model
         'distance_km'           => 'float',
         'edited_at'             => 'datetime',
         'discount'              => 'decimal:2',
+        'coupon_discount'       => 'decimal:2',
     ];
 
     public function getEditableUntilAttribute(): ?string

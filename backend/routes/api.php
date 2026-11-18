@@ -59,6 +59,14 @@ Route::get('/offers', function () {
     ]);
 });
 
+// Is home delivery available right now? (ON/OFF + hours from admin)
+Route::get('/delivery-status', function () {
+    return response()->json(App\Models\ReceiptSetting::deliveryStatus());
+});
+
+// Coupon check at checkout
+Route::post('/coupons/check', [App\Http\Controllers\Api\OrderController::class, 'checkCoupon'])->middleware('throttle:30,1');
+
 // Delivery Settings route
 Route::get('/delivery-settings', function () {
     return response()->json([

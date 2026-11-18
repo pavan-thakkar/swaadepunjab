@@ -25,6 +25,11 @@ class ReceiptSetting extends Model
         'delivery_max_distance',
         'delivery_fallback_fee',
         'order_edit_minutes',
+        'delivery_enabled',
+        'delivery_hours_enabled',
+        'delivery_start_time',
+        'delivery_end_time',
+        'delivery_off_message',
     ];
 
     /**
@@ -47,5 +52,50 @@ class ReceiptSetting extends Model
             $settings->update(['delivery_max_distance' => 20]);
         }
         return $settings;
+    }
+
+    /**
+     * Is home delivery available right now? (Admin → Store & Receipt Config)
+     * Supports overnight hours, e.g. 6:00 PM → 2:00 AM.
+     */
+    public static function deliveryStatus(): array
+    {
+        $s = static::getSettings();
+        $fmt = fn ($t) => $t ? \Carbon\Carbon::createFromFormat('H:i:s', strlen($t) === 5 ? $t . ':00' : $t)->format('h:i A') : null;
+        $start = $s->delivery_start_time;
+        $end = $s->delivery_end_time;
+        $hoursText = ($s->delivery_hours_enabled && $start && $end) ? $fmt($start) . ' – ' . $fmt($end) : null;
+
+        $available = (bool) ($s->delivery_enabled ?? true);
+        $reason = null;
+
+        if (! $available) {
+            $reason = 'off';
+        } elseif ($hoursText) {
+            $now = now()->format('H:i:s');
+            $startN = strlen($start) === 5 ? $start . ':00' : $start;
+            $endN = strlen($end) === 5 ? $end . ':00' : $end;
+            $inside = $startN <= $endN
+                ? ($now >= $startN && $now <= $endN)
+                : ($now >= $startN || $now <= $endN); // overnight
+            if (! $inside) {
+                $available = false;
+                $reason = 'outside_hours';
+            }
+        }
+
+        $message = null;
+        if (! $available) {
+            $message = $s->delivery_off_message ?: ($reason === 'outside_hours'
+                ? "Delivery is available only {$hoursText}. You can still order Take Away or Dine In."
+                : 'Home delivery is not available right now. You can still order Take Away or Dine In.');
+        }
+
+        return [
+            'available' => $available,
+            'reason'    => $reason,
+            'hours'     => $hoursText,
+            'message'   => $message,
+        ];
     }
 }

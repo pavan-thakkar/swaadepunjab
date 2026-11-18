@@ -26,6 +26,7 @@ class OrderController extends Controller
             'delivery_address'     => 'required_if:order_type,delivery|nullable|string',
             'city'                 => 'required_if:order_type,delivery|nullable|string|max:100',
             'special_instructions' => 'nullable|string|max:500',
+            'coupon_code'          => 'nullable|string|max:40',
             'payment_method'       => 'in:cash_on_delivery,card,razorpay',
             'items'                => 'required|array|min:1',
             'items.*.menu_item_id' => 'required|exists:menu_items,id',
@@ -62,6 +63,13 @@ class OrderController extends Controller
         $distanceKm  = null;
 
         if ($orderType === 'delivery') {
+            $deliveryStatus = \App\Models\ReceiptSetting::deliveryStatus();
+            if (! $deliveryStatus['available']) {
+                return response()->json(['success' => false, 'message' => $deliveryStatus['message']], 422);
+            }
+        }
+
+        if ($orderType === 'delivery') {
             $address = $validated['delivery_address'] ?? '';
             $city = $validated['city'] ?? 'Gandhinagar';
             
@@ -78,12 +86,17 @@ class OrderController extends Controller
             $distanceKm = $calc['distance_km'];
         }
         // Admin offers: free item / discount for orders above a minimum amount
-        $applied = \App\Models\Offer::applyTo($subtotal);
-        $discount = $applied['discount'];
-        if ($applied['free_line']) {
-            $orderItems[] = $applied['free_line'];
+        $pricing = \App\Services\OrderPricing::calculate($subtotal, $validated['coupon_code'] ?? null, $validated['customer_phone']);
+        if ($pricing['error']) {
+            return response()->json(['message' => $pricing['error'], 'coupon_error' => true], 422);
         }
-        $total = max(0, $subtotal - $discount) + $deliveryFee;
+        $applied = ['offer' => $pricing['offer']];
+        $discount = $pricing['offer_discount'];
+        $couponDiscount = $pricing['coupon_discount'];
+        if ($pricing['free_line']) {
+            $orderItems[] = $pricing['free_line'];
+        }
+        $total = max(0, $subtotal - $discount - $couponDiscount) + $deliveryFee;
 
         $pickupTime = $validated['pickup_time'] ?? null;
         if ($pickupTime) {
@@ -123,9 +136,12 @@ class OrderController extends Controller
             'discount'             => $discount,
             'offer_id'             => $applied['offer']?->id,
             'offer_title'          => $applied['offer']?->title,
+            'coupon_code'          => $pricing['coupon']?->code,
+            'coupon_discount'      => $couponDiscount,
         ]);
 
         $order->items()->createMany($orderItems);
+        $pricing['coupon']?->increment('used_count');
 
         return response()->json([
             'message'    => 'Order placed successfully!',
@@ -228,10 +244,17 @@ class OrderController extends Controller
                     $deliveryFee = $calc['error'] ? (float) $order->delivery_fee : $calc['fee'];
                 }
 
-                $applied = \App\Models\Offer::applyTo($subtotal);
-                if ($applied['free_line']) {
-                    $orderItems[] = $applied['free_line'];
+                // Re-check offers + the coupon the customer used (coupon is dropped if no longer valid)
+                $pricing = \App\Services\OrderPricing::calculate($subtotal, $order->coupon_code, $order->customer_phone, $order->id, false);
+                $applied = ['offer' => $pricing['offer'], 'discount' => $pricing['offer_discount']];
+                if ($pricing['free_line']) {
+                    $orderItems[] = $pricing['free_line'];
                 }
+                if ($order->coupon_code && ! $pricing['coupon']) {
+                    \App\Models\Coupon::findByCode($order->coupon_code)?->decrement('used_count');
+                    $order->coupon_code = null;
+                }
+                $order->coupon_discount = $pricing['coupon_discount'];
 
                 $order->items()->delete();
                 $order->items()->createMany($orderItems);
@@ -240,7 +263,7 @@ class OrderController extends Controller
                 $order->discount = $applied['discount'];
                 $order->offer_id = $applied['offer']?->id;
                 $order->offer_title = $applied['offer']?->title;
-                $order->total = max(0, $subtotal - $applied['discount']) + $deliveryFee;
+                $order->total = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount']) + $deliveryFee;
             }
 
             if (array_key_exists('special_instructions', $validated)) {
@@ -254,6 +277,37 @@ class OrderController extends Controller
         return response()->json([
             'message' => 'Your order has been updated!',
             'data'    => $order->fresh('items'),
+        ]);
+    }
+
+    /**
+     * Customer types a coupon at checkout: tell them if it works and how much it saves.
+     */
+    public function checkCoupon(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'code'     => 'required|string|max:40',
+            'subtotal' => 'required|numeric|min:0',
+            'phone'    => 'nullable|string|max:20',
+        ]);
+
+        $pricing = \App\Services\OrderPricing::calculate((float) $data['subtotal'], $data['code'], $data['phone'] ?? null);
+        if ($pricing['error']) {
+            return response()->json(['valid' => false, 'message' => $pricing['error']], 422);
+        }
+
+        $c = $pricing['coupon'];
+        return response()->json([
+            'valid'               => true,
+            'message'             => "{$c->code} applied! You save ₹" . number_format($pricing['coupon_discount'], 0),
+            'code'                => $c->code,
+            'description'         => $c->description,
+            'discount_type'       => $c->discount_type,
+            'discount_value'      => (float) $c->discount_value,
+            'max_discount'        => $c->max_discount !== null ? (float) $c->max_discount : null,
+            'min_order_amount'    => (float) $c->min_order_amount,
+            'combine_with_offers' => $c->combine_with_offers,
+            'coupon_discount'     => $pricing['coupon_discount'],
         ]);
     }
 

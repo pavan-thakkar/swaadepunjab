@@ -317,6 +317,9 @@ export default function TrackOrderPage() {
 
               <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{Number(order.subtotal).toFixed(2)}</span></div>
+                {Number(order.coupon_discount) > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Coupon ({order.coupon_code})</span><span>−₹{Number(order.coupon_discount).toFixed(2)}</span></div>
+                )}
                 {Number(order.discount) > 0 && (
                   <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Offer{order.offer_title ? `: ${order.offer_title}` : ''}</span><span>−₹{Number(order.discount).toFixed(2)}</span></div>
                 )}

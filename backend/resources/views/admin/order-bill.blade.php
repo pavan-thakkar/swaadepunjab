@@ -91,6 +91,12 @@
             <span>-₹{{ number_format($order->discount, 0) }}</span>
         </div>
         @endif
+        @if(($order->coupon_discount ?? 0) > 0)
+        <div style="display: flex; justify-content: space-between; font-weight: normal;">
+            <span>COUPON ({{ $order->coupon_code }}):</span>
+            <span>-₹{{ number_format($order->coupon_discount, 0) }}</span>
+        </div>
+        @endif
         <div style="display: flex; justify-content: space-between; font-weight: normal;">
             <span>DELIVERY FEE:</span>
             <span>₹{{ number_format($order->delivery_fee, 0) }}</span>

@@ -132,6 +132,43 @@ class ReceiptSettingResource extends Resource
                             ->columnSpan(1),
                     ])->columns(3),
 
+                Forms\Components\Section::make('🛵 Delivery Availability')
+                    ->description('Turn home delivery on/off, or allow it only during set hours. Dine In and Take Away always stay open.')
+                    ->schema([
+                        Forms\Components\Toggle::make('delivery_enabled')
+                            ->label('Home Delivery is ON')
+                            ->helperText('Switch off to stop all delivery orders right now.')
+                            ->default(true)
+                            ->live()
+                            ->columnSpanFull(),
+                        Forms\Components\Toggle::make('delivery_hours_enabled')
+                            ->label('Only deliver during these hours')
+                            ->default(false)
+                            ->live()
+                            ->visible(fn (Forms\Get $get) => (bool) $get('delivery_enabled'))
+                            ->columnSpanFull(),
+                        Forms\Components\TimePicker::make('delivery_start_time')
+                            ->label('Delivery starts at')
+                            ->seconds(false)
+                            ->native(false)
+                            ->displayFormat('h:i A')
+                            ->visible(fn (Forms\Get $get) => $get('delivery_enabled') && $get('delivery_hours_enabled'))
+                            ->required(fn (Forms\Get $get) => $get('delivery_enabled') && $get('delivery_hours_enabled')),
+                        Forms\Components\TimePicker::make('delivery_end_time')
+                            ->label('Delivery ends at')
+                            ->helperText('Can be after midnight, e.g. 6:00 PM to 2:00 AM.')
+                            ->seconds(false)
+                            ->native(false)
+                            ->displayFormat('h:i A')
+                            ->visible(fn (Forms\Get $get) => $get('delivery_enabled') && $get('delivery_hours_enabled'))
+                            ->required(fn (Forms\Get $get) => $get('delivery_enabled') && $get('delivery_hours_enabled')),
+                        Forms\Components\TextInput::make('delivery_off_message')
+                            ->label('Message to customers when delivery is not available (optional)')
+                            ->placeholder('e.g. Delivery band hai, Take Away available hai 🙏')
+                            ->maxLength(200)
+                            ->columnSpanFull(),
+                    ])->columns(2),
+
                 Forms\Components\Section::make('✏️ Customer Order Changes')
                     ->description('How long customers can add/remove items or change special instructions after placing an order.')
                     ->schema([

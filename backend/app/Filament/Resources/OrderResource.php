@@ -197,6 +197,15 @@ class OrderResource extends Resource
                     ->label('Offer Applied')
                     ->placeholder('No offer')
                     ->disabled(),
+                Forms\Components\TextInput::make('coupon_code')
+                    ->label('Coupon Used')
+                    ->placeholder('No coupon')
+                    ->disabled(),
+                Forms\Components\TextInput::make('coupon_discount')
+                    ->label('Coupon Discount')
+                    ->numeric()
+                    ->prefix('− ₹')
+                    ->disabled(),
                 Forms\Components\TextInput::make('distance_km')
                     ->label('Calculated Distance')
                     ->numeric()

@@ -39,6 +39,21 @@ export default function CheckoutPage() {
   });
 
   const [orderType, setOrderType] = useState<'delivery' | 'dine_in' | 'takeaway'>('delivery');
+  const [deliveryStatus, setDeliveryStatus] = useState<{ available: boolean; hours: string | null; message: string | null }>({ available: true, hours: null, message: null });
+
+  // Delivery ON/OFF + hours from admin (re-checked every minute)
+  useEffect(() => {
+    const check = () => fetch(`${API}/delivery-status`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => {
+        setDeliveryStatus({ available: d.available !== false, hours: d.hours || null, message: d.message || null });
+        if (d.available === false) setOrderType(t => (t === 'delivery' ? 'takeaway' : t));
+      })
+      .catch(() => {});
+    check();
+    const t = setInterval(check, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -334,8 +349,50 @@ export default function CheckoutPage() {
 
   const activeDeliveryFee = orderType === 'delivery' ? (customDeliveryFee !== null ? customDeliveryFee : deliveryFee) : 0;
   const offers = useOffers();
-  const offerCalc = computeOffer(total, offers);
-  const grandTotal = Math.max(0, total - offerCalc.discount) + activeDeliveryFee;
+  const offerCalcRaw = computeOffer(total, offers);
+
+  // Coupon code
+  const [couponInput, setCouponInput] = useState('');
+  const [coupon, setCoupon] = useState<{ code: string; discount: number; combine: boolean; message: string } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const applyCoupon = async (code: string, silent = false) => {
+    const c = code.trim().toUpperCase();
+    if (!c) return;
+    setCouponLoading(true);
+    if (!silent) setCouponError('');
+    try {
+      const res = await fetch(`${API}/coupons/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ code: c, subtotal: total, phone: form.customer_phone || userPhone || null }),
+      });
+      const d = await res.json();
+      if (!res.ok || !d.valid) {
+        setCoupon(null);
+        setCouponError(d.message || 'Invalid coupon code.');
+        return;
+      }
+      setCoupon({ code: d.code, discount: Number(d.coupon_discount), combine: !!d.combine_with_offers, message: d.message });
+      setCouponError('');
+    } catch {
+      setCouponError('Could not check the coupon. Try again.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // Re-check the coupon whenever the cart total changes
+  useEffect(() => {
+    if (coupon) applyCoupon(coupon.code, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total]);
+
+  const offerBlocked = !!coupon && !coupon.combine;
+  const offerCalc = offerBlocked ? { ...offerCalcRaw, discount: 0, freeLine: null, current: null } : offerCalcRaw;
+  const couponDiscount = coupon ? coupon.discount : 0;
+  const grandTotal = Math.max(0, total - offerCalc.discount - couponDiscount) + activeDeliveryFee;
 
   const handleSearchAddress = async () => {
     if (!searchQuery.trim()) return;
@@ -515,6 +572,7 @@ export default function CheckoutPage() {
           latitude: orderType === 'delivery' && coordinates ? coordinates.lat : null,
           longitude: orderType === 'delivery' && coordinates ? coordinates.lng : null,
           items: state.items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity })),
+          coupon_code: coupon?.code || null,
           order_type: orderType,
           table_number: null,
           pickup_time: orderType !== 'delivery' ? form.pickup_time : null,
@@ -522,6 +580,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.coupon_error) { setCoupon(null); setCouponError(data.message); }
         setError(data.message || 'Order place nahi ho saka. Dobara try karein.');
         return false;
       }
@@ -635,10 +694,14 @@ export default function CheckoutPage() {
                 <button 
                   type="button" 
                   className={`payment-option service-type-btn${orderType === 'delivery' ? ' selected' : ''}`}
-                  onClick={() => setOrderType('delivery')}
+                  onClick={() => deliveryStatus.available && setOrderType('delivery')}
+                  disabled={!deliveryStatus.available}
+                  aria-disabled={!deliveryStatus.available}
+                  style={!deliveryStatus.available ? { opacity: 0.45, cursor: 'not-allowed', filter: 'grayscale(1)' } : undefined}
                 >
                   <span style={{ fontSize: '1.5rem' }}>🛵</span>
                   <strong>Delivery</strong>
+                  {!deliveryStatus.available && <span style={{ fontSize: '0.7rem', fontWeight: 700 }}>Not available now</span>}
                 </button>
                 <button 
                   type="button" 
@@ -657,6 +720,16 @@ export default function CheckoutPage() {
                   <strong>Take Away</strong>
                 </button>
               </div>
+              {!deliveryStatus.available && deliveryStatus.message && (
+                <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600 }}>
+                  🛵 {deliveryStatus.message}
+                </div>
+              )}
+              {deliveryStatus.available && deliveryStatus.hours && (
+                <div style={{ marginTop: '10px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  🕒 Delivery hours: {deliveryStatus.hours}
+                </div>
+              )}
 
             </div>
 
@@ -855,12 +928,50 @@ export default function CheckoutPage() {
                   <span className="summary-price" style={{ fontWeight: 800 }}>FREE</span>
                 </div>
               )}
-              <div style={{ marginTop: '10px' }}><OfferProgress subtotal={total} /></div>
+              <div style={{ marginTop: '10px' }}><OfferProgress subtotal={total} disabledReason={offerBlocked ? `Offers don't apply with coupon ${coupon?.code}.` : null} /></div>
+
+              {/* Coupon code */}
+              <div style={{ marginTop: '6px' }}>
+                {coupon ? (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '10px 12px', borderRadius: 10, background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.35)' }}>
+                    <div style={{ fontSize: '0.85rem' }}>
+                      <div style={{ fontWeight: 800, color: 'var(--success)' }}>🏷️ {coupon.code} applied</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>You save ₹{coupon.discount.toFixed(0)}</div>
+                    </div>
+                    <button type="button" onClick={() => { setCoupon(null); setCouponInput(''); }} style={{ background: 'none', border: 'none', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer', fontSize: '0.82rem' }}>
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        value={couponInput}
+                        onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(couponInput); } }}
+                        placeholder="Have a coupon code?"
+                        className="form-input"
+                        style={{ flex: 1, textTransform: 'uppercase', padding: '10px 12px' }}
+                        aria-label="Coupon code"
+                      />
+                      <button type="button" className="btn-secondary" onClick={() => applyCoupon(couponInput)} disabled={couponLoading || !couponInput.trim()} style={{ padding: '10px 16px', justifyContent: 'center', opacity: couponLoading || !couponInput.trim() ? 0.6 : 1 }}>
+                        {couponLoading ? '…' : 'Apply'}
+                      </button>
+                    </div>
+                    {couponError && <div style={{ color: 'var(--danger)', fontSize: '0.8rem', fontWeight: 600, marginTop: 6 }}>⚠️ {couponError}</div>}
+                  </>
+                )}
+              </div>
               <div style={{ borderTop: '1px solid var(--border)', marginTop: '10px', paddingTop: '10px' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{total.toFixed(0)}</span></div>
                 {offerCalc.discount > 0 && (
                   <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
                     <span>Offer: {offerCalc.current?.title}</span><span>−₹{offerCalc.discount.toFixed(0)}</span>
+                  </div>
+                )}
+                {couponDiscount > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                    <span>Coupon ({coupon?.code})</span><span>−₹{couponDiscount.toFixed(0)}</span>
                   </div>
                 )}
                 {orderType === 'delivery' && distanceKm !== null && (
