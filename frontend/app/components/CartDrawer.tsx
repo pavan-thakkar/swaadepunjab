@@ -2,6 +2,7 @@
 
 import { useCart } from '../context/CartContext';
 import { useRouter, usePathname } from 'next/navigation';
+import OfferProgress, { useOffers, computeOffer } from './OfferProgress';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   special_combo:  '🍱',
@@ -65,6 +66,8 @@ function ScooterIcon({ size = 28, color = '#1a1a2e' }: { size?: number; color?: 
 
 export default function CartDrawer() {
   const { state, dispatch, total, itemCount } = useCart();
+  const offers = useOffers();
+  const offerCalc = computeOffer(total, offers);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -155,9 +158,20 @@ export default function CartDrawer() {
 
             {state.items.length > 0 && (
               <div className="cart-footer">
+                <OfferProgress subtotal={total} compact />
                 <div className="cart-totals">
                   <div className="cart-total-row"><span>Subtotal</span><span>₹{total.toFixed(0)}</span></div>
-                  <div className="cart-total-row grand"><span>Total</span><span>₹{total.toFixed(0)}</span></div>
+                  {offerCalc.freeLine && (
+                    <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                      <span>🎁 {offerCalc.freeLine.quantity > 1 ? `${offerCalc.freeLine.quantity}× ` : ''}{offerCalc.freeLine.name}</span><span>FREE</span>
+                    </div>
+                  )}
+                  {offerCalc.discount > 0 && (
+                    <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                      <span>Offer discount</span><span>−₹{offerCalc.discount.toFixed(0)}</span>
+                    </div>
+                  )}
+                  <div className="cart-total-row grand"><span>Total</span><span>₹{(total - offerCalc.discount).toFixed(0)}</span></div>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '8px', marginBottom: '12px' }}>
                   * Delivery charges will be calculated on the next page based on your address.

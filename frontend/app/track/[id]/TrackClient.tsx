@@ -311,12 +311,15 @@ export default function TrackOrderPage() {
                     {CATEGORY_EMOJI[item.menu_item?.category || ''] || '🍽️'} {item.name}
                   </span>
                   <span className="summary-qty">×{item.quantity}</span>
-                  <span className="summary-price">₹{Number(item.subtotal).toFixed(2)}</span>
+                  <span className="summary-price" style={item.is_free ? { color: 'var(--success)', fontWeight: 800 } : undefined}>{item.is_free ? 'FREE' : `₹${Number(item.subtotal).toFixed(2)}`}</span>
                 </div>
               ))}
 
               <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{Number(order.subtotal).toFixed(2)}</span></div>
+                {Number(order.discount) > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Offer{order.offer_title ? `: ${order.offer_title}` : ''}</span><span>−₹{Number(order.discount).toFixed(2)}</span></div>
+                )}
                 <div className="cart-total-row"><span>Delivery fee</span><span>₹{Number(order.delivery_fee).toFixed(2)}</span></div>
                 <div className="cart-total-row grand"><span>Total</span><span style={{ color: 'var(--primary)' }}>₹{Number(order.total).toFixed(2)}</span></div>
               </div>

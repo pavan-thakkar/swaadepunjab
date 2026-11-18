@@ -50,6 +50,15 @@ Route::get('/featured-cards', function () {
     ]);
 });
 
+// Active offers (free item / discount above a minimum order amount)
+Route::get('/offers', function () {
+    return response()->json([
+        'data' => App\Models\Offer::live()->with('freeItem:id,name,price,image')
+            ->orderBy('min_order_amount')
+            ->get(['id', 'title', 'description', 'min_order_amount', 'reward_type', 'free_menu_item_id', 'free_quantity', 'discount_value', 'max_discount']),
+    ]);
+});
+
 // Delivery Settings route
 Route::get('/delivery-settings', function () {
     return response()->json([

@@ -77,7 +77,13 @@ class OrderController extends Controller
             $deliveryFee = $calc['fee'];
             $distanceKm = $calc['distance_km'];
         }
-        $total       = $subtotal + $deliveryFee;
+        // Admin offers: free item / discount for orders above a minimum amount
+        $applied = \App\Models\Offer::applyTo($subtotal);
+        $discount = $applied['discount'];
+        if ($applied['free_line']) {
+            $orderItems[] = $applied['free_line'];
+        }
+        $total = max(0, $subtotal - $discount) + $deliveryFee;
 
         $pickupTime = $validated['pickup_time'] ?? null;
         if ($pickupTime) {
@@ -114,6 +120,9 @@ class OrderController extends Controller
             'longitude'            => $request->longitude ?? null,
             'distance_km'          => $distanceKm,
             'edit_token'           => $editToken = \Illuminate\Support\Str::random(48),
+            'discount'             => $discount,
+            'offer_id'             => $applied['offer']?->id,
+            'offer_title'          => $applied['offer']?->title,
         ]);
 
         $order->items()->createMany($orderItems);
@@ -139,6 +148,7 @@ class OrderController extends Controller
             'items'                => 'sometimes|array|min:1',
             'items.*.menu_item_id' => 'required_with:items|exists:menu_items,id',
             'items.*.quantity'     => 'required_with:items|integer|min:1|max:20',
+            'items.*.is_free'      => 'sometimes|boolean',
         ]);
 
         $order = Order::with('items')
@@ -151,17 +161,21 @@ class OrderController extends Controller
         }
 
         // Small grace period for slow networks
-        $deadline = $order->created_at->copy()->addMinutes(Order::EDIT_WINDOW_MINUTES)->addSeconds(10);
-        if ($order->status !== 'pending' || now()->gt($deadline)) {
+        $minutes = Order::editWindowMinutes();
+        $deadline = $order->created_at->copy()->addMinutes($minutes)->addSeconds(10);
+        if ($minutes === 0 || $order->status !== 'pending' || now()->gt($deadline)) {
             return response()->json(['message' => 'Sorry, the time to change this order is over. Please call the restaurant.'], 422);
         }
 
         $itemsChanged = array_key_exists('items', $validated);
 
         if ($itemsChanged && $order->isPaidOnline()) {
-            $current = $order->items->mapWithKeys(fn ($i) => [$i->menu_item_id => (int) $i->quantity])->sort()->all();
+            $current = $order->items->where('is_free', false)->mapWithKeys(fn ($i) => [$i->menu_item_id => (int) $i->quantity])->sort()->all();
             $wanted = [];
             foreach ($validated['items'] as $i) {
+                if (! empty($i['is_free'])) {
+                    continue;
+                }
                 $wanted[$i['menu_item_id']] = ($wanted[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
             }
             ksort($current); ksort($wanted);
@@ -176,7 +190,14 @@ class OrderController extends Controller
                 // Merge duplicate lines, recalculate from DB prices
                 $merged = [];
                 foreach ($validated['items'] as $i) {
+                    if (! empty($i['is_free'])) {
+                        continue;
+                    }
                     $merged[$i['menu_item_id']] = ($merged[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
+                }
+
+                if (empty($merged)) {
+                    abort(response()->json(['message' => 'Your order needs at least one item.'], 422));
                 }
 
                 $orderItems = [];
@@ -207,11 +228,19 @@ class OrderController extends Controller
                     $deliveryFee = $calc['error'] ? (float) $order->delivery_fee : $calc['fee'];
                 }
 
+                $applied = \App\Models\Offer::applyTo($subtotal);
+                if ($applied['free_line']) {
+                    $orderItems[] = $applied['free_line'];
+                }
+
                 $order->items()->delete();
                 $order->items()->createMany($orderItems);
                 $order->subtotal = $subtotal;
                 $order->delivery_fee = $deliveryFee;
-                $order->total = $subtotal + $deliveryFee;
+                $order->discount = $applied['discount'];
+                $order->offer_id = $applied['offer']?->id;
+                $order->offer_title = $applied['offer']?->title;
+                $order->total = max(0, $subtotal - $applied['discount']) + $deliveryFee;
             }
 
             if (array_key_exists('special_instructions', $validated)) {

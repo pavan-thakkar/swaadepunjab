@@ -14,11 +14,13 @@ class OrderItem extends Model
         'price',
         'quantity',
         'subtotal',
+        'is_free',
     ];
 
     protected $casts = [
         'price'    => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'is_free'  => 'boolean',
     ];
 
     public function order(): BelongsTo

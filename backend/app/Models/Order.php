@@ -30,10 +30,29 @@ class Order extends Model
         'distance_km',
         'edit_token',
         'edited_at',
+        'discount',
+        'offer_id',
+        'offer_title',
     ];
 
-    /** Customers may change their order for this many minutes after placing it. */
+    /** Fallback if the admin setting is missing. */
     public const EDIT_WINDOW_MINUTES = 2;
+
+    private static ?int $editMinutesCache = null;
+
+    /** Minutes a customer may change an order after placing it (Admin → Store & Receipt Config). 0 = off. */
+    public static function editWindowMinutes(): int
+    {
+        if (self::$editMinutesCache === null) {
+            try {
+                $value = \App\Models\ReceiptSetting::query()->value('order_edit_minutes');
+                self::$editMinutesCache = $value === null ? self::EDIT_WINDOW_MINUTES : max(0, min(60, (int) $value));
+            } catch (\Throwable $e) {
+                self::$editMinutesCache = self::EDIT_WINDOW_MINUTES;
+            }
+        }
+        return self::$editMinutesCache;
+    }
 
     protected $hidden = ['edit_token'];
 
@@ -48,18 +67,20 @@ class Order extends Model
         'longitude'             => 'float',
         'distance_km'           => 'float',
         'edited_at'             => 'datetime',
+        'discount'              => 'decimal:2',
     ];
 
     public function getEditableUntilAttribute(): ?string
     {
-        return $this->created_at?->copy()->addMinutes(self::EDIT_WINDOW_MINUTES)->toIso8601String();
+        return $this->created_at?->copy()->addMinutes(self::editWindowMinutes())->toIso8601String();
     }
 
     public function getCanEditAttribute(): bool
     {
-        return $this->status === 'pending'
+        return self::editWindowMinutes() > 0
+            && $this->status === 'pending'
             && $this->created_at
-            && now()->lte($this->created_at->copy()->addMinutes(self::EDIT_WINDOW_MINUTES));
+            && now()->lte($this->created_at->copy()->addMinutes(self::editWindowMinutes()));
     }
 
     public function isPaidOnline(): bool

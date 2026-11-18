@@ -130,7 +130,22 @@ class ReceiptSettingResource extends Resource
                             ->placeholder('20.00')
                             ->helperText('Maximum distance you deliver to. Orders beyond this will be rejected.')
                             ->columnSpan(1),
-                    ])->columns(3)
+                    ])->columns(3),
+
+                Forms\Components\Section::make('✏️ Customer Order Changes')
+                    ->description('How long customers can add/remove items or change special instructions after placing an order.')
+                    ->schema([
+                        Forms\Components\TextInput::make('order_edit_minutes')
+                            ->label('Time allowed to change order')
+                            ->numeric()
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(60)
+                            ->default(2)
+                            ->required()
+                            ->suffix('minutes')
+                            ->helperText('Set 0 to turn off order changes. Changes also stop as soon as you accept the order.'),
+                    ])->columns(3),
             ]);
     }
 

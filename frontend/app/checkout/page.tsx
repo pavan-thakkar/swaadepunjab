@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import CartDrawer from '../components/CartDrawer';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import OfferProgress, { useOffers, computeOffer } from '../components/OfferProgress';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -332,7 +333,9 @@ export default function CheckoutPage() {
   }, [userPhone, userEmail, userName]);
 
   const activeDeliveryFee = orderType === 'delivery' ? (customDeliveryFee !== null ? customDeliveryFee : deliveryFee) : 0;
-  const grandTotal = total + activeDeliveryFee;
+  const offers = useOffers();
+  const offerCalc = computeOffer(total, offers);
+  const grandTotal = Math.max(0, total - offerCalc.discount) + activeDeliveryFee;
 
   const handleSearchAddress = async () => {
     if (!searchQuery.trim()) return;
@@ -845,8 +848,21 @@ export default function CheckoutPage() {
                   <span className="summary-price">₹{(item.price * item.quantity).toFixed(0)}</span>
                 </div>
               ))}
+              {offerCalc.freeLine && (
+                <div className="summary-item" style={{ color: 'var(--success)' }}>
+                  <span className="summary-name">🎁 {offerCalc.freeLine.name}</span>
+                  <span className="summary-qty">×{offerCalc.freeLine.quantity}</span>
+                  <span className="summary-price" style={{ fontWeight: 800 }}>FREE</span>
+                </div>
+              )}
+              <div style={{ marginTop: '10px' }}><OfferProgress subtotal={total} /></div>
               <div style={{ borderTop: '1px solid var(--border)', marginTop: '10px', paddingTop: '10px' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{total.toFixed(0)}</span></div>
+                {offerCalc.discount > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                    <span>Offer: {offerCalc.current?.title}</span><span>−₹{offerCalc.discount.toFixed(0)}</span>
+                  </div>
+                )}
                 {orderType === 'delivery' && distanceKm !== null && (
                   <div className="cart-total-row" style={{ color: 'var(--primary-dark)', fontSize: '0.82rem', fontWeight: 600 }}>
                     <span>Calculated Distance</span>

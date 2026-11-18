@@ -85,6 +85,12 @@
             <span>SUB TOTAL:</span>
             <span>₹{{ number_format($order->subtotal, 0) }}</span>
         </div>
+        @if(($order->discount ?? 0) > 0)
+        <div style="display: flex; justify-content: space-between; font-weight: normal;">
+            <span>OFFER{{ $order->offer_title ? ' (' . $order->offer_title . ')' : '' }}:</span>
+            <span>-₹{{ number_format($order->discount, 0) }}</span>
+        </div>
+        @endif
         <div style="display: flex; justify-content: space-between; font-weight: normal;">
             <span>DELIVERY FEE:</span>
             <span>₹{{ number_format($order->delivery_fee, 0) }}</span>

@@ -24,6 +24,7 @@ class ReceiptSetting extends Model
         'delivery_extra_fee_per_km',
         'delivery_max_distance',
         'delivery_fallback_fee',
+        'order_edit_minutes',
     ];
 
     /**

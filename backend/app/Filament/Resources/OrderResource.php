@@ -188,6 +188,15 @@ class OrderResource extends Resource
                     ->numeric()
                     ->prefix('₹')
                     ->disabled(),
+                Forms\Components\TextInput::make('discount')
+                    ->label('Offer Discount')
+                    ->numeric()
+                    ->prefix('− ₹')
+                    ->disabled(),
+                Forms\Components\TextInput::make('offer_title')
+                    ->label('Offer Applied')
+                    ->placeholder('No offer')
+                    ->disabled(),
                 Forms\Components\TextInput::make('distance_km')
                     ->label('Calculated Distance')
                     ->numeric()

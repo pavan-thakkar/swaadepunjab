@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import OfferProgress from '../../components/OfferProgress';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -40,7 +41,7 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
   }, [secondsLeft, token, deadline, order.order_number]);
 
   const startEditing = async () => {
-    setItems((order.items || []).map((i: any) => ({
+    setItems((order.items || []).filter((i: any) => !i.is_free).map((i: any) => ({
       menu_item_id: i.menu_item_id, name: i.name, price: Number(i.price), quantity: Number(i.quantity),
     })));
     setNote(order.special_instructions || '');
@@ -184,6 +185,7 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
                 )}
               </div>
 
+              <OfferProgress subtotal={subtotal} compact />
               <div style={{ textAlign: 'right', fontWeight: 800 }}>
                 New items total: ₹{subtotal.toFixed(2)}
                 <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--text-muted)' }}>Delivery fee is recalculated when you save.</div>
