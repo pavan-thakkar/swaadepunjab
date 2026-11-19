@@ -12,6 +12,7 @@ class MenuItem extends Model
         'description',
         'category',
         'price',
+        'quantity_label',
         'image',
         'prep_time',
         'rating',

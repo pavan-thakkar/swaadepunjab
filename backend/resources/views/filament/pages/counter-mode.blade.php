@@ -65,6 +65,7 @@
                     @php $q = $bill[$d->id] ?? 0; @endphp
                     <button type="button" class="cm-dish {{ ! $d->is_available ? 'out' : ($q ? 'in' : '') }}" wire:click="add({{ $d->id }})" wire:key="d-{{ $d->id }}" @disabled(! $d->is_available) aria-label="Add {{ $d->name }}, ₹{{ number_format($d->price, 0) }}{{ $q ? ', ' . $q . ' in bill' : '' }}">
                         <span style="font-size: 14px; font-weight: 700; line-height: 1.25">{{ $d->name }}</span>
+                        @if ($d->quantity_label)<span style="font-size: 11px; font-weight: 600; color: #8A5A00">{{ $d->quantity_label }}</span>@endif
                         <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
                             <span style="font-size: 15px; font-weight: 800">₹{{ number_format($d->price, 0) }}</span>
                             @if (! $d->is_available)<span style="font-size: 11px; font-weight: 800; color: #9F1D1D">SOLD OUT</span>@elseif ($q)<span class="cm-qty">{{ $q }}</span>@endif

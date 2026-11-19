@@ -62,6 +62,12 @@ class MenuItemResource extends Resource
                     ->numeric()
                     ->prefix('₹')
                     ->minValue(0),
+                Forms\Components\TextInput::make('quantity_label')
+                    ->label('Quantity / portion (optional)')
+                    ->placeholder('e.g. 250 g, 4 pieces, Serves 2')
+                    ->helperText('Shown to customers with the dish. Leave empty to hide.')
+                    ->maxLength(60)
+                    ->datalist(['250 g', '500 g', '1 kg', '2 pieces', '4 pieces', '6 pieces', 'Half', 'Full', 'Serves 1', 'Serves 2', '500 ml', '1 plate']),
                 Forms\Components\TextInput::make('prep_time')
                     ->numeric()
                     ->suffix('min')
@@ -117,6 +123,11 @@ class MenuItemResource extends Resource
                 Tables\Columns\TextColumn::make('price')
                     ->formatStateUsing(fn ($state) => '₹' . number_format($state, 0))
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('quantity_label')
+                    ->label('Quantity')
+                    ->placeholder('—')
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('prep_time')
                     ->suffix(' min')

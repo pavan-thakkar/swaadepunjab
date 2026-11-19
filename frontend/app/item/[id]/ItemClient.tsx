@@ -353,6 +353,9 @@ export default function ItemDetailPage() {
               }}>
                 {item.name}
               </h1>
+              {item.quantity_label && (
+                <div className="qty-label qty-label-lg" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>⚖️ {item.quantity_label}</div>
+              )}
 
               {/* Stats / Ratings Row */}
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -603,6 +606,7 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
         </div>
 
         <div className="food-card-name">{item.name}</div>
+        {item.quantity_label && <div className="qty-label">{item.quantity_label}</div>}
 
         <div className="food-card-price-row">
           <span className="food-card-price">₹{Number(item.price).toFixed(0)}</span>

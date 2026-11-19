@@ -958,7 +958,7 @@ export default function CheckoutPage() {
               {state.items.map(item => (
                 <div key={item.menu_item_id} className="summary-item">
                   <span className="summary-name">
-                    {CATEGORY_EMOJI[item.category] || '🍽️'} {item.name}
+                    {CATEGORY_EMOJI[item.category] || '🍽️'} {item.name}{item.quantity_label ? <small style={{ color: 'var(--text-muted, #8A7350)', fontWeight: 500 }}> ({item.quantity_label})</small> : null}
                   </span>
                   <span className="summary-qty">×{item.quantity}</span>
                   <span className="summary-price">₹{(item.price * item.quantity).toFixed(0)}</span>

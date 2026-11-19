@@ -1,6 +1,9 @@
 'use client';
 
-import { useCart } from '../context/CartContext';
+import { useCart, firstImageUrl } from '../context/CartContext';
+import { useEffect, useState } from 'react';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 import { useRouter, usePathname } from 'next/navigation';
 import OfferProgress, { useOffers, computeOffer } from './OfferProgress';
 
@@ -71,6 +74,30 @@ export default function CartDrawer() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Photos for items added before photos were saved in the cart
+  const [photos, setPhotos] = useState<Record<number, string>>({});
+  const [labels, setLabels] = useState<Record<number, string>>({});
+  const [broken, setBroken] = useState<Record<number, boolean>>({});
+  const [fetched, setFetched] = useState(false);
+  const needsPhotos = state.isOpen && !fetched && state.items.some(i => !i.image || i.quantity_label === undefined);
+  useEffect(() => {
+    if (!needsPhotos) return;
+    let alive = true;
+    fetch(`${API}/menu`)
+      .then(r => r.json())
+      .then(d => {
+        if (!alive) return;
+        setFetched(true);
+        const map: Record<number, string> = {};
+        const lab: Record<number, string> = {};
+        (d.data || []).forEach((m: any) => { const u = firstImageUrl(m.image); if (u) map[m.id] = u; if (m.quantity_label) lab[m.id] = m.quantity_label; });
+        setPhotos(p => ({ ...map, ...p }));
+        setLabels(l => ({ ...lab, ...l }));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [needsPhotos]);
+
   const handleCheckout = () => {
     dispatch({ type: 'CLOSE_CART' });
     router.push('/checkout');
@@ -140,9 +167,20 @@ export default function CartDrawer() {
                         router.push(`/item/${item.menu_item_id}`);
                       }}
                     >
-                      <div className="cart-item-emoji">{CATEGORY_EMOJI[item.category] || '🍽️'}</div>
+                      {(item.image || photos[item.menu_item_id]) && !broken[item.menu_item_id] ? (
+                        <img
+                          className="cart-item-img"
+                          src={(item.image || photos[item.menu_item_id]) as string}
+                          alt={item.name}
+                          loading="lazy"
+                          onError={() => setBroken(b => ({ ...b, [item.menu_item_id]: true }))}
+                        />
+                      ) : (
+                        <div className="cart-item-emoji">{CATEGORY_EMOJI[item.category] || '🍽️'}</div>
+                      )}
                       <div className="cart-item-info">
                         <div className="cart-item-name">{item.name}</div>
+                        {(item.quantity_label || labels[item.menu_item_id]) && <div className="qty-label">{item.quantity_label || labels[item.menu_item_id]}</div>}
                         <div className="cart-item-price">₹{(item.price * item.quantity).toFixed(0)}</div>
                       </div>
                     </div>

@@ -301,7 +301,7 @@ class CounterMode extends Page
                 });
             })
             ->orderByDesc('is_available')->orderByDesc('is_featured')->orderBy('name')
-            ->get(['id', 'name', 'price', 'is_available', 'is_featured', 'category']); // all dishes, no limit
+            ->get(['id', 'name', 'price', 'quantity_label', 'is_available', 'is_featured', 'category']); // all dishes, no limit
 
         $pending = Order::where('status', 'pending')->orderBy('created_at')->limit(6)->get(['id', 'order_number', 'order_type', 'total']);
 

@@ -584,6 +584,7 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
         </div>
 
         <div className="food-card-name">{item.name}</div>
+        {item.quantity_label && <div className="qty-label">{item.quantity_label}</div>}
 
         <div className="food-card-price-row">
           <span className="food-card-price">₹{Number(item.price).toFixed(0)}</span>
@@ -712,6 +713,7 @@ function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem)
       </div>
       <div className="best-card-body">
         <div className="best-card-name">{item.name}</div>
+        {item.quantity_label && <div className="qty-label">{item.quantity_label}</div>}
         <div className="best-card-row" onClick={e => e.stopPropagation()}>
           <span className="best-card-price">₹{Number(item.price).toFixed(0)}</span>
           {qty > 0 ? (

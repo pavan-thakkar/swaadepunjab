@@ -11,6 +11,7 @@ export interface MenuItem {
   category: string;
   price: number;
   prep_time: number;
+  quantity_label?: string | null;
   rating: number;
   is_available: boolean;
   is_featured: boolean;
@@ -23,6 +24,20 @@ export interface CartItem {
   price: number;
   quantity: number;
   category: string;
+  image?: string | null;
+  quantity_label?: string | null;
+}
+
+// First photo of a menu item as a full URL (image may be a path, URL or JSON list)
+export function firstImageUrl(imageField: any): string | null {
+  let list: string[] = [];
+  if (Array.isArray(imageField)) list = imageField.filter(Boolean);
+  else if (typeof imageField === 'string' && imageField) {
+    try { const d = JSON.parse(imageField); list = Array.isArray(d) ? d.filter(Boolean) : [imageField]; } catch { list = [imageField]; }
+  }
+  const img = list[0];
+  if (!img) return null;
+  return img.startsWith('http') ? img : `${API.replace(/\/api\/?$/, '')}/storage/${img.replace(/^\/+/, '')}`;
 }
 
 interface CartState {
@@ -58,7 +73,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
         ...state,
         items: [
           ...state.items,
-          { menu_item_id: action.item.id, name: action.item.name, price: action.item.price, quantity: 1, category: action.item.category },
+          { menu_item_id: action.item.id, name: action.item.name, price: action.item.price, quantity: 1, category: action.item.category, image: firstImageUrl(action.item.image), quantity_label: action.item.quantity_label || null },
         ],
       };
     }

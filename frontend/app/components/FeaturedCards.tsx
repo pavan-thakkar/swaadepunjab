@@ -84,7 +84,7 @@ export default function FeaturedCards() {
                 return (
                   <div className="featured-add-bar" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                     <div className="featured-add-info">
-                      <span className="featured-add-name">{dish.name}</span>
+                      <span className="featured-add-name">{dish.name}{dish.quantity_label ? <span className="qty-label" style={{ display: 'inline', marginLeft: 6 }}>· {dish.quantity_label}</span> : null}</span>
                       <span className="featured-add-price">₹{Number(dish.price).toFixed(0)}</span>
                     </div>
                     {qty > 0 ? (
