@@ -24,6 +24,15 @@
         .cm-pay[aria-pressed="true"] { border: 2px solid #C98F0F; background: #FFF8E7; }
         .cm-go { height: 56px; border-radius: 14px; border: 0; background: #E6A817; color: #1A0F00; font: inherit; font-size: 17px; font-weight: 900; cursor: pointer; }
         .cm-go:disabled { opacity: .5; cursor: not-allowed; }
+        .cm-tabsbar { display: flex; gap: 6px; padding: 10px 10px 0; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid #EDE0C4; background: #FBF8F1; border-radius: 18px 18px 0 0; }
+        .cm-billtab { display: flex; align-items: center; flex-shrink: 0; border: 1px solid #EDE0C4; border-bottom: 0; border-radius: 10px 10px 0 0; background: #F3EAD6; }
+        .cm-billtab.on { background: #fff; border-color: #C98F0F; box-shadow: 0 -2px 0 #E6A817 inset; }
+        .cm-billtab-main { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 6px 0 12px; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 700; color: #1A0F00; cursor: pointer; white-space: nowrap; }
+        .cm-billtab.on .cm-billtab-main { font-weight: 800; }
+        .cm-billtab-count { background: #2C1A00; color: #FFF8E7; font-size: 11px; font-weight: 800; min-width: 20px; height: 20px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+        .cm-billtab-x { width: 28px; height: 40px; border: 0; background: none; color: #9F1D1D; font-size: 18px; font-weight: 700; cursor: pointer; }
+        .cm-newbill { flex-shrink: 0; height: 40px; padding: 0 12px; border: 1px dashed #C98F0F; border-bottom: 0; border-radius: 10px 10px 0 0; background: transparent; color: #8A5A00; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+        .dark .cm-tabsbar { background: rgb(39 39 42); border-color: rgb(63 63 70); }
     </style>
 
     @if (count($pending))
@@ -50,6 +59,7 @@
                     <button type="button" role="tab" class="cm-tab" aria-selected="{{ $category === $c->slug ? 'true' : 'false' }}" wire:click="$set('category', '{{ $c->slug }}')" wire:key="cat-{{ $c->slug }}">{{ $c->name }}</button>
                 @endforeach
             </div>
+            <div class="sp-muted" style="margin-top: -4px">{{ $menu->count() }} {{ $menu->count() === 1 ? 'dish' : 'dishes' }}{{ $menu->where('is_available', false)->count() ? ' · ' . $menu->where('is_available', false)->count() . ' sold out' : '' }}</div>
             <div class="cm-grid">
                 @forelse ($menu as $d)
                     @php $q = $bill[$d->id] ?? 0; @endphp
@@ -67,8 +77,23 @@
         </section>
 
         <aside class="cm-bill" aria-label="Current bill">
+            {{-- Open bills: one tab per table / customer --}}
+            <div class="cm-tabsbar" role="tablist" aria-label="Open bills">
+                @foreach ($tabs as $t)
+                    <div class="cm-billtab {{ $t['active'] ? 'on' : '' }}" wire:key="tab-{{ $t['id'] }}">
+                        <button type="button" role="tab" aria-selected="{{ $t['active'] ? 'true' : 'false' }}" class="cm-billtab-main" wire:click="switchBill('{{ $t['id'] }}')" title="Opened {{ $t['opened'] }}">
+                            <span>{{ $t['label'] }}</span>
+                            @if ($t['count'])<span class="cm-billtab-count">{{ $t['count'] }}</span>@endif
+                        </button>
+                        @if (count($tabs) > 1 || $t['count'])
+                            <button type="button" class="cm-billtab-x" aria-label="Close {{ $t['label'] }}" wire:click="closeBill('{{ $t['id'] }}')" @if ($t['count']) wire:confirm="Close {{ $t['label'] }}? Its items will be removed." @endif>×</button>
+                        @endif
+                    </div>
+                @endforeach
+                <button type="button" class="cm-newbill" wire:click="newBill" aria-label="Open a new bill">+ New bill</button>
+            </div>
             <div style="padding: 16px 18px; border-bottom: 1px solid #F3EAD6; display: flex; flex-direction: column; gap: 10px">
-                <div class="sp-row"><h2 style="margin: 0; font-size: 18px; font-weight: 800">Current bill</h2>
+                <div class="sp-row"><h2 style="margin: 0; font-size: 18px; font-weight: 800">{{ collect($tabs)->firstWhere('active', true)['label'] ?? 'Current bill' }}</h2>
                     @if (count($lines))<button type="button" style="background: none; border: 0; color: #9F1D1D; font: inherit; font-weight: 700; cursor: pointer; min-height: 40px" wire:click="clearBill">Clear</button>@endif
                 </div>
                 <div class="cm-seg" role="group" aria-label="Order type">
