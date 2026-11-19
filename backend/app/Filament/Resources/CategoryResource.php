@@ -31,12 +31,31 @@ class CategoryResource extends Resource
         return $form->schema([
             Forms\Components\Section::make('Category Details')->schema([
 
+                Forms\Components\FileUpload::make('image')
+                    ->label('Category image / icon (optional)')
+                    ->helperText('Square photo or icon works best (PNG with transparent background, JPG or WebP, up to 2 MB). Shown in the round category circle on the website instead of the emoji.')
+                    ->image()
+                    ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp'])
+                    ->imageEditor()
+                    ->imageEditorAspectRatios(['1:1'])
+                    ->imageCropAspectRatio('1:1')
+                    ->imageResizeTargetWidth('400')
+                    ->imageResizeTargetHeight('400')
+                    ->disk('public')
+                    ->directory('categories')
+                    ->visibility('public')
+                    ->maxSize(2048)
+                    ->openable()
+                    ->live()
+                    ->columnSpanFull(),
+
                 Forms\Components\TextInput::make('emoji')
                     ->label('Emoji Icon')
                     ->placeholder('🧀')
+                    ->helperText('Used when there is no image.')
                     ->maxLength(10)
                     ->default('🍽️')
-                    ->required(),
+                    ->required(fn (Forms\Get $get) => empty($get('image'))),
 
                 Forms\Components\TextInput::make('name')
                     ->label('Category Name')
@@ -86,6 +105,13 @@ class CategoryResource extends Resource
             ->persistSearchInSession()
             ->persistSortInSession()
             ->columns([
+                Tables\Columns\ImageColumn::make('image')
+                    ->label('')
+                    ->disk('public')
+                    ->circular()
+                    ->size(36)
+                    ->defaultImageUrl(null),
+
                 Tables\Columns\TextColumn::make('emoji')
                     ->label('')
                     ->width(40),

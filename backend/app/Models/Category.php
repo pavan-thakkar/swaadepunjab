@@ -11,6 +11,7 @@ class Category extends Model
         'name',
         'slug',
         'emoji',
+        'image',
         'description',
         'is_active',
         'is_addon',

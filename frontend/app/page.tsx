@@ -77,7 +77,9 @@ export default function HomePage() {
           ...list.map((c: any) => ({
             key: c.slug,
             label: c.name,
-            emoji: c.emoji || '🍽️'
+            emoji: c.emoji || '🍽️',
+            // Admin-uploaded category photo / icon (shown instead of the emoji)
+            image: c.image ? (String(c.image).startsWith('http') ? c.image : `${API.replace(/\/api\/?$/, '')}/storage/${String(c.image).replace(/^\/+/, '')}`) : null,
           }))
         ];
         setCategories(dynamicCats);
@@ -466,7 +468,10 @@ export default function HomePage() {
                     className="story-inner"
                     style={{ background: isActive ? '#fff' : '#f9f5ee' }}
                   >
-                    <span className="story-emoji">{c.emoji}</span>
+                    {c.image
+                      ? <img src={c.image} alt="" className="story-img" loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.removeAttribute('hidden'); }} />
+                      : null}
+                    <span className="story-emoji" hidden={!!c.image}>{c.emoji}</span>
                   </span>
                 </span>
                 <span className={`story-label${isActive ? ' active' : ''}`}>{c.label}</span>
