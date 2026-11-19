@@ -46,8 +46,11 @@ export default function Navbar() {
 
   return (
     <nav className="navbar">
-      <Link href="/" className="navbar-brand">
-        🍛 <span>Swaad <span style={{ color: 'var(--primary)' }}>E Punjab</span></span>
+      <Link href="/" className="navbar-brand" aria-label="Swaad E Punjab — home">
+        <picture>
+          <source srcSet="/brand/logo.webp" type="image/webp" />
+          <img src="/brand/logo.png" alt="Swaad E Punjab" className="navbar-logo" width={547} height={240} />
+        </picture>
       </Link>
       
       {/* Desktop Navbar Actions */}

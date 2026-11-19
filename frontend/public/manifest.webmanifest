@@ -1,0 +1,13 @@
+{
+  "name": "Swaad E Punjab",
+  "short_name": "Swaad E Punjab",
+  "description": "Authentic Punjabi food — order online for delivery or take away.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFDF5",
+  "theme_color": "#FFFDF5",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

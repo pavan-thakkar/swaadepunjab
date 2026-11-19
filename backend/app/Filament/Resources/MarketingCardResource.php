@@ -54,12 +54,31 @@ class MarketingCardResource extends Resource
                         ->searchable()
                         ->preload()
                         ->nullable(),
+                    Forms\Components\FileUpload::make('video_path')
+                        ->label('Upload video (MP4)')
+                        ->helperText('MP4 up to 50 MB (keep it short, 10–30 seconds, for fast loading on phones). Plays on loop in the banner. If both an upload and a link are set, the upload is used.')
+                        ->disk('public')
+                        ->directory('marketing/videos')
+                        ->visibility('public')
+                        ->acceptedFileTypes(['video/mp4', 'video/webm', 'video/quicktime'])
+                        ->maxSize(51200)
+                        ->openable()
+                        ->downloadable()
+                        ->live()
+                        ->columnSpanFull(),
                     Forms\Components\TextInput::make('video_url')
-                        ->label('Background Video URL (MP4 Link)')
+                        ->label('…or video link (MP4 URL)')
                         ->placeholder('e.g. https://assets.mixkit.co/...mp4')
-                        ->url(),
+                        ->url()
+                        ->live(onBlur: true),
+                    Forms\Components\Toggle::make('video_sound')
+                        ->label('Video has sound — show 🔊 button')
+                        ->helperText('Phones and browsers always start videos muted. Customers tap 🔊 on the banner to hear it.')
+                        ->default(true)
+                        ->inline(false)
+                        ->visible(fn (Forms\Get $get) => filled($get('video_path')) || filled($get('video_url'))),
                     Forms\Components\FileUpload::make('image_path')
-                        ->label('Fallback Banner Image')
+                        ->label('Cover image (shown while the video loads, or when there is no video)')
                         ->disk('public')
                         ->directory('marketing')
                         ->visibility('public')
@@ -91,6 +110,14 @@ class MarketingCardResource extends Resource
                     ->label('Order')
                     ->sortable()
                     ->grow(false),
+                Tables\Columns\IconColumn::make('video_path')
+                    ->label('Video')
+                    ->state(fn ($record) => filled($record->video_path) || filled($record->video_url))
+                    ->boolean()
+                    ->trueIcon(fn ($record) => $record->video_sound ? 'heroicon-o-speaker-wave' : 'heroicon-o-film')
+                    ->falseIcon('heroicon-o-minus')
+                    ->tooltip(fn ($record) => (filled($record->video_path) || filled($record->video_url)) ? ($record->video_sound ? 'Video with sound' : 'Video (muted)') : 'No video'),
+
                 Tables\Columns\ImageColumn::make('image_path')
                     ->label('Image')
                     ->grow(false),

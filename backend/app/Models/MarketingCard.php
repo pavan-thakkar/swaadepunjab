@@ -13,6 +13,8 @@ class MarketingCard extends Model
         'price',
         'menu_item_id',
         'video_url',
+        'video_path',
+        'video_sound',
         'image_path',
         'is_active',
         'sort_order',
@@ -20,6 +22,7 @@ class MarketingCard extends Model
 
     protected $casts = [
         'is_active'  => 'boolean',
+        'video_sound' => 'boolean',
         'sort_order' => 'integer',
         'menu_item_id' => 'integer',
     ];

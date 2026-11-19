@@ -8,6 +8,7 @@ import Navbar from './components/Navbar';
 import Toast from './components/Toast';
 import FeaturedCards from './components/FeaturedCards';
 import PlansSection from './components/PlansSection';
+import PromoVideo from './components/PromoVideo';
 import OfferProgress from './components/OfferProgress';
 import { searchMenu } from './lib/search';
 
@@ -56,6 +57,7 @@ export default function HomePage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [promoSlides, setPromoSlides] = useState<any[]>([]);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [promoSound, setPromoSound] = useState(false); // customer turned banner video sound on
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLElement>(null);
   const fetchSeq = useRef(0);
@@ -137,11 +139,14 @@ export default function HomePage() {
 
   useEffect(() => {
     if (promoSlides.length === 0) return;
+    // While a customer is listening to a banner video, don't jump to the next banner (it moves on when the video ends)
+    const cur = promoSlides[activeSlide];
+    if (promoSound && cur && cur.video_sound && (cur.video_path || cur.video_url)) return;
     const timer = setInterval(() => {
       setActiveSlide(prev => (prev + 1) % promoSlides.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, [promoSlides]);
+  }, [promoSlides, promoSound, activeSlide]);
 
   const handlePromoOrder = (slide: any) => {
     const matchedItem = items.find(i => i.id === slide.menu_item_id);
@@ -369,15 +374,16 @@ export default function HomePage() {
                   key={slide.id} 
                   className={`promo-slide${activeSlide === idx ? ' active' : ''}`}
                 >
-                  {/* background video loop */}
-                  {slide.video_url && (
-                    <video 
-                      className="promo-video-bg" 
-                      src={slide.video_url} 
-                      autoPlay 
-                      loop 
-                      muted 
-                      playsInline 
+                  {/* background video: uploaded file first, else link (starts muted; 🔊 button if it has sound) */}
+                  {(slide.video_path || slide.video_url) && (
+                    <PromoVideo
+                      src={slide.video_path ? `${API.replace('/api', '')}/storage/${slide.video_path}` : slide.video_url}
+                      poster={bgImage}
+                      active={activeSlide === idx}
+                      hasSound={!!slide.video_sound}
+                      soundOn={promoSound}
+                      onToggleSound={() => setPromoSound(s => !s)}
+                      onEnded={() => setActiveSlide(prev => (prev + 1) % promoSlides.length)}
                     />
                   )}
                   {/* background image fallback if video fails */}
@@ -544,6 +550,7 @@ export default function HomePage() {
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       <footer>
+        <img src="/brand/logo.webp" alt="Swaad E Punjab" className="footer-logo" width={547} height={240} loading="lazy" />
         <p>© 2026 <strong style={{ color: 'var(--primary)' }}>Swaad E Punjab</strong> — Dil se banaya, ghar tak pahunchaya 🧡</p>
       </footer>
     </div>

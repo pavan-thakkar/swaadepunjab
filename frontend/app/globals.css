@@ -2348,3 +2348,21 @@ img, video { max-width: 100%; }
 /* Category photo / icon uploaded in admin (replaces the emoji in the round circle) */
 .story-inner { overflow: hidden; }
 .story-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+/* ===== Brand logo ===== */
+.navbar-brand { gap: 0; line-height: 0; flex-shrink: 0; }
+.navbar-logo { display: block; height: 70px; width: auto; max-width: none; filter: drop-shadow(0 2px 4px rgba(100,60,0,.12)); transition: transform .2s ease; }
+.navbar-brand:hover .navbar-logo { transform: scale(1.03) rotate(-1deg); }
+@media (min-width: 769px) { .navbar { height: 84px; } }
+@media (max-width: 768px) { .navbar-logo { height: 52px; } }
+@media (max-width: 380px) { .navbar-logo { height: 42px; } }
+.footer-logo { display: block; height: 72px; width: auto; margin: 0 auto 10px; }
+.login-logo { display: block; height: 84px; width: auto; margin: 0 auto 14px; }
+
+/* Promo banner video sound button */
+.promo-sound-btn { position: absolute; right: 14px; top: 14px; z-index: 5; display: inline-flex; align-items: center; gap: 6px; height: 40px; min-width: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.35); background: rgba(26,15,0,.6); color: #fff; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.promo-sound-btn span[aria-hidden] { font-size: 1.05rem; line-height: 1; }
+.promo-sound-btn.on { padding: 0; width: 40px; justify-content: center; }
+.promo-sound-btn:hover { background: rgba(26,15,0,.78); }
+.promo-sound-hint { white-space: nowrap; }
+@media (max-width: 480px) { .promo-sound-btn { right: 10px; top: 10px; height: 36px; min-width: 36px; } .promo-sound-btn.on { width: 36px; } }

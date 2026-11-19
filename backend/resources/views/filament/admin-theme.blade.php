@@ -6,6 +6,10 @@
   html:not(.dark) .fi-sidebar { background: var(--sp-tandoor) !important; }
   html:not(.dark) .fi-sidebar-header { background: var(--sp-tandoor) !important; border-bottom: 1px solid rgba(255,248,231,0.08) !important; box-shadow: none !important; }
   html:not(.dark) .fi-sidebar-header a, html:not(.dark) .fi-sidebar-header .fi-logo { color: var(--sp-cream) !important; }
+  /* Brand logo: a bit more room in the sidebar header, bigger on the login page */
+  .fi-sidebar-header { min-height: 4.5rem; }
+  .fi-sidebar-header .fi-logo, .fi-topbar .fi-logo { width: auto !important; max-width: 100%; filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+  .fi-simple-header .fi-logo { height: 6rem !important; width: auto !important; margin: 0 auto; }
   html:not(.dark) .fi-sidebar-group-label { color: #C8B48E !important; letter-spacing: .08em; text-transform: uppercase; font-size: 11px !important; font-weight: 800 !important; }
   html:not(.dark) .fi-sidebar-group-button svg, html:not(.dark) .fi-sidebar-group-collapse-button svg { color: #C8B48E !important; }
   html:not(.dark) .fi-sidebar-item-button { border-radius: 10px !important; }
