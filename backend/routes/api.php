@@ -29,7 +29,8 @@ Route::post('/monthly-plans/enquiry', [App\Http\Controllers\Api\MonthlyPlanContr
 
 Route::prefix('menu')->group(function () {
     Route::get('/', [MenuController::class, 'index']);
-    Route::get('/{menuItem}', [MenuController::class, 'show']);
+    Route::get('/slug/{slug}', [MenuController::class, 'showBySlug'])->where('slug', '[A-Za-z0-9\-]+');
+    Route::get('/{menuItem}', [MenuController::class, 'show'])->whereNumber('menuItem');
     Route::get('/{menuItem}/pairs', [MenuController::class, 'pairs'])->middleware('throttle:120,1');
     Route::get('/{menuItem}/reviews', [App\Http\Controllers\Api\ReviewController::class, 'index']);
     Route::post('/{menuItem}/reviews', [App\Http\Controllers\Api\ReviewController::class, 'store']);

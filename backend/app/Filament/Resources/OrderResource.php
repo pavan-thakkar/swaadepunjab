@@ -323,6 +323,7 @@ class OrderResource extends Resource
                     ->url(fn (Order $record) => $record->latitude ? "https://www.google.com/maps/search/?api=1&query={$record->latitude},{$record->longitude}" : null, shouldOpenInNewTab: true)
                     ->color(fn (Order $record) => $record->latitude ? 'success' : 'gray')
                     ->weight('bold')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('distance_km')
@@ -330,6 +331,7 @@ class OrderResource extends Resource
                     ->state(fn (Order $record) => $record->distance_km ? "{$record->distance_km} KM" : '—')
                     ->color('info')
                     ->weight('bold')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('ordered_items')
@@ -411,7 +413,7 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Ordered At')
-                    ->dateTime('d M Y, h:i A')
+                    ->dateTime('d M, h:i A')
                     ->sortable()
                     ->grow(false),
 
@@ -420,6 +422,7 @@ class OrderResource extends Resource
                     ->formatStateUsing(fn ($state) => $state ? "⏱ {$state} min" : '—')
                     ->badge()
                     ->color(fn ($state) => $state ? 'warning' : 'gray')
+                    ->toggleable(isToggledHiddenByDefault: true)
                     ->grow(false),
             ])
             ->filters([

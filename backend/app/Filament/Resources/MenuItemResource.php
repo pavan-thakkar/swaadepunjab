@@ -188,23 +188,31 @@ class MenuItemResource extends Resource
                 Tables\Columns\ImageColumn::make('image')
                     ->label('Photo')
                     ->circular()
-                    ->stacked(),
+                    ->stacked()
+                    ->limit(1)
+                    ->size(44),
 
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
                     ->sortable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->wrap()
+                    // quantity + options shown under the name instead of separate columns
+                    ->description(fn (MenuItem $record) => collect([
+                        $record->quantity_label,
+                        count($record->groups()) ? count($record->groups()) . ' option group(s)' : null,
+                    ])->filter()->implode(' · ') ?: null),
 
                 Tables\Columns\TextColumn::make('category')
                     ->badge()
                     ->formatStateUsing(function (string $state): string {
-                        $cat = \App\Models\Category::where('slug', $state)->first();
-                        if ($cat) {
-                            return ($cat->emoji ? $cat->emoji . ' ' : '') . $cat->name;
-                        }
-                        return $state;
+                        static $cats = null; // load categories once, not once per row
+                        $cats ??= \App\Models\Category::all()->keyBy('slug');
+                        $cat = $cats[$state] ?? null;
+                        return $cat ? (($cat->emoji ? $cat->emoji . ' ' : '') . $cat->name) : $state;
                     })
-                    ->color('gray'),
+                    ->color('gray')
+                    ->visibleFrom('md'),
 
                 Tables\Columns\TextColumn::make('price')
                     ->formatStateUsing(fn ($state) => '₹' . number_format($state, 0))
@@ -216,21 +224,23 @@ class MenuItemResource extends Resource
                     ->badge()
                     ->color('warning')
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('quantity_label')
                     ->label('Quantity')
                     ->placeholder('—')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('prep_time')
                     ->suffix(' min')
                     ->label('Prep Time')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('rating')
                     ->formatStateUsing(fn ($state) => '★ ' . $state)
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\ToggleColumn::make('is_available')
                     ->label('Available')

@@ -7,6 +7,7 @@ import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Toast from '../../components/Toast';
 import Link from 'next/link';
+import { itemPath } from '../../lib/itemPath';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -104,13 +105,22 @@ export default function ItemDetailPage() {
     const fetchItem = async () => {
       setError(''); // Clear any previous errors
       try {
-        const res = await fetch(`${API}/menu/${id}`, { cache: 'no-store' });
+        // New links use the dish name (/item/paneer-tikka), old links the number (/item/548)
+        const isNumber = /^\d+$/.test(id);
+        const res = await fetch(isNumber ? `${API}/menu/${id}` : `${API}/menu/slug/${encodeURIComponent(id)}`, { cache: 'no-store' });
         if (!res.ok) {
           setError('Dish not found in our kitchen!');
           return;
         }
         const data = await res.json();
         setItem(data.data);
+        // Old number link → show the pretty name in the address bar instead
+        try {
+          const pretty = itemPath(data.data);
+          if (isNumber && pretty !== `/item/${id}/` && typeof window !== 'undefined') {
+            window.history.replaceState(window.history.state, '', pretty);
+          }
+        } catch {}
       } catch (err) {
         setError('Connection error. Is the backend kitchen active?');
       } finally {
@@ -165,7 +175,7 @@ export default function ItemDetailPage() {
 
   const fetchReviews = async () => {
     try {
-      const res = await fetch(`${API}/menu/${id}/reviews`, { cache: 'no-store' });
+      const res = await fetch(`${API}/menu/${item?.id ?? id}/reviews`, { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         setReviews(json.data || []);
@@ -596,7 +606,7 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
     <div 
       className="food-card" 
       style={{ cursor: 'pointer', height: '100%' }}
-      onClick={() => router.push(`/item/${item.id}`)}
+      onClick={() => router.push(itemPath(item))}
     >
       {/* Details Side */}
       <div className="food-card-body">

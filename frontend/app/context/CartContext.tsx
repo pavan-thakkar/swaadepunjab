@@ -27,6 +27,7 @@ export interface ChosenOption {
 export interface MenuItem {
   id: number;
   name: string;
+  slug?: string; // pretty web name, e.g. "paneer-tikka"
   description: string;
   category: string;
   price: number;

@@ -22,6 +22,23 @@ class MenuItem extends Model
         'is_featured',
     ];
 
+    // Pretty web address: /item/paneer-tikka instead of /item/548
+    protected $appends = ['slug'];
+
+    public function getSlugAttribute(): string
+    {
+        return \Illuminate\Support\Str::slug((string) $this->name) ?: (string) $this->id;
+    }
+
+    /** Find a dish by its web name (available dishes first, then the oldest). */
+    public static function findBySlug(string $slug): ?self
+    {
+        $slug = \Illuminate\Support\Str::slug($slug);
+        if ($slug === '') return null;
+        return static::query()->orderByDesc('is_available')->orderBy('id')->get()
+            ->first(fn (self $m) => \Illuminate\Support\Str::slug((string) $m->name) === $slug);
+    }
+
     protected $casts = [
         'price'        => 'decimal:2',
         'rating'       => 'decimal:1',

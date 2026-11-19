@@ -6,6 +6,14 @@
   html:not(.dark) .fi-sidebar { background: var(--sp-tandoor) !important; }
   html:not(.dark) .fi-sidebar-header { background: var(--sp-tandoor) !important; border-bottom: 1px solid rgba(255,248,231,0.08) !important; box-shadow: none !important; }
   html:not(.dark) .fi-sidebar-header a, html:not(.dark) .fi-sidebar-header .fi-logo { color: var(--sp-cream) !important; }
+  /* Wide screens: tables use the full width, but forms stay readable */
+  .fi-resource-create-record-page .fi-fo-component-ctn,
+  .fi-resource-edit-record-page .fi-fo-component-ctn,
+  .fi-resource-create-record-page .fi-form-actions,
+  .fi-resource-edit-record-page .fi-form-actions { max-width: 1200px; }
+  /* Tables never push the page wider than the screen; they scroll inside their card instead */
+  .fi-ta-ctn { max-width: 100%; }
+  .fi-ta-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   /* Brand logo: a bit more room in the sidebar header, bigger on the login page */
   .fi-sidebar-header { min-height: 4.5rem; }
   .fi-sidebar-header .fi-logo, .fi-topbar .fi-logo { width: auto !important; max-width: 100%; filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }

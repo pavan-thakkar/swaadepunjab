@@ -135,6 +135,16 @@ class MenuController extends Controller
         return trim(preg_replace('/\s+/', ' ', $n));
     }
 
+    /** A dish by its web name: /menu/slug/paneer-tikka */
+    public function showBySlug(string $slug): JsonResponse
+    {
+        $item = MenuItem::findBySlug($slug);
+        if (! $item) {
+            return response()->json(['message' => 'Dish not found'], 404);
+        }
+        return response()->json(['data' => $item]);
+    }
+
     /**
      * Return a single menu item.
      */

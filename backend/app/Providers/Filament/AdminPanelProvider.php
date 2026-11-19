@@ -55,6 +55,8 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('3.25rem')
             ->favicon(fn () => asset('images/brand/favicon.ico'))
             ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth('16rem')
+            ->maxContentWidth(\Filament\Support\Enums\MaxWidth::Full) // tables use the whole screen on big monitors
             ->navigationGroups(['Live', 'Menu', 'Grow', 'Insights', 'Settings'])
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.admin-theme'))
             // "Back" button at the top of create / edit / view pages

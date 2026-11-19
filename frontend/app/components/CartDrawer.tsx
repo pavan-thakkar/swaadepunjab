@@ -7,6 +7,7 @@ import { CartOptionSheet } from './OptionSheet';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 import { useRouter, usePathname } from 'next/navigation';
 import OfferProgress, { useOffers, computeOffer } from './OfferProgress';
+import { itemPath } from '../lib/itemPath';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   special_combo:  '🍱',
@@ -166,7 +167,7 @@ export default function CartDrawer() {
                       className="cart-item-clickable"
                       onClick={() => {
                         dispatch({ type: 'CLOSE_CART' });
-                        router.push(`/item/${item.menu_item_id}`);
+                        router.push(itemPath(item));
                       }}
                     >
                       {(item.image || photos[item.menu_item_id]) && !broken[item.menu_item_id] ? (

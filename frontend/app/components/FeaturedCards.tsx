@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart, MenuItem, qtyInCart } from '../context/CartContext';
+import { itemPath } from '../lib/itemPath';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 const STORAGE = `${API.replace(/\/api\/?$/, '')}/storage`;
@@ -69,8 +70,8 @@ export default function FeaturedCards() {
               className={`featured-card${clickable ? ' clickable' : ''}`}
               role={clickable ? 'link' : undefined}
               tabIndex={clickable ? 0 : undefined}
-              onClick={() => clickable && router.push(`/item/${card.menu_item_id}/`)}
-              onKeyDown={e => { if (clickable && (e.key === 'Enter' || e.key === ' ')) router.push(`/item/${card.menu_item_id}/`); }}
+              onClick={() => clickable && router.push(card.menu_item ? itemPath(card.menu_item) : `/item/${card.menu_item_id}/`)}
+              onKeyDown={e => { if (clickable && (e.key === 'Enter' || e.key === ' ')) router.push(card.menu_item ? itemPath(card.menu_item) : `/item/${card.menu_item_id}/`); }}
             >
               <img src={imgSrc(card.image_path)} alt={card.title || 'Featured dish'} loading="lazy" />
               {card.badge && (

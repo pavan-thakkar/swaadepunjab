@@ -11,6 +11,7 @@ import PlansSection from './components/PlansSection';
 import PromoVideo from './components/PromoVideo';
 import OfferProgress from './components/OfferProgress';
 import { searchMenu } from './lib/search';
+import { itemPath } from './lib/itemPath';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -231,7 +232,7 @@ export default function HomePage() {
 
   const handleSuggestionClick = (item: MenuItem) => {
     setShowSuggest(false);
-    router.push(`/item/${item.id}`);
+    router.push(itemPath(item));
   };
 
   const showResults = () => {
@@ -595,7 +596,7 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
     <div 
       className="food-card" 
       style={{ animationDelay: `${delay}ms`, cursor: 'pointer' }}
-      onClick={() => router.push(`/item/${item.id}`)}
+      onClick={() => router.push(itemPath(item))}
     >
       {/* Details Side (Left on mobile, bottom on desktop) */}
       <div className="food-card-body">
@@ -730,7 +731,7 @@ function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem)
   const qty = qtyInCart(state.items, item.id);
   const img = firstImage(item.image);
   return (
-    <div className="best-card" role="link" tabIndex={0} onClick={() => router.push(`/item/${item.id}`)} onKeyDown={e => { if (e.key === 'Enter') router.push(`/item/${item.id}`); }}>
+    <div className="best-card" role="link" tabIndex={0} onClick={() => router.push(itemPath(item))} onKeyDown={e => { if (e.key === 'Enter') router.push(itemPath(item)); }}>
       <div className="best-card-img">
         {img ? <img src={img} alt={item.name} loading="lazy" /> : <span aria-hidden="true">{emoji}</span>}
         {item.rating ? <span className="best-card-rating">★ {Number(item.rating).toFixed(1)}</span> : null}
