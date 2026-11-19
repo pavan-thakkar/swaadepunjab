@@ -13,11 +13,18 @@ use Filament\Tables\Table;
 
 class ReviewResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = Review::class;
     protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-left-right';
     protected static ?string $navigationLabel = 'Customer Reviews';
-    protected static ?string $navigationGroup = 'Catalog';
-    protected static ?int $navigationSort = 4;
+    protected static ?string $navigationGroup = 'Menu';
+    protected static ?int $navigationSort = 3;
 
     public static function form(Form $form): Form
     {

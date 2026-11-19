@@ -685,8 +685,8 @@ export default function CheckoutPage() {
     <div className="page-wrapper">
       <Navbar />
       <CartDrawer />
-      <div style={{ padding: '2rem 2rem 0', maxWidth: 550, margin: '0 auto' }}>
-        <Link href="/" className="btn-secondary" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
+      <div className="checkout-head" style={{ padding: '2rem 2rem 0', maxWidth: 550, margin: '0 auto' }}>
+        <Link href="/" className="btn-secondary back-link-sm" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
           ← Back to Menu
         </Link>
         <h1 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.25rem' }}>Your order</h1>

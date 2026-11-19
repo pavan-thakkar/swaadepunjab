@@ -13,13 +13,20 @@ use Filament\Tables\Table;
 
 class OfferResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = Offer::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-gift';
     protected static ?string $navigationLabel = 'Offers & Free Items';
     protected static ?string $modelLabel = 'offer';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 4;
+    protected static ?string $navigationGroup = 'Grow';
+    protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
     {

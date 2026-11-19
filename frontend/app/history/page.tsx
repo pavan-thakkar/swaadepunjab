@@ -220,7 +220,7 @@ export default function HistoryPage() {
       <Navbar />
       <CartDrawer />
 
-      <div style={{ padding: '2.5rem 2rem', maxWidth: 850, margin: '0 auto' }}>
+      <div className="history-page" style={{ padding: '2.5rem 2rem', maxWidth: 850, margin: '0 auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h1 style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text)' }}>📜 My Orders</h1>

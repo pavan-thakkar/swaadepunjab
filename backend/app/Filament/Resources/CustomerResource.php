@@ -12,11 +12,18 @@ use Filament\Tables\Table;
 
 class CustomerResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner']];
+    }
+
     protected static ?string $model = Customer::class;
     protected static ?string $navigationIcon = 'heroicon-o-users';
     protected static ?string $navigationLabel = 'Customers';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 1;
+    protected static ?string $navigationGroup = 'Insights';
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {

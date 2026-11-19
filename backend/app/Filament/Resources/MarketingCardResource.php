@@ -15,12 +15,19 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class MarketingCardResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = MarketingCard::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-megaphone';
     protected static ?string $navigationLabel = 'Promo Banners';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 3;
+    protected static ?string $navigationGroup = 'Grow';
+    protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {

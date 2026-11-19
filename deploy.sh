@@ -66,6 +66,8 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
 # Clear cache and dump autoload on live server
 sshpass -p "$SSH_PASS" ssh -tt -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
   "cd /home/u360309011/domains/swaadepunjab.com/public_html/backend && \
+   sed -i 's/^APP_ENV=.*/APP_ENV=production/; s/^APP_DEBUG=.*/APP_DEBUG=false/' .env && \
+   rm -f public/info.php && \
    (grep -q '^GOOGLE_CLIENT_ID=' .env || printf '\\nGOOGLE_CLIENT_ID=82292707740-slkcblrneb4jeckjbdjq85onu6pr3qgf.apps.googleusercontent.com\\n' >> .env) && \
    rm -f public/storage && \
    ln -s /home/u360309011/domains/swaadepunjab.com/public_html/backend/storage/app/public public/storage 2>/dev/null || true && \
@@ -85,11 +87,20 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
   "$FRONTEND_DIR/out/" \
   "$SSH_USER@$SSH_HOST:$REMOTE_FRONTEND/"
 
+# Remove any old database dumps from the live site (rsync skips *.sql, so delete them here)
+sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
+  "rm -f $REMOTE_FRONTEND/*.sql $REMOTE_FRONTEND/backend/public/info.php"
+
 # Write .htaccess after rsync (rsync may overwrite it)
 sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST 'cat > /home/u360309011/domains/swaadepunjab.com/public_html/.htaccess << '"'"'HTA'"'"'
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  # Never serve the Laravel backend folder (.env, database, logs) through the main domain
+  RewriteRule ^backend(/.*)?$ - [F,L]
+  # Never serve hidden files (.env, .git) or database/backup files
+  RewriteRule (^|/)\.(?!well-known) - [F,L]
+  RewriteRule \.(sql|sqlite|log|bak|env)$ - [F,L,NC]
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]

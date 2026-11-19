@@ -9,18 +9,17 @@ use Illuminate\Support\Facades\Auth;
 
 class MenuImportController extends Controller
 {
+    /** Only logged-in Owner / Manager accounts may import menus. */
+    private function allowed(): bool
+    {
+        $user = Auth::guard('web')->user();
+        return $user && $user->is_active && method_exists($user, 'hasRole') && $user->hasRole(['owner', 'manager']);
+    }
+
     public function show()
     {
-        // Ensure only authenticated filament admins can access
-        if (!Auth::guard('web')->check()) {
-            // Try filament guard
-            try {
-                if (!\Filament\Facades\Filament::auth()->check()) {
-                    return redirect('/admin/login');
-                }
-            } catch (\Exception $e) {
-                return redirect('/admin/login');
-            }
+        if (! $this->allowed()) {
+            return redirect('/admin/login');
         }
 
         return view('admin.menu-import');
@@ -28,6 +27,8 @@ class MenuImportController extends Controller
 
     public function upload(Request $request)
     {
+        abort_unless($this->allowed(), 403, 'Not allowed');
+
         $request->validate([
             'menu_file' => 'required|file|max:524288', // 512 MB max
         ]);

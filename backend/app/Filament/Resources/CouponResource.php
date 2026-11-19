@@ -13,13 +13,20 @@ use Filament\Tables\Table;
 
 class CouponResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = Coupon::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-ticket';
     protected static ?string $navigationLabel = 'Coupon Codes';
     protected static ?string $modelLabel = 'coupon';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 5;
+    protected static ?string $navigationGroup = 'Grow';
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {

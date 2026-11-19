@@ -13,14 +13,21 @@ use Filament\Tables\Table;
 
 class LoyaltyTransactionResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner']];
+    }
+
     protected static ?string $model = LoyaltyTransaction::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-star';
     protected static ?string $navigationLabel = 'Loyalty Points';
     protected static ?string $modelLabel = 'points entry';
     protected static ?string $pluralModelLabel = 'Loyalty Points';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 6;
+    protected static ?string $navigationGroup = 'Grow';
+    protected static ?int $navigationSort = 3;
 
     /** Used for manual adjustments only. */
     public static function form(Form $form): Form

@@ -13,11 +13,29 @@ use Illuminate\Database\Eloquent\Builder;
 
 class OrderResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager', 'staff'], 'edit' => ['owner', 'manager', 'staff'], 'delete' => ['owner']];
+    }
+
+    public static function getNavigationBadge(): ?string
+    {
+        $n = \App\Models\Order::where('status', 'pending')->count();
+        return $n > 0 ? (string) $n : null;
+    }
+
+    public static function getNavigationBadgeColor(): ?string
+    {
+        return 'danger';
+    }
+
     protected static ?string $model = Order::class;
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
     protected static ?string $navigationLabel = 'Orders';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 2;
+    protected static ?string $navigationGroup = 'Live';
+    protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
     {
@@ -83,6 +101,7 @@ class OrderResource extends Resource
                             'cash_on_delivery' => '💵 Cash on Delivery',
                             'card'             => '💳 Card',
                             'razorpay'         => '💳 Razorpay (Online)',
+                            'upi_counter'      => '📱 UPI at counter',
                             default            => $record->payment_method,
                         }),
                     Forms\Components\Placeholder::make('status')
@@ -230,6 +249,7 @@ class OrderResource extends Resource
                         'cash_on_delivery' => '💵 Cash on Delivery',
                         'card'             => '💳 Card',
                         'razorpay'         => '💳 Razorpay (Online)',
+                        'upi_counter'      => '📱 UPI at counter',
                     ])
                     ->default('cash_on_delivery'),
             ])->columns(2),
@@ -369,6 +389,7 @@ class OrderResource extends Resource
                         'cash_on_delivery' => '💵 COD',
                         'card'             => '💳 Card',
                         'razorpay'         => '💳 Razorpay',
+                        'upi_counter'      => '📱 UPI (counter)',
                         default            => $state,
                     })
                     ->grow(false),

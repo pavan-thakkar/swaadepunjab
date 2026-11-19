@@ -254,8 +254,8 @@ export default function TrackOrderPage() {
       <Navbar />
       <CartDrawer />
 
-      <div style={{ padding: '2rem', maxWidth: 700, margin: '0 auto' }}>
-        <Link href="/" className="btn-secondary" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
+      <div className="track-page" style={{ padding: '2rem', maxWidth: 700, margin: '0 auto' }}>
+        <Link href="/" className="btn-secondary back-link-sm" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
           ← Back to Menu
         </Link>
 

@@ -12,12 +12,19 @@ use Filament\Tables\Table;
 
 class DeliveryFeeSettingResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner'], 'edit' => ['owner'], 'delete' => ['owner']];
+    }
+
     protected static ?string $model = DeliveryFeeSetting::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-truck';
     protected static ?string $navigationLabel = 'Delivery Fee Tiers (KM)';
     protected static ?string $navigationGroup = 'Settings';
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form
     {

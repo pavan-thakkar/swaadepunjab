@@ -12,12 +12,19 @@ use Filament\Tables\Table;
 
 class ReceiptSettingResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner'], 'edit' => ['owner'], 'delete' => ['owner']];
+    }
+
     protected static ?string $model = ReceiptSetting::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
     protected static ?string $navigationLabel = 'Store & Receipt Config';
     protected static ?string $navigationGroup = 'Settings';
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 1;
 
     public static function canCreate(): bool
     {

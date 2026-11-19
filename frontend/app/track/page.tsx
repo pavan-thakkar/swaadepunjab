@@ -21,7 +21,7 @@ export default function TrackSearchPage() {
       <Navbar />
       <CartDrawer />
 
-      <div style={{ padding: '6rem 2rem', maxWidth: 600, margin: '0 auto', textAlign: 'center', flex: 1 }}>
+      <div className="track-search" style={{ padding: '6rem 2rem', maxWidth: 600, margin: '0 auto', textAlign: 'center', flex: 1 }}>
         <div style={{ fontSize: '4rem', marginBottom: '1.5rem' }}>📦</div>
         <h1 style={{ fontSize: '2.2rem', fontWeight: 900, marginBottom: '1rem', color: 'var(--text)' }}>
           Track Your <span style={{ color: 'var(--primary)' }}>Order</span>

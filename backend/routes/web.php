@@ -20,5 +20,10 @@ Route::get('/admin/alarm/pending-count', function () {
     return response()->json(['count' => $count]);
 })->middleware(['web']);
 
-
-
+// Print bill and/or kitchen ticket (any logged-in admin account)
+Route::get('/admin/orders/{order}/print', function (\App\Models\Order $order) {
+    $user = auth()->guard('web')->user();
+    abort_unless($user && $user->is_active, 403);
+    $type = in_array(request('type'), ['bill', 'kot', 'both'], true) ? request('type') : 'bill';
+    return view('admin.print-order', ['order' => $order->load('items'), 'type' => $type]);
+})->middleware(['web'])->name('admin.order.print');

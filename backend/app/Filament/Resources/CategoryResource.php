@@ -13,10 +13,17 @@ use Illuminate\Support\Str;
 
 class CategoryResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = Category::class;
     protected static ?string $navigationIcon = 'heroicon-o-tag';
     protected static ?string $navigationLabel = 'Categories';
-    protected static ?string $navigationGroup = 'Catalog';
+    protected static ?string $navigationGroup = 'Menu';
     protected static ?int $navigationSort = 2;
 
     public static function form(Form $form): Form

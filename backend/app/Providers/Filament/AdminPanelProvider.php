@@ -18,6 +18,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Support\Assets\Js;
+use Filament\View\PanelsRenderHook;
 use Filament\Navigation\MenuItem;
 use Filament\Navigation\NavigationItem;
 
@@ -44,19 +45,19 @@ class AdminPanelProvider extends PanelProvider
                     ->sort(100)
                     ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.auth.profile')),
             ])
-            ->brandName('Swaad E Punjab')
             ->colors([
                 'primary' => Color::Amber,
             ])
+            ->font('Outfit')
+            ->brandName('Swaad E Punjab')
+            ->sidebarCollapsibleOnDesktop()
+            ->navigationGroups(['Live', 'Menu', 'Grow', 'Insights', 'Settings'])
+            ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.admin-theme'))
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Pages\Dashboard::class,
-            ])
+            ->pages([])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
-            ->widgets([
-                \App\Filament\Widgets\StatsOverview::class,
-            ])
+            ->widgets([])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

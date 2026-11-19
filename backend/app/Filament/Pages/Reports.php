@@ -10,10 +10,15 @@ use Carbon\Carbon;
 
 class Reports extends Page
 {
+    public static function canAccess(): bool
+    {
+        return (bool) auth()->user()?->hasRole(['owner']);
+    }
+
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'Reports & Analytics';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 3;
+    protected static ?string $navigationGroup = 'Insights';
+    protected static ?int $navigationSort = 1;
 
     protected static string $view = 'filament.pages.reports';
 

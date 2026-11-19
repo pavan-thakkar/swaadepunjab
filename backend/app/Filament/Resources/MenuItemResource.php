@@ -12,10 +12,17 @@ use Filament\Tables\Table;
 
 class MenuItemResource extends Resource
 {
+    use \App\Filament\Concerns\HasRoleAccess;
+
+    protected static function roleAccess(): array
+    {
+        return ['view' => ['owner', 'manager', 'staff'], 'edit' => ['owner', 'manager'], 'delete' => ['owner', 'manager']];
+    }
+
     protected static ?string $model = MenuItem::class;
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
     protected static ?string $navigationLabel = 'Menu Items';
-    protected static ?string $navigationGroup = 'Catalog';
+    protected static ?string $navigationGroup = 'Menu';
     protected static ?int $navigationSort = 1;
 
     public static function form(Form $form): Form
@@ -116,9 +123,9 @@ class MenuItemResource extends Resource
                     ->formatStateUsing(fn ($state) => '★ ' . $state)
                     ->sortable(),
 
-                Tables\Columns\IconColumn::make('is_available')
-                    ->boolean()
-                    ->label('Available'),
+                Tables\Columns\ToggleColumn::make('is_available')
+                    ->label('Available')
+                    ->onColor('success'),
 
                 Tables\Columns\IconColumn::make('is_featured')
                     ->boolean()

@@ -2126,3 +2126,51 @@ a.link-amber:hover { color: #5C3C00; }
 .search-suggestion-item.active, .search-suggestion-item:hover { background: var(--bg-elevated); }
 .search-see-all { justify-content: center; font-weight: 700; color: var(--primary-text) !important; border-top: 1px solid var(--border); }
 .home-search input::-webkit-search-cancel-button { display: none; }
+
+/* ---- Mobile fixes 2026-11-19 ---- */
+img, video { max-width: 100%; }
+.checkout-page { grid-template-columns: minmax(0, 1fr) !important; }
+.checkout-page > * { min-width: 0; }
+.checkout-section, .order-summary-card { min-width: 0; overflow-wrap: anywhere; }
+.summary-name { min-width: 0; overflow-wrap: anywhere; padding-right: 8px; }
+.search-bar input, .home-search input { min-width: 0; }
+.search-bar { box-sizing: border-box; max-width: 100%; }
+@media (max-width: 768px) {
+  /* Checkout */
+  .checkout-head { padding: 1rem 1rem 0 !important; }
+  .checkout-head h1 { font-size: 1.5rem !important; }
+  .checkout-head p { margin-bottom: 0.5rem !important; font-size: 0.9rem; }
+  .checkout-page { padding: 0.75rem 0.75rem 0 !important; gap: 0.75rem !important; }
+  .checkout-section { padding: 1rem !important; margin-bottom: 0.75rem !important; }
+  .checkout-section h3 { margin-bottom: 0.85rem !important; }
+  .order-summary-card { padding: 1rem !important; }
+  .checkout-submit { margin: 0 -0.75rem !important; }
+  .segmented .payment-option.service-type-btn { min-height: 58px; font-size: 0.8rem !important; padding: 8px 4px !important; }
+  .form-grid { grid-template-columns: 1fr !important; }
+  /* Small "back" links */
+  .back-link-sm { padding: 8px 14px !important; font-size: 0.85rem !important; margin-bottom: 0.75rem !important; min-height: 40px; }
+  /* Track search page */
+  .track-search { padding: 3rem 1rem !important; }
+  .track-search h1 { font-size: 1.7rem !important; }
+  .track-search .search-bar { padding: 6px 6px 6px 14px; }
+  .track-search .search-btn { padding: 10px 16px; flex-shrink: 0; }
+  /* Tracking page */
+  .track-page { padding: 1rem 0.75rem !important; }
+  /* Home promo slider: shorter on phones */
+  .promo-slider-container { height: 220px !important; margin: 0.5rem 0 !important; }
+  .promo-title { font-size: 1.3rem !important; }
+  .promo-desc { font-size: 0.85rem !important; }
+  /* Dish page: side spacing for reviews and suggestions */
+  .item-page > div:not(:has(.item-media)) { margin-left: 12px; margin-right: 12px; }
+  .item-page h2 { padding: 0 2px; }
+  .item-back { z-index: 20 !important; }
+  /* History */
+  .history-page { padding: 1.25rem 1rem !important; }
+  .history-page h1 { font-size: 1.6rem !important; }
+  /* Cart drawer: full width & safe bottom */
+  .cart-drawer { width: 100vw !important; }
+  .cart-footer { padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important; }
+  /* Section titles */
+  .section-title { font-size: 1.2rem !important; }
+}
+.track-search { width: 100%; box-sizing: border-box; }

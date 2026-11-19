@@ -334,11 +334,6 @@ export default function ItemDetailPage() {
                 </div>
               )}
 
-              {item.is_featured && (
-                <span className="featured-badge" style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', margin: 0, fontSize: '0.9rem', padding: '6px 14px', zIndex: 10 }}>
-                  ⭐ Special Combo
-                </span>
-              )}
             </div>
 
             {/* Content Details */}

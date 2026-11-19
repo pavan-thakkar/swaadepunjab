@@ -13,10 +13,15 @@ class WhatsAppMarketing extends Page implements Forms\Contracts\HasForms
 {
     use Forms\Concerns\InteractsWithForms;
 
+    public static function canAccess(): bool
+    {
+        return (bool) auth()->user()?->hasRole(['owner', 'manager']);
+    }
+
     protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-left-right';
     protected static ?string $navigationLabel = 'WhatsApp Marketing';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 2;
+    protected static ?string $navigationGroup = 'Grow';
+    protected static ?int $navigationSort = 6;
 
     protected static string $view = 'filament.pages.whats-app-marketing';
 

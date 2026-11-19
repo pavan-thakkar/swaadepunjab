@@ -12,3 +12,7 @@
 backend-server.log
 deploy.sh.bak
 AuthController.php.bak
+
+# Private files: never deploy or push
+private-backups/
+*.sql
