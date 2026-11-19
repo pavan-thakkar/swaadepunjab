@@ -27,6 +27,7 @@ class OrderController extends Controller
             'city'                 => 'required_if:order_type,delivery|nullable|string|max:100',
             'special_instructions' => 'nullable|string|max:500',
             'coupon_code'          => 'nullable|string|max:40',
+            'redeem_points'        => 'nullable|integer|min:0|max:1000000',
             'payment_method'       => 'in:cash_on_delivery,card,razorpay',
             'items'                => 'required|array|min:1',
             'items.*.menu_item_id' => 'required|exists:menu_items,id',
@@ -96,7 +97,21 @@ class OrderController extends Controller
         if ($pricing['free_line']) {
             $orderItems[] = $pricing['free_line'];
         }
-        $total = max(0, $subtotal - $discount - $couponDiscount) + $deliveryFee;
+        // Loyalty points (only for the logged-in owner of this phone number)
+        $pointsUsed = 0;
+        $pointsDiscount = 0.0;
+        if (! empty($validated['redeem_points'])) {
+            $identity = \App\Support\CustomerToken::fromRequest($request);
+            if (! \App\Support\CustomerToken::ownsPhone($identity, $validated['customer_phone'])) {
+                return response()->json(['message' => 'Please log in with this phone number to use your points.', 'points_error' => true], 422);
+            }
+            $balance = \App\Services\Loyalty::balance($validated['customer_phone']);
+            $r = \App\Services\Loyalty::redeemable((int) $validated['redeem_points'], $balance, max(0, $subtotal - $discount - $couponDiscount));
+            $pointsUsed = $r['points'];
+            $pointsDiscount = $r['discount'];
+        }
+
+        $total = max(0, $subtotal - $discount - $couponDiscount - $pointsDiscount) + $deliveryFee;
 
         $pickupTime = $validated['pickup_time'] ?? null;
         if ($pickupTime) {
@@ -138,7 +153,15 @@ class OrderController extends Controller
             'offer_title'          => $applied['offer']?->title,
             'coupon_code'          => $pricing['coupon']?->code,
             'coupon_discount'      => $couponDiscount,
+            'points_redeemed'      => $pointsUsed,
+            'points_discount'      => $pointsDiscount,
         ]);
+        if ($pointsUsed > 0) {
+            \App\Models\LoyaltyTransaction::create([
+                'phone' => $order->customer_phone, 'order_id' => $order->id, 'points' => -$pointsUsed,
+                'type' => 'redeem', 'note' => "Used on order {$order->order_number}",
+            ]);
+        }
 
         $order->items()->createMany($orderItems);
         $pricing['coupon']?->increment('used_count');
@@ -263,7 +286,26 @@ class OrderController extends Controller
                 $order->discount = $applied['discount'];
                 $order->offer_id = $applied['offer']?->id;
                 $order->offer_title = $applied['offer']?->title;
-                $order->total = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount']) + $deliveryFee;
+                // Loyalty points: keep what still fits the new amount, give back the rest
+                if ($order->points_redeemed > 0) {
+                    $s = \App\Services\Loyalty::settings();
+                    $eligible = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount']);
+                    $maxPts = $s['point_value'] > 0 ? (int) floor(($eligible * $s['max_redeem_percent'] / 100) / $s['point_value']) : 0;
+                    $keep = min((int) $order->points_redeemed, $maxPts);
+                    if ($keep < $s['min_redeem']) {
+                        $keep = 0;
+                    }
+                    $giveBack = (int) $order->points_redeemed - $keep;
+                    if ($giveBack > 0) {
+                        \App\Models\LoyaltyTransaction::create([
+                            'phone' => $order->customer_phone, 'order_id' => $order->id, 'points' => $giveBack,
+                            'type' => 'refund', 'note' => "Returned after order {$order->order_number} was changed",
+                        ]);
+                    }
+                    $order->points_redeemed = $keep;
+                    $order->points_discount = round($keep * $s['point_value'], 2);
+                }
+                $order->total = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount'] - (float) $order->points_discount) + $deliveryFee;
             }
 
             if (array_key_exists('special_instructions', $validated)) {
@@ -278,6 +320,35 @@ class OrderController extends Controller
             'message' => 'Your order has been updated!',
             'data'    => $order->fresh('items'),
         ]);
+    }
+
+    /**
+     * Customer cancels their own order during the change window (before the restaurant accepts).
+     */
+    public function cancel(Request $request, string $identifier): JsonResponse
+    {
+        $validated = $request->validate(['edit_token' => 'required|string']);
+
+        $order = Order::where('order_number', $identifier)->firstOrFail();
+
+        if (! $order->edit_token || ! hash_equals($order->edit_token, $validated['edit_token'])) {
+            return response()->json(['message' => 'You can only cancel orders placed from this device.'], 403);
+        }
+
+        $minutes = Order::editWindowMinutes();
+        $deadline = $order->created_at->copy()->addMinutes($minutes)->addSeconds(10);
+        if ($minutes === 0 || $order->status !== 'pending' || now()->gt($deadline)) {
+            return response()->json(['message' => 'This order can no longer be cancelled here. Please call the restaurant.'], 422);
+        }
+
+        if ($order->coupon_code) {
+            \App\Models\Coupon::findByCode($order->coupon_code)?->decrement('used_count');
+        }
+        $order->edited_at = now();
+        $order->status = 'cancelled'; // loyalty points are returned automatically
+        $order->save();
+
+        return response()->json(['message' => 'Your order has been cancelled.', 'data' => $order->fresh('items')]);
     }
 
     /**
@@ -311,78 +382,66 @@ class OrderController extends Controller
         ]);
     }
 
-    public function show(string $identifier): JsonResponse
+    public function show(Request $request, string $identifier): JsonResponse
     {
         $order = Order::with('items')
-            ->where('id', $identifier)
-            ->orWhere('order_number', $identifier)
+            ->where('order_number', $identifier)
+            ->orWhere(fn ($q) => ctype_digit($identifier) ? $q->where('id', $identifier) : $q->whereRaw('1 = 0'))
             ->firstOrFail();
 
-        return response()->json(['data' => $order]);
-    }
+        // Full details only for the device that placed the order or its logged-in owner
+        $orderToken = (string) $request->header('X-Order-Token', '');
+        $isOwner = ($order->edit_token && $orderToken !== '' && hash_equals($order->edit_token, $orderToken))
+            || \App\Support\CustomerToken::ownsOrder(\App\Support\CustomerToken::fromRequest($request), $order);
 
-    /**
-     * List all orders (for admin use via API if needed).
-     */
-    public function index(Request $request): JsonResponse
-    {
-        $query = Order::with('items')->latest();
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
+        $data = $order->toArray();
+        $data['is_owner'] = $isOwner;
+        if (! $isOwner) {
+            $last4 = substr(preg_replace('/\D/', '', (string) $order->customer_phone), -4);
+            $data['customer_phone'] = '******' . $last4;
+            $data['customer_email'] = null;
+            $data['customer_name'] = strtok((string) $order->customer_name, ' ') ?: 'Customer';
+            $data['delivery_address'] = ($order->order_type ?? 'delivery') === 'delivery' ? 'Hidden for privacy' : $order->delivery_address;
+            $data['latitude'] = null;
+            $data['longitude'] = null;
         }
 
-        return response()->json(['data' => $query->get()]);
+        return response()->json(['data' => $data]);
     }
 
-    /**
-     * Update order status (used by admin).
-     */
-    public function updateStatus(Request $request, Order $order): JsonResponse
-    {
-        $validated = $request->validate([
-            'status' => 'required|in:pending,accepted,preparing,out_for_delivery,delivered,cancelled',
-        ]);
 
-        $order->update(['status' => $validated['status']]);
 
-        return response()->json([
-            'message' => 'Order status updated.',
-            'data'    => $order->fresh('items'),
-        ]);
-    }
 
     /**
      * Get order history by phone number or email address.
      */
     public function history(Request $request): JsonResponse
     {
-        $request->validate([
-            'phone' => 'nullable|string|max:30',
-            'email' => 'nullable|string|email|max:100',
-        ]);
-
-        if (!$request->phone && !$request->email) {
+        // Only the logged-in customer can see their own orders
+        $identity = \App\Support\CustomerToken::fromRequest($request);
+        if (! $identity) {
             return response()->json([
-                'status' => 'error',
-                'message' => 'Phone or Email is required.'
-            ], 422);
+                'status'  => 'error',
+                'message' => 'Please log in to see your orders.',
+            ], 401);
         }
 
-        $query = Order::with('items');
+        $orders = Order::with('items')
+            ->where(function ($q) use ($identity) {
+                if ($identity['phone']) {
+                    $q->orWhere('customer_phone', 'like', '%' . $identity['phone']);
+                }
+                if ($identity['email']) {
+                    $q->orWhere('customer_email', $identity['email']);
+                }
+            })
+            ->latest()
+            ->limit(100)
+            ->get();
 
-        if ($request->phone) {
-            $query->where('customer_phone', $request->phone);
-        } else {
-            $query->where('customer_email', $request->email);
-        }
-
-        $orders = $query->latest()->get();
-
-        return response()->json([
-            'data' => $orders,
-        ]);
+        return response()->json(['data' => $orders]);
     }
+
 
     /**
      * Calculate distance and fee for the frontend checkout screen.

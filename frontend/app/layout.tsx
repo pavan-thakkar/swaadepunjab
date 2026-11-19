@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { CartProvider } from "./context/CartContext";
+import BottomNav from './components/BottomNav';
 
 export const metadata: Metadata = {
   title: "Swaad E Punjab — Authentic Punjabi Food Delivery",
@@ -10,7 +11,6 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <CartProvider>
           {children}
+          <BottomNav />
         </CartProvider>
       </body>
     </html>

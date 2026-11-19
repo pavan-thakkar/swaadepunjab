@@ -39,4 +39,7 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
     ],
 
+    // Show email OTP codes on screen (local testing only — keep false on the live site)
+    'otp_debug' => (bool) env('OTP_DEBUG', false),
+
 ];

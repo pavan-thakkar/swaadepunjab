@@ -108,7 +108,8 @@ const CartContext = createContext<{
   userPhone: string | null;
   userEmail: string | null;
   userName: string | null;
-  loginUser: (phone: string | null, email: string | null, name: string) => void;
+  customerToken: string | null;
+  loginUser: (phone: string | null, email: string | null, name: string, token?: string | null) => void;
   logoutUser: () => void;
 } | null>(null);
 
@@ -118,11 +119,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [userPhone, setUserPhone] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
+  const [customerToken, setCustomerToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Load auth and cart items from localStorage on mount
     if (typeof window !== 'undefined') {
       setUserPhone(localStorage.getItem('user_phone'));
+      setCustomerToken(localStorage.getItem('customer_token'));
       setUserEmail(localStorage.getItem('user_email'));
       setUserName(localStorage.getItem('user_name'));
       const savedCart = localStorage.getItem('swaad_cart_items');
@@ -146,7 +149,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [state.items]);
 
-  const loginUser = (phone: string | null, email: string | null, name: string) => {
+  const loginUser = (phone: string | null, email: string | null, name: string, token?: string | null) => {
+    if (token) {
+      localStorage.setItem('customer_token', token);
+      setCustomerToken(token);
+    }
     if (phone) {
       localStorage.setItem('user_phone', phone);
       setUserPhone(phone);
@@ -169,6 +176,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user_phone');
     localStorage.removeItem('user_email');
     localStorage.removeItem('user_name');
+    localStorage.removeItem('customer_token');
+    setCustomerToken(null);
     setUserPhone(null);
     setUserEmail(null);
     setUserName(null);
@@ -230,7 +239,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const freeDeliveryThreshold = getFreeDeliveryThreshold();
 
   return (
-    <CartContext.Provider value={{ state, dispatch, total, itemCount, deliveryFee, freeDeliveryThreshold, userPhone, userEmail, userName, loginUser, logoutUser }}>
+    <CartContext.Provider value={{ state, dispatch, total, itemCount, deliveryFee, freeDeliveryThreshold, userPhone, userEmail, userName, customerToken, loginUser, logoutUser }}>
       {children}
     </CartContext.Provider>
   );

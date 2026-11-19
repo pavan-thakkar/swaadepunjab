@@ -7,6 +7,8 @@ import CartDrawer from '../components/CartDrawer';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import OfferProgress, { useOffers, computeOffer } from '../components/OfferProgress';
+import { useLoyalty, pointsToEarn, redeemable } from '../components/LoyaltyPoints';
+import QuickAdds from '../components/QuickAdds';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -15,7 +17,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 export default function CheckoutPage() {
-  const { state, dispatch, total, deliveryFee, userPhone, userEmail, userName } = useCart();
+  const { state, dispatch, total, deliveryFee, userPhone, userEmail, userName, customerToken } = useCart();
   const router = useRouter();
   const [payment, setPayment] = useState<'cash_on_delivery' | 'card' | 'razorpay'>('cash_on_delivery');
   const [loading, setLoading] = useState(false);
@@ -392,7 +394,16 @@ export default function CheckoutPage() {
   const offerBlocked = !!coupon && !coupon.combine;
   const offerCalc = offerBlocked ? { ...offerCalcRaw, discount: 0, freeLine: null, current: null } : offerCalcRaw;
   const couponDiscount = coupon ? coupon.discount : 0;
-  const grandTotal = Math.max(0, total - offerCalc.discount - couponDiscount) + activeDeliveryFee;
+
+  // Loyalty points
+  const loyalty = useLoyalty(customerToken);
+  const [usePoints, setUsePoints] = useState(false);
+  const amountAfterDiscounts = Math.max(0, total - offerCalc.discount - couponDiscount);
+  const pointsOption = redeemable(loyalty.balance || 0, amountAfterDiscounts, loyalty.settings);
+  const pointsDiscount = usePoints ? pointsOption.discount : 0;
+  const earnPoints = pointsToEarn(Math.max(0, amountAfterDiscounts - pointsDiscount), loyalty.settings);
+
+  const grandTotal = Math.max(0, amountAfterDiscounts - pointsDiscount) + activeDeliveryFee;
 
   const handleSearchAddress = async () => {
     if (!searchQuery.trim()) return;
@@ -563,7 +574,11 @@ export default function CheckoutPage() {
     try {
       const res = await fetch(`${API}/orders`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(customerToken ? { Authorization: `Bearer ${customerToken}` } : {}),
+        },
         body: JSON.stringify({
           ...form,
           delivery_address: orderType === 'delivery' ? fullAddress : (orderType === 'dine_in' ? 'Dine In' : 'Take Away'),
@@ -573,6 +588,7 @@ export default function CheckoutPage() {
           longitude: orderType === 'delivery' && coordinates ? coordinates.lng : null,
           items: state.items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity })),
           coupon_code: coupon?.code || null,
+          redeem_points: usePoints ? pointsOption.points : 0,
           order_type: orderType,
           table_number: null,
           pickup_time: orderType !== 'delivery' ? form.pickup_time : null,
@@ -581,6 +597,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) {
         if (data.coupon_error) { setCoupon(null); setCouponError(data.message); }
+        if (data.points_error) setUsePoints(false);
         setError(data.message || 'Order place nahi ho saka. Dobara try karein.');
         return false;
       }
@@ -672,8 +689,8 @@ export default function CheckoutPage() {
         <Link href="/" className="btn-secondary" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
           ← Back to Menu
         </Link>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.25rem' }}>Order Karein</h1>
-        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Neeche apni jaankari bharein aur order place karein.</p>
+        <h1 style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: '0.25rem' }}>Your order</h1>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>Swaad E Punjab · check your details and place the order.</p>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -681,16 +698,39 @@ export default function CheckoutPage() {
           {/* Left: Form */}
           <div>
             <div className="checkout-section">
-              <h3 style={{ margin: '0 0 1rem 0' }}>📝 Special Instructions</h3>
+              <h3 style={{ margin: '0 0 0.75rem 0' }}>📝 Note for the chef</h3>
+              <div className="chef-chips" role="group" aria-label="Quick notes">
+                {['Less spicy', 'Extra spicy', 'No onion-garlic', 'Extra butter', 'Send cutlery'].map(chip => {
+                  const on = form.special_instructions.toLowerCase().includes(chip.toLowerCase());
+                  return (
+                    <button
+                      key={chip}
+                      type="button"
+                      aria-pressed={on}
+                      className={`chef-chip${on ? ' on' : ''}`}
+                      onClick={() => setForm(prev => {
+                        const cur = prev.special_instructions || '';
+                        if (cur.toLowerCase().includes(chip.toLowerCase())) {
+                          const parts = cur.split(',').map(x => x.trim()).filter(x => x && x.toLowerCase() !== chip.toLowerCase());
+                          return { ...prev, special_instructions: parts.join(', ') };
+                        }
+                        return { ...prev, special_instructions: cur.trim() ? `${cur.trim()}, ${chip}` : chip };
+                      })}
+                    >
+                      {chip}
+                    </button>
+                  );
+                })}
+              </div>
               <div className="form-group">
-                <label className="form-label">Instructions for the Chef (optional)</label>
+                <label className="form-label">Anything else? (optional)</label>
                 <textarea name="special_instructions" className="form-input" placeholder="E.g. Make it extra spicy, less butter on naan..." rows={3} value={form.special_instructions} onChange={handleChange} style={{ resize: 'vertical' }} />
               </div>
             </div>
 
             <div className="checkout-section">
               <h3 style={{ margin: '0 0 1rem 0' }}>🍽️ Service Type</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginTop: '0.5rem' }}>
+              <div className="segmented" role="group" aria-label="Service type">
                 <button 
                   type="button" 
                   className={`payment-option service-type-btn${orderType === 'delivery' ? ' selected' : ''}`}
@@ -890,13 +930,16 @@ export default function CheckoutPage() {
             )}
 
             <div className="checkout-section">
-              <h3>💳 Payment Method</h3>
-              <div className="payment-options" style={{ display: 'flex', gap: '12px', marginTop: '0.5rem' }}>
-                <button type="button" className={`payment-option${payment === 'cash_on_delivery' ? ' selected' : ''}`} onClick={() => setPayment('cash_on_delivery')}>
-                  💵 Cash on Delivery
+              <h3>💳 Pay with</h3>
+              <div className="payment-options pay-list" role="radiogroup" aria-label="Payment method">
+                <button type="button" role="radio" aria-checked={payment === 'razorpay'} className={`payment-option pay-row${payment === 'razorpay' ? ' selected' : ''}`} onClick={() => setPayment('razorpay')}>
+                  <span className="pay-radio" aria-hidden="true" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>UPI (GPay, PhonePe, Paytm), Card or Netbanking</span>
+                  <span className="pay-tag">FASTEST</span>
                 </button>
-                <button type="button" className={`payment-option${payment === 'razorpay' ? ' selected' : ''}`} onClick={() => setPayment('razorpay')}>
-                  💳 Pay Online (Razorpay)
+                <button type="button" role="radio" aria-checked={payment === 'cash_on_delivery'} className={`payment-option pay-row${payment === 'cash_on_delivery' ? ' selected' : ''}`} onClick={() => setPayment('cash_on_delivery')}>
+                  <span className="pay-radio" aria-hidden="true" />
+                  <span style={{ flex: 1, textAlign: 'left' }}>{orderType === 'delivery' ? 'Cash on delivery' : 'Pay at the counter'}</span>
                 </button>
               </div>
               {payment === 'razorpay' && (
@@ -928,7 +971,8 @@ export default function CheckoutPage() {
                   <span className="summary-price" style={{ fontWeight: 800 }}>FREE</span>
                 </div>
               )}
-              <div style={{ marginTop: '10px' }}><OfferProgress subtotal={total} disabledReason={offerBlocked ? `Offers don't apply with coupon ${coupon?.code}.` : null} /></div>
+              <div style={{ marginTop: '12px' }}><OfferProgress subtotal={total} variant="dark" disabledReason={offerBlocked ? `Offers don't apply with coupon ${coupon?.code}.` : null} /></div>
+              {!offerBlocked && <QuickAdds subtotal={total} />}
 
               {/* Coupon code */}
               <div style={{ marginTop: '6px' }}>
@@ -962,11 +1006,37 @@ export default function CheckoutPage() {
                   </>
                 )}
               </div>
+              {/* Loyalty points */}
+              {loyalty.settings?.enabled && (
+                <div style={{ marginTop: '10px', padding: '10px 12px', borderRadius: 10, background: 'rgba(230,168,23,0.08)', border: '1px solid rgba(230,168,23,0.35)', fontSize: '0.85rem' }}>
+                  {customerToken && loyalty.balance !== null ? (
+                    pointsOption.points > 0 ? (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700 }}>
+                        <input type="checkbox" checked={usePoints} onChange={e => setUsePoints(e.target.checked)} style={{ width: 18, height: 18 }} />
+                        <span>⭐ Use {pointsOption.points} points (save ₹{pointsOption.discount.toFixed(0)}) <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}>· balance {loyalty.balance}</span></span>
+                      </label>
+                    ) : (
+                      <div style={{ color: 'var(--text-muted)' }}>⭐ You have {loyalty.balance} points. Use them once you have {loyalty.settings.min_redeem}+.</div>
+                    )
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)' }}>⭐ <a href="/login?redirect=/checkout" style={{ color: 'var(--primary-dark)', fontWeight: 700 }}>Log in</a> to collect and use loyalty points.</div>
+                  )}
+                  {earnPoints > 0 && (
+                    <div style={{ marginTop: 6, color: 'var(--success)', fontWeight: 700 }}>🎉 You&apos;ll earn {earnPoints} points when this order is delivered</div>
+                  )}
+                </div>
+              )}
+
               <div style={{ borderTop: '1px solid var(--border)', marginTop: '10px', paddingTop: '10px' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{total.toFixed(0)}</span></div>
                 {offerCalc.discount > 0 && (
                   <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
                     <span>Offer: {offerCalc.current?.title}</span><span>−₹{offerCalc.discount.toFixed(0)}</span>
+                  </div>
+                )}
+                {pointsDiscount > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}>
+                    <span>Loyalty points ({pointsOption.points})</span><span>−₹{pointsDiscount.toFixed(0)}</span>
                   </div>
                 )}
                 {couponDiscount > 0 && (
@@ -983,9 +1053,17 @@ export default function CheckoutPage() {
                 <div className="cart-total-row"><span>Delivery charge</span><span>₹{activeDeliveryFee.toFixed(0)}</span></div>
               </div>
               <div className="summary-total">
-                <span>Total</span>
-                <span style={{ color: 'var(--primary)' }}>₹{grandTotal.toFixed(0)}</span>
+                <span>To pay</span>
+                <span>₹{grandTotal.toFixed(0)}</span>
               </div>
+              {(offerCalc.discount + couponDiscount + pointsDiscount) > 0 && (
+                <div className="savings-chip">
+                  You save ₹{(offerCalc.discount + couponDiscount + pointsDiscount).toFixed(0)}{offerCalc.freeLine ? ' + a free item' : ''} on this order{earnPoints > 0 ? ` · earn ${earnPoints} points` : ''}
+                </div>
+              )}
+              {offerCalc.discount + couponDiscount + pointsDiscount === 0 && offerCalc.freeLine && (
+                <div className="savings-chip">You get {offerCalc.freeLine.name} free{earnPoints > 0 ? ` · earn ${earnPoints} points` : ''}</div>
+              )}
               <div style={{ marginTop: '1rem', padding: '12px', background: 'rgba(255,107,53,0.08)', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                 {orderType === 'dine_in' && <>⏱ Expected preparation: <strong style={{ color: 'var(--text)' }}>15–20 minutes</strong> (Serve at Table)</>}
                 {orderType === 'takeaway' && <>⏱ Expected preparation: <strong style={{ color: 'var(--text)' }}>15–20 minutes</strong> (Ready for Pickup)</>}
@@ -995,7 +1073,7 @@ export default function CheckoutPage() {
           </div>
 
           {/* Bottom Submit Block */}
-          <div style={{ width: '100%', marginTop: '0.5rem' }}>
+          <div className="checkout-submit" style={{ width: '100%', marginTop: '0.5rem' }}>
             {error && (
               <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', padding: '12px 16px', color: 'var(--danger)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                 ⚠️ {error}
@@ -1003,7 +1081,7 @@ export default function CheckoutPage() {
             )}
 
             <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '15px', fontSize: '1rem' }} disabled={loading}>
-              {loading ? '⏳ Order ho raha hai...' : `🚀 Order Place Karein — ₹${grandTotal.toFixed(0)}`}
+              {loading ? 'Placing your order…' : payment === 'razorpay' ? `Pay ₹${grandTotal.toFixed(0)} & place order` : `Place order · ₹${grandTotal.toFixed(0)}`}
             </button>
           </div>
         </div>

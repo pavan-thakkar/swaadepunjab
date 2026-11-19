@@ -195,10 +195,11 @@ export default function ItemDetailPage() {
       <Navbar />
       <CartDrawer />
 
-      <div style={{ padding: '2rem 1.5rem', maxWidth: '850px', margin: '0 auto' }}>
+      <div className="item-page" style={{ padding: '2rem 1.5rem', maxWidth: '850px', margin: '0 auto' }}>
         {/* Back Link */}
-        <Link href="/" className="btn-secondary" style={{ display: 'inline-flex', marginBottom: '2rem', gap: '8px', alignItems: 'center' }}>
-          ← Back to Menu
+        <Link href="/" className="item-back" aria-label="Back to menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          <span>Back to menu</span>
         </Link>
 
         {loading && (
@@ -231,7 +232,7 @@ export default function ItemDetailPage() {
             border: '1px solid var(--border)' 
           }}>
             {/* Header / Media Banner with Carousel */}
-            <div style={{ 
+            <div className="item-media" style={{ 
               position: 'relative', 
               height: '380px', 
               background: 'var(--bg-elevated)', 
@@ -341,7 +342,12 @@ export default function ItemDetailPage() {
             </div>
 
             {/* Content Details */}
-            <div style={{ padding: '2.5rem' }}>
+            <div className="item-content" style={{ padding: '2.5rem' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                <span className="veg-mark" title="100% Pure Veg" />
+                {item.is_featured && <span style={{ background: '#FDECEC', color: '#9F1D1D', fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 999 }}>BEST SELLER</span>}
+                <span style={{ background: '#FFF1E0', color: '#8A3B00', fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 999, textTransform: 'uppercase' }}>{categoryLabels[item.category] || item.category}</span>
+              </div>
 
               <h1 style={{ 
                 fontSize: '2.25rem', 
@@ -356,11 +362,11 @@ export default function ItemDetailPage() {
               {/* Stats / Ratings Row */}
               <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                 <span style={{ 
-                  background: 'rgba(230,168,23,0.12)', 
-                  color: 'var(--primary-dark)', 
+                  background: '#15803D', 
+                  color: '#FFFFFF', 
                   fontWeight: 800, 
-                  fontSize: '0.9rem', 
-                  padding: '4px 10px', 
+                  fontSize: '0.85rem', 
+                  padding: '3px 8px', 
                   borderRadius: '6px', 
                   display: 'flex', 
                   alignItems: 'center', 
@@ -368,6 +374,7 @@ export default function ItemDetailPage() {
                 }}>
                   ★ {Number(item.rating).toFixed(1)}
                 </span>
+                {reviews.length > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}</span>}
                 
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   ⏱️ Prep Time: <strong>{item.prep_time} mins</strong>
@@ -399,7 +406,7 @@ export default function ItemDetailPage() {
               </div>
 
               {/* Footer / Buy Action */}
-              <div style={{ 
+              <div className="item-buy-bar" style={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
                 alignItems: 'center', 
@@ -455,7 +462,7 @@ export default function ItemDetailPage() {
                       cursor: item.is_available ? 'pointer' : 'not-allowed'
                     }}
                   >
-                    <span>🛒</span> Add to Cart
+                    {item.is_available ? `Add item · ₹${Number(item.price).toFixed(0)}` : 'Sold out'}
                   </button>
                 )}
               </div>
@@ -532,7 +539,7 @@ export default function ItemDetailPage() {
                   alignItems: 'center',
                   gap: '8px'
                 }}>
-                  🍲 You Might Also Like
+                  Goes well with
                 </h2>
                 <div className="menu-grid" style={{ 
                   display: 'grid', 

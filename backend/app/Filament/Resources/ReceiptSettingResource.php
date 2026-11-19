@@ -169,6 +169,35 @@ class ReceiptSettingResource extends Resource
                             ->columnSpanFull(),
                     ])->columns(2),
 
+                Forms\Components\Section::make('⭐ Loyalty Points')
+                    ->description('Customers earn points when an order is delivered and use them as a discount on later orders.')
+                    ->schema([
+                        Forms\Components\Toggle::make('loyalty_enabled')
+                            ->label('Loyalty Points are ON')
+                            ->helperText('Switch off to stop earning and using points. Customers keep their balance for when you switch it on again.')
+                            ->default(false)
+                            ->live()
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('loyalty_earn_per_100')
+                            ->label('Points earned per ₹100 spent')
+                            ->numeric()->minValue(0)->default(5)
+                            ->helperText('e.g. 5 → a ₹600 order earns 30 points.')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                        Forms\Components\TextInput::make('loyalty_point_value')
+                            ->label('Value of 1 point')
+                            ->numeric()->minValue(0.01)->default(1)->prefix('₹')
+                            ->helperText('e.g. ₹1 → 100 points = ₹100 off.')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                        Forms\Components\TextInput::make('loyalty_min_redeem')
+                            ->label('Minimum points to use')
+                            ->numeric()->integer()->minValue(0)->default(50)
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                        Forms\Components\TextInput::make('loyalty_max_redeem_percent')
+                            ->label('Max part of an order paid with points')
+                            ->numeric()->integer()->minValue(1)->maxValue(100)->default(50)->suffix('%')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                    ])->columns(2),
+
                 Forms\Components\Section::make('✏️ Customer Order Changes')
                     ->description('How long customers can add/remove items or change special instructions after placing an order.')
                     ->schema([

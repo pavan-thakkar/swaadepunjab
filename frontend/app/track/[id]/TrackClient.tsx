@@ -6,6 +6,7 @@ import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Link from 'next/link';
 import EditOrderPanel from './EditOrderPanel';
+import { useLoyalty, pointsToEarn } from '../../components/LoyaltyPoints';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -116,6 +117,14 @@ export default function TrackOrderPage() {
   }, []);
 
   const [order, setOrder] = useState<any>(null);
+  const [store, setStore] = useState<{ phone: string | null; whatsapp: string | null } | null>(null);
+  const [nowTs, setNowTs] = useState(Date.now());
+  const loyalty = useLoyalty(null);
+  useEffect(() => {
+    fetch(`${API}/store-info`).then(r => r.json()).then(d => setStore({ phone: d.phone || null, whatsapp: d.whatsapp || null })).catch(() => {});
+    const t = setInterval(() => setNowTs(Date.now()), 30000);
+    return () => clearInterval(t);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -148,7 +157,7 @@ export default function TrackOrderPage() {
   };
 
   useEffect(() => {
-    if (order && order.customer_phone) {
+    if (order && order.is_owner && order.customer_phone) {
       fetchUserReviews(order.customer_phone);
     }
   }, [order]);
@@ -162,7 +171,14 @@ export default function TrackOrderPage() {
   const fetchOrder = useCallback(async () => {
     if (!id) return; // wait until id is resolved from URL
     try {
-      const res = await fetch(`${API}/orders/${id}`, { cache: 'no-store' });
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      try {
+        const ot = localStorage.getItem(`order_edit_${id}`);
+        if (ot) headers['X-Order-Token'] = ot;
+        const ct = localStorage.getItem('customer_token');
+        if (ct) headers['Authorization'] = `Bearer ${ct}`;
+      } catch {}
+      const res = await fetch(`${API}/orders/${id}`, { cache: 'no-store', headers });
       if (!res.ok) { setError('Order not found.'); setLoading(false); return; }
       const data = await res.json();
       setOrder(data.data);
@@ -195,7 +211,7 @@ export default function TrackOrderPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customer_name: reviewName,
-          customer_phone: order.customer_phone || null,
+          customer_phone: order.is_owner ? order.customer_phone : null,
           rating: reviewRating,
           comment: reviewComment,
         }),
@@ -261,15 +277,31 @@ export default function TrackOrderPage() {
 
         {order && !loading && (
           <>
-            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <h1 style={{ fontSize: '2rem', fontWeight: 900, marginBottom: '0.5rem' }}>
-                {isCancelled ? '❌ Order Cancelled' : currentStep >= 3 ? '🛵 On The Way!' : '🍳 Tracking Your Order'}
-              </h1>
-              <p style={{ color: 'var(--text-muted)' }}>
-                Order <strong style={{ color: 'var(--primary)' }}>#{renderOrderNumber(order.order_number)}</strong> for <strong>{order.customer_name}</strong>
-              </p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Updates every 5 seconds automatically</p>
-            </div>
+            {(() => {
+              const eta = order.estimated_delivery_at ? new Date(order.estimated_delivery_at).getTime() : 0;
+              const minsLeft = eta ? Math.max(0, Math.round((eta - nowTs) / 60000)) : null;
+              const stepLabel = STATUSES.find(st => st.key === order.status)?.label || '';
+              const active = !isCancelled && order.status !== 'delivered';
+              return (
+                <div className={`track-hero${isCancelled ? ' cancelled' : ''}`}>
+                  <div className="track-hero-num">Order #{renderOrderNumber(order.order_number)}</div>
+                  {isCancelled ? (
+                    <><div className="track-hero-big">Order cancelled</div><div className="track-hero-sub">Any points you used have been returned.</div></>
+                  ) : order.status === 'delivered' ? (
+                    <><div className="track-hero-big">Delivered</div><div className="track-hero-sub">Enjoy your meal, {order.customer_name}!</div></>
+                  ) : (
+                    <>
+                      <div className="track-hero-sub">{(order.order_type && order.order_type !== 'delivery') ? 'Ready in about' : 'Arriving in'}</div>
+                      <div className="track-hero-big">{minsLeft !== null ? (minsLeft > 0 ? `${minsLeft} min` : 'Any minute') : '30–45 min'}</div>
+                      <div className="track-hero-sub">
+                        {eta ? `Expected by ${new Date(eta).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · ` : ''}{stepLabel}
+                      </div>
+                    </>
+                  )}
+                  {active && <div className="track-hero-live"><span className="status-dot" /> Live · updates every 5 seconds</div>}
+                </div>
+              );
+            })()}
 
             {/* Status Stepper */}
             {!isCancelled && (
@@ -302,6 +334,23 @@ export default function TrackOrderPage() {
             {/* Change order within 2 minutes */}
             <EditOrderPanel order={order} onUpdated={setOrder} />
 
+            {store && (store.phone || store.whatsapp) && (
+              <div className="track-contact">
+                {store.phone && (
+                  <a href={`tel:${store.phone.replace(/\s/g, '')}`} className="track-contact-btn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>
+                    Call restaurant
+                  </a>
+                )}
+                {store.whatsapp && (
+                  <a href={`https://wa.me/${store.whatsapp}?text=${encodeURIComponent(`Hi, about my order ${order.order_number}`)}`} target="_blank" rel="noopener noreferrer" className="track-contact-btn wa">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/></svg>
+                    WhatsApp us
+                  </a>
+                )}
+              </div>
+            )}
+
             {/* Order Details */}
             <div className="tracking-card">
               <h3 style={{ fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: 8 }}>🧾 Order Details</h3>
@@ -317,6 +366,9 @@ export default function TrackOrderPage() {
 
               <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                 <div className="cart-total-row"><span>Subtotal</span><span>₹{Number(order.subtotal).toFixed(2)}</span></div>
+                {Number(order.points_discount) > 0 && (
+                  <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Loyalty points ({order.points_redeemed})</span><span>−₹{Number(order.points_discount).toFixed(2)}</span></div>
+                )}
                 {Number(order.coupon_discount) > 0 && (
                   <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Coupon ({order.coupon_code})</span><span>−₹{Number(order.coupon_discount).toFixed(2)}</span></div>
                 )}
@@ -346,12 +398,32 @@ export default function TrackOrderPage() {
                   <div><span style={{ color: 'var(--text-muted)' }}>📍 Delivering to: </span>{order.delivery_address}, {order.city}</div>
                 )}
                 <div><span style={{ color: 'var(--text-muted)' }}>📞 Phone: </span>{order.customer_phone}</div>
-                <div><span style={{ color: 'var(--text-muted)' }}>💳 Payment: </span>{order.payment_method === 'cash_on_delivery' ? 'Cash on Delivery' : 'Card'}</div>
+                <div><span style={{ color: 'var(--text-muted)' }}>💳 Payment: </span>{order.payment_method === 'cash_on_delivery' ? 'Cash on Delivery' : 'Paid online (UPI/Card)'}</div>
+                {order.estimated_delivery_at && !['delivered', 'cancelled'].includes(order.status) && (
+                  <div><span style={{ color: 'var(--text-muted)' }}>⏱️ Expected by: </span><strong>{new Date(order.estimated_delivery_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</strong></div>
+                )}
                 {order.special_instructions && (
                   <div><span style={{ color: 'var(--text-muted)' }}>📝 Note: </span>{order.special_instructions}</div>
                 )}
               </div>
             </div>
+
+            {(() => {
+              if (!loyalty.settings?.enabled || isCancelled || !order.is_owner) return null;
+              const pts = pointsToEarn(Math.max(0, Number(order.subtotal) - Number(order.discount || 0) - Number(order.coupon_discount || 0) - Number(order.points_discount || 0)), loyalty.settings);
+              if (pts <= 0) return null;
+              return (
+                <div className="track-points">
+                  <span className="track-points-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1A0F00" strokeWidth="2"><path d="M12 2l3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/></svg>
+                  </span>
+                  <div>
+                    <strong>{order.status === 'delivered' ? `+${pts} points earned` : `+${pts} points on delivery`}</strong>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Use them on your next order</div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {order.status === 'delivered' && (
               <div style={{ 

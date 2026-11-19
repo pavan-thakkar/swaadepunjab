@@ -22,12 +22,13 @@ Route::prefix('menu')->group(function () {
 
 // Order routes
 Route::prefix('orders')->group(function () {
-    Route::get('/', [OrderController::class, 'index']);
-    Route::get('/history', [OrderController::class, 'history']);
-    Route::post('/', [OrderController::class, 'store']);
+    // (Public "list all orders" route removed: it exposed every customer's details.)
+    Route::get('/history', [OrderController::class, 'history'])->middleware('throttle:30,1');
+    Route::post('/', [OrderController::class, 'store'])->middleware('throttle:10,1');
     Route::get('/{identifier}', [OrderController::class, 'show']);
     Route::put('/{identifier}', [OrderController::class, 'update'])->middleware('throttle:20,1');
-    Route::patch('/{order}/status', [OrderController::class, 'updateStatus']);
+    Route::post('/{identifier}/cancel', [OrderController::class, 'cancel'])->middleware('throttle:10,1');
+    // (Public "change status" route removed: status is changed only from the admin panel.)
 });
 
 // Marketing cards route
@@ -67,6 +68,42 @@ Route::get('/delivery-status', function () {
 // Coupon check at checkout
 Route::post('/coupons/check', [App\Http\Controllers\Api\OrderController::class, 'checkCoupon'])->middleware('throttle:30,1');
 
+// Loyalty points
+Route::get('/loyalty/settings', function () {
+    $s = App\Services\Loyalty::settings();
+    return response()->json($s);
+});
+Route::get('/loyalty', function (Illuminate\Http\Request $request) {
+    $s = App\Services\Loyalty::settings();
+    $identity = App\Support\CustomerToken::fromRequest($request);
+    if (! $identity) {
+        return response()->json(['message' => 'Please log in to see your points.'] + ['settings' => $s], 401);
+    }
+    $phone = App\Support\CustomerToken::phoneFor($identity);
+    return response()->json([
+        'settings' => $s,
+        'phone'    => $phone ? '******' . substr($phone, -4) : null,
+        'balance'  => App\Services\Loyalty::balance($phone),
+        'history'  => $phone
+            ? App\Models\LoyaltyTransaction::where('phone', $phone)->latest()->limit(20)->get(['points', 'type', 'note', 'created_at'])
+            : [],
+    ]);
+})->middleware('throttle:30,1');
+
+// Public store info (name + phone for Call / WhatsApp buttons)
+Route::get('/store-info', function () {
+    $s = App\Models\ReceiptSetting::getSettings();
+    $digits = preg_replace('/\D/', '', (string) $s->outlet_phone);
+    if (strlen($digits) === 10) {
+        $digits = '91' . $digits;
+    }
+    return response()->json([
+        'name'     => $s->outlet_name,
+        'phone'    => $s->outlet_phone,
+        'whatsapp' => $digits ?: null,
+    ]);
+});
+
 // Delivery Settings route
 Route::get('/delivery-settings', function () {
     return response()->json([
@@ -88,10 +125,10 @@ Route::get('/categories', function () {
 });
 
 // Authentication & OTP routes
-Route::post('/otp/send', [AuthController::class, 'sendOtp']);
-Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
-Route::post('/auth/google', [AuthController::class, 'googleLogin']);
-Route::post('/auth/firebase', [AuthController::class, 'firebaseLogin']);
+Route::post('/otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:5,1');
+Route::post('/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
+Route::post('/auth/google', [AuthController::class, 'googleLogin'])->middleware('throttle:10,1');
+Route::post('/auth/firebase', [AuthController::class, 'firebaseLogin'])->middleware('throttle:10,1');
 
 // Google Places API proxy routes (keeps API key secure on the server)
 Route::get('/places/autocomplete', [PlacesController::class, 'autocomplete']);

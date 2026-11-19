@@ -30,6 +30,11 @@ class ReceiptSetting extends Model
         'delivery_start_time',
         'delivery_end_time',
         'delivery_off_message',
+        'loyalty_enabled',
+        'loyalty_earn_per_100',
+        'loyalty_point_value',
+        'loyalty_min_redeem',
+        'loyalty_max_redeem_percent',
     ];
 
     /**

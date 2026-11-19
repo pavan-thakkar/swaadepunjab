@@ -21,6 +21,29 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const cancelOrder = async () => {
+    setCancelling(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/orders/${order.order_number}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ edit_token: token }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setMsg({ ok: false, text: json.message || 'Could not cancel the order.' }); return; }
+      onUpdated({ ...order, ...json.data, is_owner: true });
+      setMsg({ ok: true, text: 'Your order has been cancelled.' });
+    } catch {
+      setMsg({ ok: false, text: 'Network error. Please try again.' });
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  };
 
   useEffect(() => { setToken(getToken(order.order_number)); }, [order.order_number]);
   useEffect(() => {
@@ -33,12 +56,6 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
   const paidOnline = order.payment_method && order.payment_method !== 'cash_on_delivery';
   const canEdit = !!token && order.status === 'pending' && order.can_edit !== false && secondsLeft > 0;
 
-  // Clean up the token once the window is over
-  useEffect(() => {
-    if (token && deadline && secondsLeft === 0) {
-      try { localStorage.removeItem(`order_edit_${order.order_number}`); } catch {}
-    }
-  }, [secondsLeft, token, deadline, order.order_number]);
 
   const startEditing = async () => {
     setItems((order.items || []).filter((i: any) => !i.is_free).map((i: any) => ({
@@ -110,6 +127,7 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
   };
 
   if (!canEdit) {
+    if (order.status === 'cancelled') return null;
     return msg?.ok ? (
       <div className="tracking-card" style={{ marginBottom: '1.5rem', color: 'var(--success)', fontWeight: 700 }}>{msg.text}</div>
     ) : null;
@@ -127,17 +145,34 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
     <div className="tracking-card" style={{ marginBottom: '1.5rem', border: '2px solid var(--primary)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontWeight: 800 }}>✏️ Need to change something?</div>
+          <div style={{ fontWeight: 800 }}>Need to change something?</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            You can change your order for <strong style={{ color: 'var(--primary-dark)' }}>{mm}:{ss}</strong> more
+            Add or remove items, edit your note, or cancel
           </div>
         </div>
-        {!open && (
-          <button className="btn-primary" onClick={startEditing} style={{ padding: '10px 18px', justifyContent: 'center' }}>
-            Change Order
-          </button>
-        )}
+        <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--primary-text, #8A5A00)', fontVariantNumeric: 'tabular-nums' }}>{mm}:{ss}</span>
       </div>
+
+      {!open && !confirmCancel && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 12 }}>
+          <button type="button" className="btn-primary" onClick={startEditing} style={{ justifyContent: 'center', minHeight: 44, borderRadius: 12 }}>
+            Change order
+          </button>
+          <button type="button" onClick={() => setConfirmCancel(true)} style={{ minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', background: '#fff', color: '#9F1D1D', font: 'inherit', fontWeight: 700, cursor: 'pointer' }}>
+            Cancel order
+          </button>
+        </div>
+      )}
+
+      {confirmCancel && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: '#FDECEC', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontWeight: 700, color: '#9F1D1D' }}>Cancel this order? This can&apos;t be undone.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
+            <button type="button" onClick={() => setConfirmCancel(false)} style={{ minHeight: 44, borderRadius: 12, border: '1px solid var(--border)', background: '#fff', font: 'inherit', fontWeight: 700, cursor: 'pointer', color: 'var(--text)' }}>Keep order</button>
+            <button type="button" onClick={cancelOrder} disabled={cancelling} style={{ minHeight: 44, borderRadius: 12, border: 0, background: '#B91C1C', color: '#fff', font: 'inherit', fontWeight: 800, cursor: 'pointer', opacity: cancelling ? 0.6 : 1 }}>{cancelling ? 'Cancelling…' : 'Yes, cancel'}</button>
+          </div>
+        </div>
+      )}
 
       {msg && !msg.ok && !open && (
         <div style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600, marginTop: 10 }}>⚠️ {msg.text}</div>

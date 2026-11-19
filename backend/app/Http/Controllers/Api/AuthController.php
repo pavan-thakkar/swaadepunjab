@@ -59,8 +59,8 @@ class AuthController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Verification code sent successfully.',
-            // Return OTP in response for development and manual testing
-            'otp' => $code,
+            // Only for local testing: never show the code on the live site
+            'otp' => config('services.otp_debug') ? $code : null,
         ]);
     }
 
@@ -77,6 +77,17 @@ class AuthController extends Controller
         $identifier = trim($request->identifier);
         $code = trim($request->code);
 
+        // Max 5 wrong tries per code, then it must be requested again
+        $attemptKey = 'otp_attempts:' . sha1(strtolower($identifier));
+        if (\Illuminate\Support\Facades\Cache::get($attemptKey, 0) >= 5) {
+            DB::table('otp_verifications')->where('identifier', $identifier)->delete();
+            \Illuminate\Support\Facades\Cache::forget($attemptKey);
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Too many wrong attempts. Please request a new code.'
+            ], 429);
+        }
+
         // Lookup verification code
         $verification = DB::table('otp_verifications')
             ->where('identifier', $identifier)
@@ -85,11 +96,13 @@ class AuthController extends Controller
             ->first();
 
         if (!$verification) {
+            \Illuminate\Support\Facades\Cache::put($attemptKey, \Illuminate\Support\Facades\Cache::get($attemptKey, 0) + 1, now()->addMinutes(10));
             return response()->json([
                 'status' => 'error',
                 'message' => 'Invalid or expired OTP verification code.'
             ], 422);
         }
+        \Illuminate\Support\Facades\Cache::forget($attemptKey);
 
         // Clean up verification record
         DB::table('otp_verifications')->where('identifier', $identifier)->delete();
@@ -111,7 +124,8 @@ class AuthController extends Controller
             'message' => 'OTP verified successfully.',
             'identifier' => $identifier,
             'name' => $customerName,
-            'is_email' => $isEmail
+            'is_email' => $isEmail,
+            'token' => \App\Support\CustomerToken::issue($isEmail ? null : $identifier, $isEmail ? $identifier : null),
         ]);
     }
 
@@ -169,7 +183,8 @@ class AuthController extends Controller
                 return response()->json([
                     'status' => 'success',
                     'email' => $email,
-                    'name' => $name
+                    'name' => $name,
+                    'token' => \App\Support\CustomerToken::issue(null, $email),
                 ]);
             }
         } catch (\Exception $e) {
@@ -202,7 +217,8 @@ class AuthController extends Controller
                         'status' => 'success',
                         'email' => $email,
                         'name' => $name,
-                        'note' => 'verified_locally'
+                        'note' => 'verified_locally',
+                        'token' => \App\Support\CustomerToken::issue(null, $email),
                     ]);
                 }
             }
@@ -264,7 +280,8 @@ class AuthController extends Controller
                         'status' => 'success',
                         'phone' => $phoneNumber,
                         'email' => $email,
-                        'name' => $name
+                        'name' => $name,
+                        'token' => \App\Support\CustomerToken::issue($phoneNumber, $email),
                     ]);
                 }
             } else {

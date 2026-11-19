@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart, MenuItem } from './context/CartContext';
 import CartDrawer from './components/CartDrawer';
 import Navbar from './components/Navbar';
 import Toast from './components/Toast';
 import FeaturedCards from './components/FeaturedCards';
+import OfferProgress from './components/OfferProgress';
+import { searchMenu } from './lib/search';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -40,7 +42,9 @@ const DEFAULT_CATEGORY_LABELS: Record<string, string> = {
 
 export default function HomePage() {
   const router = useRouter();
-  const { dispatch, itemCount } = useCart();
+  const { dispatch, itemCount, total } = useCart();
+  const [delivery, setDelivery] = useState<{ available: boolean; hours: string | null } | null>(null);
+  const [savedArea, setSavedArea] = useState<string | null>(null);
   const [items, setItems]         = useState<MenuItem[]>([]);
   const [allItems, setAllItems]   = useState<MenuItem[]>([]);
   const [suggestions, setSuggestions] = useState<MenuItem[]>([]);
@@ -52,6 +56,10 @@ export default function HomePage() {
   const [promoSlides, setPromoSlides] = useState<any[]>([]);
   const [activeSlide, setActiveSlide] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+  const fetchSeq = useRef(0);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [showSuggest, setShowSuggest] = useState(false);
 
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
   const [categoryEmoji, setCategoryEmoji] = useState<Record<string, string>>(DEFAULT_CATEGORY_EMOJI);
@@ -111,6 +119,17 @@ export default function HomePage() {
     fetchPromoSlides();
     fetchAllItems();
     fetchCategories();
+    fetch(`${API}/delivery-status`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(d => setDelivery({ available: d.available !== false, hours: d.hours || null }))
+      .catch(() => {});
+    try {
+      const saved = JSON.parse(localStorage.getItem('swaad_user_address') || 'null');
+      if (saved) {
+        const area = [saved.apartment_name, saved.city].filter(Boolean).join(', ') || saved.delivery_address;
+        if (area) setSavedArea(String(area).slice(0, 40));
+      }
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -150,25 +169,25 @@ export default function HomePage() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const fetchMenu = async (cat: string, q: string) => {
+  const fetchMenu = async (cat: string) => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (cat !== 'all') params.set('category', cat);
-      if (q) params.set('search', q);
       const res = await fetch(`${API}/menu?${params}`, { cache: 'no-store' });
       const data = await res.json();
-      setItems(data.data || []);
+      if (seq === fetchSeq.current) setItems(data.data || []); // ignore late, older replies
     } catch {
-      showToast('Backend se connect nahi ho pa raha. Check karein!', 'error');
+      if (seq === fetchSeq.current) showToast('Could not load the menu. Please check your internet and try again.', 'error');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMenu(category, searchQuery);
-  }, [category, searchQuery]);
+    fetchMenu(category);
+  }, [category]);
 
   // Debounced search trigger as user types
   useEffect(() => {
@@ -179,25 +198,23 @@ export default function HomePage() {
     return () => clearTimeout(handler);
   }, [search]);
 
-  // Generate suggestions list from allItems based on search input
+  // Suggestions while typing (forgiving search over the whole menu)
   useEffect(() => {
-    if (!search.trim()) {
-      setSuggestions([]);
-      return;
-    }
-    const query = search.toLowerCase();
-    const filtered = allItems.filter(item => 
-      item.name.toLowerCase().includes(query) || 
-      item.description?.toLowerCase().includes(query)
-    ).slice(0, 5); // Max 5 suggestions
-    setSuggestions(filtered);
-  }, [search, allItems]);
+    setSuggestions(search.trim() ? searchMenu(allItems, search, categoryLabels).slice(0, 6) : []);
+    setActiveIdx(-1);
+  }, [search, allItems, categoryLabels]);
+
+  // Results for the menu list: whole menu, every category
+  const searchResults = useMemo(
+    () => (searchQuery.trim() ? searchMenu(allItems.length ? allItems : items, searchQuery, categoryLabels) : null),
+    [searchQuery, allItems, items, categoryLabels]
+  );
 
   // Close suggestions dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setSuggestions([]);
+        setShowSuggest(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -205,16 +222,32 @@ export default function HomePage() {
   }, []);
 
   const handleSuggestionClick = (item: MenuItem) => {
-    setSearch(item.name);
-    setSearchQuery(item.name);
-    setSuggestions([]);
+    setShowSuggest(false);
     router.push(`/item/${item.id}`);
+  };
+
+  const showResults = () => {
+    setSearchQuery(search);
+    setShowSuggest(false);
+    setTimeout(() => menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setSearchQuery(search);
-    setSuggestions([]);
+    if (activeIdx >= 0 && suggestions[activeIdx]) { handleSuggestionClick(suggestions[activeIdx]); return; }
+    showResults();
+  };
+
+  const clearSearch = () => {
+    setSearch('');
+    setSearchQuery('');
+    setShowSuggest(false);
+  };
+
+  const handleSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' && suggestions.length) { e.preventDefault(); setShowSuggest(true); setActiveIdx(i => (i + 1) % suggestions.length); }
+    else if (e.key === 'ArrowUp' && suggestions.length) { e.preventDefault(); setActiveIdx(i => (i <= 0 ? suggestions.length - 1 : i - 1)); }
+    else if (e.key === 'Escape') { setShowSuggest(false); setActiveIdx(-1); }
   };
 
   const handleAddToCart = (item: MenuItem) => {
@@ -224,38 +257,80 @@ export default function HomePage() {
 
   const featured = items.filter(i => i.is_featured);
   const regular  = items.filter(i => !i.is_featured);
+  // Search shows every match (bestsellers too). Without search, the full menu skips the
+  // bestsellers already shown above; a single category shows all its dishes.
+  const shownItems: MenuItem[] = searchResults
+    ? searchResults
+    : category === 'all' && featured.length > 0 ? regular : items;
 
   return (
     <div className="page-wrapper">
       <Navbar />
       <CartDrawer />
 
-      {/* Hero */}
-      <section className="hero">
-        <h1>
-          Punjab da <span className="highlight">Asli Swad,</span><br />
-          Ghar Baitha!
-        </h1>
-        <p>Amritsar di Kulfi se lekar Delhi di Daal tak — sab kuch ek click mein. Garam, taaza, seedha aapke ghar!</p>
+      {/* Top: status, search, offers */}
+      <section className="home-top">
+        {savedArea && (
+          <button type="button" className="home-location" onClick={() => router.push('/checkout')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 21s-7-6.5-7-12a7 7 0 0 1 14 0c0 5.5-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+            <span>Delivering to <strong>{savedArea}</strong></span>
+          </button>
+        )}
+        <div className="status-pills">
+          {delivery && (
+            delivery.available ? (
+              <span className="status-pill open"><span className="status-dot" />Open{delivery.hours ? ` · Delivery ${delivery.hours}` : ' · Delivering now'}</span>
+            ) : (
+              <span className="status-pill closed"><span className="status-dot" />Delivery closed · Take Away open</span>
+            )
+          )}
+          <span className="status-pill"><span className="veg-mark" />100% Pure Veg</span>
+          <span className="status-pill">30–45 min</span>
+        </div>
 
-        <div ref={dropdownRef} style={{ position: 'relative', width: '100%', maxWidth: '580px', margin: '0 auto' }}>
-          <form className="search-bar" onSubmit={handleSearch}>
-            <span>🔍</span>
+        <div ref={dropdownRef} style={{ position: 'relative', width: '100%' }}>
+          <form className="home-search" onSubmit={handleSearch} role="search">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7A6040" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
             <input
-              type="text"
-              placeholder="Kya khaenge aaj? Search karein..."
+              type="search"
+              placeholder="Search paneer, naan, thali…"
+              aria-label="Search the menu"
+              role="combobox"
+              aria-expanded={showSuggest && suggestions.length > 0}
+              aria-controls="search-suggest-list"
+              aria-autocomplete="list"
+              aria-activedescendant={activeIdx >= 0 ? `sugg-${suggestions[activeIdx]?.id}` : undefined}
+              autoComplete="off"
+              enterKeyHint="search"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => { setSearch(e.target.value); setShowSuggest(true); }}
+              onFocus={() => setShowSuggest(true)}
+              onKeyDown={handleSearchKey}
             />
-            <button type="submit" className="search-btn">Khojo</button>
+            {search && (
+              <button type="button" className="home-search-clear" onClick={clearSearch} aria-label="Clear search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            )}
+            {search && <button type="submit">Search</button>}
           </form>
 
-          {suggestions.length > 0 && (
-            <ul className="search-suggestions">
-              {suggestions.map(item => (
+          {showSuggest && search.trim() && (
+            <ul className="search-suggestions" id="search-suggest-list" role="listbox" aria-label="Matching dishes">
+              {suggestions.length === 0 && (
+                <li className="search-suggestion-item" aria-disabled="true" style={{ cursor: 'default', color: 'var(--text-muted)' }}>
+                  No dishes match &quot;{search}&quot;. Try another word, like paneer, naan or dal.
+                </li>
+              )}
+              {suggestions.map((item, idx) => (
                 <li 
                   key={item.id} 
-                  className="search-suggestion-item" 
+                  id={`sugg-${item.id}`}
+                  role="option"
+                  aria-selected={idx === activeIdx}
+                  className={`search-suggestion-item${idx === activeIdx ? ' active' : ''}`} 
+                  onMouseDown={e => e.preventDefault()}
+                  onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => handleSuggestionClick(item)}
                 >
                   <span className="search-suggestion-emoji">{categoryEmoji[item.category] || '🍽️'}</span>
@@ -263,8 +338,17 @@ export default function HomePage() {
                   <span className="search-suggestion-price">₹{Number(item.price).toFixed(0)}</span>
                 </li>
               ))}
+              {suggestions.length > 0 && (
+                <li role="option" aria-selected={false} className="search-suggestion-item search-see-all" onMouseDown={e => e.preventDefault()} onClick={showResults}>
+                  See all results for &quot;{search}&quot;
+                </li>
+              )}
             </ul>
           )}
+        </div>
+
+        <div id="offers" style={{ scrollMarginTop: 90 }}>
+          <OfferProgress subtotal={total} variant="dark" showWhenEmpty />
         </div>
       </section>
 
@@ -347,7 +431,7 @@ export default function HomePage() {
       {/* Categories */}
       <section className="section">
         <div className="section-header">
-          <h2 className="section-title">Category se <span>Chunein</span></h2>
+          <h2 className="section-title">What would you like?</h2>
         </div>
         <div className="categories">
           {categories.map((c, i) => {
@@ -391,30 +475,33 @@ export default function HomePage() {
       {category === 'all' && !searchQuery && featured.length > 0 && (
         <section className="section" style={{ paddingTop: 0 }}>
           <div className="section-header">
-            <h2 className="section-title">⭐ <span>Aaj ka</span> Special</h2>
+            <h2 className="section-title">Bestsellers</h2>
           </div>
-          <div className="menu-grid">
-            {featured.map((item, i) => (
-              <FoodCard key={item.id} item={item} onAdd={handleAddToCart} delay={i * 60} categoryEmoji={categoryEmoji} categoryLabels={categoryLabels} />
+          <div className="best-grid">
+            {featured.map(item => (
+              <BestCard key={item.id} item={item} onAdd={handleAddToCart} emoji={categoryEmoji[item.category] || '🍽️'} />
             ))}
           </div>
         </section>
       )}
 
       {/* Menu Grid */}
-      <section className="section" style={{ paddingTop: 0 }}>
+      <section className="section" ref={menuRef} style={{ paddingTop: 0, scrollMarginTop: 80 }}>
         <div className="section-header">
           <h2 className="section-title">
             {searchQuery
-              ? `"${searchQuery}" ke results`
+              ? `Results for "${searchQuery}"`
               : category === 'all'
-              ? 'Hamara Poora Menu'
+              ? 'Full Menu'
               : `${categoryEmoji[category] || ''} ${categories.find(c => c.key === category)?.label || category}`}
           </h2>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{items.length} items</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            {shownItems.length} {shownItems.length === 1 ? 'dish' : 'dishes'}
+            {searchQuery && <button type="button" className="section-link" onClick={clearSearch}>Clear search</button>}
+          </span>
         </div>
 
-        {loading ? (
+        {loading && !searchQuery ? (
           <div className="menu-grid">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="food-card">
@@ -428,15 +515,16 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-        ) : regular.length === 0 && (category === 'all' || featured.length === 0) ? (
+        ) : shownItems.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🍽️</div>
-            <h3>Kuch nahi mila</h3>
-            <p>Doosri category ya search try karein.</p>
+            <h3>{searchQuery ? `No dishes match "${searchQuery}"` : 'No dishes here yet'}</h3>
+            <p>{searchQuery ? 'Check the spelling or try a simpler word, like paneer, naan or dal.' : 'Try another category.'}</p>
+            {searchQuery && <button type="button" className="btn-secondary" style={{ marginTop: '1rem' }} onClick={clearSearch}>Show full menu</button>}
           </div>
         ) : (
           <div className="menu-grid">
-            {(category === 'all' && !searchQuery ? regular : items).map((item, i) => (
+            {shownItems.map((item, i) => (
               <FoodCard key={item.id} item={item} onAdd={handleAddToCart} delay={i * 60} categoryEmoji={categoryEmoji} categoryLabels={categoryLabels} />
             ))}
           </div>
@@ -600,3 +688,43 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
   );
 }
 
+function firstImage(imageField: any): string | null {
+  let list: string[] = [];
+  if (Array.isArray(imageField)) list = imageField.filter(Boolean);
+  else if (typeof imageField === 'string' && imageField) {
+    try { const d = JSON.parse(imageField); list = Array.isArray(d) ? d.filter(Boolean) : [imageField]; } catch { list = [imageField]; }
+  }
+  const img = list[0];
+  if (!img) return null;
+  return img.startsWith('http') ? img : `${API.replace('/api', '/storage')}/${img}`;
+}
+
+function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem) => void; emoji: string }) {
+  const router = useRouter();
+  const { state, dispatch } = useCart();
+  const qty = state.items.find(i => i.menu_item_id === item.id)?.quantity || 0;
+  const img = firstImage(item.image);
+  return (
+    <div className="best-card" role="link" tabIndex={0} onClick={() => router.push(`/item/${item.id}`)} onKeyDown={e => { if (e.key === 'Enter') router.push(`/item/${item.id}`); }}>
+      <div className="best-card-img">
+        {img ? <img src={img} alt={item.name} loading="lazy" /> : <span aria-hidden="true">{emoji}</span>}
+        {item.rating ? <span className="best-card-rating">★ {Number(item.rating).toFixed(1)}</span> : null}
+      </div>
+      <div className="best-card-body">
+        <div className="best-card-name">{item.name}</div>
+        <div className="best-card-row" onClick={e => e.stopPropagation()}>
+          <span className="best-card-price">₹{Number(item.price).toFixed(0)}</span>
+          {qty > 0 ? (
+            <div className="quantity-control-card" style={{ minWidth: 84 }}>
+              <button type="button" className="qty-control-btn" aria-label={`Remove one ${item.name}`} onClick={() => dispatch({ type: 'DECREMENT', id: item.id })}>−</button>
+              <span className="qty-control-val">{qty}</span>
+              <button type="button" className="qty-control-btn" aria-label={`Add one ${item.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: item.id })}>+</button>
+            </div>
+          ) : (
+            <button type="button" className="best-add" onClick={() => onAdd(item)}>ADD</button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

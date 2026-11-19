@@ -35,6 +35,8 @@ class Order extends Model
         'offer_title',
         'coupon_code',
         'coupon_discount',
+        'points_redeemed',
+        'points_discount',
     ];
 
     /** Fallback if the admin setting is missing. */
@@ -71,7 +73,23 @@ class Order extends Model
         'edited_at'             => 'datetime',
         'discount'              => 'decimal:2',
         'coupon_discount'       => 'decimal:2',
+        'points_discount'       => 'decimal:2',
+        'points_redeemed'       => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        // Loyalty points: earn on delivery, give back on cancel
+        static::updated(function (Order $order) {
+            if ($order->wasChanged('status')) {
+                try {
+                    \App\Services\Loyalty::onStatusChanged($order);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error('Loyalty update failed: ' . $e->getMessage());
+                }
+            }
+        });
+    }
 
     public function getEditableUntilAttribute(): ?string
     {
@@ -99,7 +117,13 @@ class Order extends Model
     public static function generateOrderNumber(): string
     {
         do {
-            $number = 'ORD-' . date('Ymd') . '-' . rand(1000, 9999);
+            // 6 random characters (no look-alike letters): about 1 billion combinations per day
+            $chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+            $rand = '';
+            for ($i = 0; $i < 6; $i++) {
+                $rand .= $chars[random_int(0, strlen($chars) - 1)];
+            }
+            $number = 'ORD-' . date('Ymd') . '-' . $rand;
         } while (self::where('order_number', $number)->exists());
 
         return $number;

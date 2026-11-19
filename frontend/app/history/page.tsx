@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Navbar from '../components/Navbar';
 import CartDrawer from '../components/CartDrawer';
 import Link from 'next/link';
+import { LoyaltyCard } from '../components/LoyaltyPoints';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -56,7 +57,7 @@ interface Order {
 }
 
 export default function HistoryPage() {
-  const { userPhone, userEmail, userName } = useCart();
+  const { userPhone, userEmail, userName, logoutUser, customerToken } = useCart();
   const router = useRouter();
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -121,10 +122,23 @@ export default function HistoryPage() {
 
     const fetchHistory = async () => {
       try {
-        const queryParam = activePhone ? `phone=${encodeURIComponent(activePhone)}` : `email=${encodeURIComponent(activeEmail || '')}`;
-        const res = await fetch(`${API}/orders/history?${queryParam}`, {
-          cache: 'no-store'
+        let token: string | null = null;
+        try { token = localStorage.getItem('customer_token'); } catch {}
+        if (!token) {
+          // Logged in before the secure login update: ask to log in once more
+          logoutUser();
+          router.push('/login?redirect=/history');
+          return;
+        }
+        const res = await fetch(`${API}/orders/history`, {
+          cache: 'no-store',
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
         });
+        if (res.status === 401) {
+          logoutUser();
+          router.push('/login?redirect=/history');
+          return;
+        }
         if (!res.ok) {
           setError('Failed to load order history.');
           return;
@@ -218,6 +232,8 @@ export default function HistoryPage() {
             🍽️ Order New Food
           </Link>
         </div>
+
+        <LoyaltyCard token={customerToken} />
 
         {loading && (
           <div style={{ textAlign: 'center', padding: '5rem', color: 'var(--text-muted)' }}>

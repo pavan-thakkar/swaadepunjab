@@ -206,6 +206,15 @@ class OrderResource extends Resource
                     ->numeric()
                     ->prefix('− ₹')
                     ->disabled(),
+                Forms\Components\TextInput::make('points_redeemed')
+                    ->label('Loyalty Points Used')
+                    ->numeric()
+                    ->disabled(),
+                Forms\Components\TextInput::make('points_discount')
+                    ->label('Points Discount')
+                    ->numeric()
+                    ->prefix('− ₹')
+                    ->disabled(),
                 Forms\Components\TextInput::make('distance_km')
                     ->label('Calculated Distance')
                     ->numeric()

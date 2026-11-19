@@ -172,7 +172,7 @@ export default function LoginPage() {
 
         if (res.ok) {
           const resolvedName = name.trim() || data.name || 'Customer';
-          loginUser(data.phone || identifier.trim(), null, resolvedName);
+          loginUser(data.phone || identifier.trim(), null, resolvedName, data.token);
           setToast('✅ Login Successful!');
           
           setTimeout(() => {
@@ -208,7 +208,7 @@ export default function LoginPage() {
 
         if (res.ok) {
           const resolvedName = name.trim() || data.name || 'Customer';
-          loginUser(null, identifier.trim(), resolvedName);
+          loginUser(null, identifier.trim(), resolvedName, data.token);
           setToast('✅ Login Successful!');
           
           setTimeout(() => {
@@ -243,7 +243,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok) {
-        loginUser(null, data.email, data.name || 'Google User');
+        loginUser(null, data.email, data.name || 'Google User', data.token);
         setToast('✅ Signed in with Google successfully!');
         setTimeout(() => {
           let targetPath = '/';
