@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/payment-settings', [App\Http\Controllers\Api\OrderController::class, 'paymentSettings']);
 Route::post('/orders/{identifier}/payment', [App\Http\Controllers\Api\OrderController::class, 'paymentStart'])->middleware('throttle:20,1');
 Route::post('/orders/{identifier}/payment/verify', [App\Http\Controllers\Api\OrderController::class, 'paymentVerify'])->middleware('throttle:20,1');
+Route::post('/orders/{identifier}/payment/check', [App\Http\Controllers\Api\OrderController::class, 'paymentCheck'])->middleware('throttle:20,1');
 Route::post('/orders/{identifier}/pay-with-cash', [App\Http\Controllers\Api\OrderController::class, 'payWithCash'])->middleware('throttle:10,1');
 Route::post('/razorpay/webhook', [App\Http\Controllers\Api\OrderController::class, 'razorpayWebhook'])->middleware('throttle:120,1');
 

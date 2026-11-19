@@ -30,6 +30,20 @@ class Razorpay
         return (bool) $s->razorpay_enabled && filled($s->razorpay_key_id) && filled(self::secret());
     }
 
+    /** Why online payment is (not) showing on the website — for the admin settings page. */
+    public static function statusText(): string
+    {
+        $s = self::settings();
+        $hasSecretSaved = filled($s->getRawOriginal('razorpay_key_secret'));
+        return match (true) {
+            ! $s->razorpay_enabled      => '⚪ OFF — turn on "Accept online payments on the website" and Save.',
+            ! filled($s->razorpay_key_id) => '🔴 Not showing — the Key ID is not saved.',
+            ! $hasSecretSaved           => '🔴 Not showing — the Key Secret is not saved. Paste it and Save.',
+            ! filled(self::secret())    => '🔴 Not showing — the saved Key Secret can\'t be read. Paste it again and Save.',
+            default                     => '🟢 ON — customers see "UPI, Card or Netbanking" at checkout (' . (self::isTestMode() ? 'TEST mode' : 'LIVE mode') . ').',
+        };
+    }
+
     public static function keyId(): ?string
     {
         return self::settings()->razorpay_key_id ?: null;
@@ -137,6 +151,7 @@ class Razorpay
     {
         $secret = self::webhookSecret();
         if (! $secret || ! $signature || ! hash_equals(hash_hmac('sha256', $rawBody, $secret), $signature)) {
+            Log::warning('Razorpay webhook rejected: ' . (! $secret ? 'no webhook secret saved in admin' : 'signature does not match — the Webhook Secret in admin must be the same as in Razorpay'));
             return false;
         }
         $data = json_decode($rawBody, true) ?: [];
@@ -150,7 +165,7 @@ class Razorpay
         if (! $order) {
             return true;
         }
-        if (in_array($event, ['payment.captured', 'order.paid'], true)) {
+        if (in_array($event, ['payment.captured', 'payment.authorized', 'order.paid'], true)) {
             $paidAmount = (int) ($payment['amount'] ?? ($data['payload']['order']['entity']['amount_paid'] ?? 0));
             if ($paidAmount && $paidAmount < (int) round(((float) $order->total) * 100)) {
                 Log::warning("Razorpay paid less than order total for {$order->order_number}");
@@ -163,19 +178,36 @@ class Razorpay
         return true;
     }
 
-    /** Ask Razorpay directly whether the order was paid (used when the customer comes back). */
-    public static function syncFromRazorpayOrder(Order $order): void
+    /**
+     * Ask Razorpay directly whether the order was paid (customer came back, "check again", admin button).
+     * "authorized" counts as paid: the bank approved it and Razorpay captures it automatically.
+     * @return string 'paid' | 'pending' | 'failed' | 'error'
+     */
+    public static function syncFromRazorpayOrder(Order $order): string
     {
-        if (! $order->razorpay_order_id || $order->payment_status === 'paid' || ! self::enabled()) {
-            return;
+        if ($order->payment_status === 'paid') {
+            return 'paid';
+        }
+        if (! $order->razorpay_order_id || ! filled(self::keyId()) || ! filled(self::secret())) {
+            return 'error';
         }
         $payments = self::request('get', "/orders/{$order->razorpay_order_id}/payments");
-        foreach (($payments['items'] ?? []) as $p) {
-            if (($p['status'] ?? '') === 'captured') {
-                self::markPaid($order, $p['id']);
-                return;
-            }
+        if ($payments === null) {
+            Log::warning("Razorpay sync failed for {$order->order_number} ({$order->razorpay_order_id})");
+            return 'error';
         }
+        $sawFailed = false;
+        foreach (($payments['items'] ?? []) as $p) {
+            $st = $p['status'] ?? '';
+            if (in_array($st, ['captured', 'authorized'], true)) {
+                self::markPaid($order, $p['id'] ?? null);
+                Log::info("Razorpay sync: {$order->order_number} paid ({$st})");
+                return 'paid';
+            }
+            if ($st === 'failed') $sawFailed = true;
+        }
+        Log::info("Razorpay sync: {$order->order_number} not paid yet", ['count' => count($payments['items'] ?? [])]);
+        return $sawFailed ? 'failed' : 'pending';
     }
 
     /** Mark paid once, and send the order to the kitchen. Safe to call twice. */

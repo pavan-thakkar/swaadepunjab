@@ -14,6 +14,25 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('check_payment')
+                ->label('Check payment with Razorpay')
+                ->icon('heroicon-o-arrow-path')
+                ->color('warning')
+                ->visible(fn () => $this->record->payment_method === 'razorpay' && $this->record->payment_status !== 'paid' && filled($this->record->razorpay_order_id))
+                ->action(function () {
+                    $r = \App\Services\Razorpay::syncFromRazorpayOrder($this->record);
+                    $this->record->refresh();
+                    \Filament\Notifications\Notification::make()
+                        ->title(match ($r) {
+                            'paid'    => 'Paid ✅ — order sent to the kitchen',
+                            'pending' => 'Razorpay has no successful payment for this order yet',
+                            'failed'  => 'The customer\'s payment failed',
+                            default   => 'Could not reach Razorpay — check the keys in Store & Receipt Config',
+                        })
+                        ->{$r === 'paid' ? 'success' : ($r === 'error' ? 'danger' : 'warning')}()
+                        ->send();
+                }),
+
             Actions\Action::make('print_bill')
                 ->label('Print Receipt')
                 ->icon('heroicon-o-printer')

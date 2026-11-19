@@ -237,6 +237,24 @@ class OrderController extends Controller
         return response()->json(['message' => 'Payment received. Your order is placed!', 'data' => $order->fresh('items')]);
     }
 
+    /** "I've paid — check again": ask Razorpay now (no 15-second wait). */
+    public function paymentCheck(Request $request, string $identifier): JsonResponse
+    {
+        $order = Order::where('order_number', $identifier)->firstOrFail();
+        if (! $this->canPay($request, $order)) {
+            return response()->json(['message' => 'You can only check orders placed from this device.'], 403);
+        }
+        $result = \App\Services\Razorpay::syncFromRazorpayOrder($order);
+        $order->refresh();
+        $messages = [
+            'paid'    => 'Payment received. Your order is placed!',
+            'pending' => 'Razorpay has not received this payment yet. If money was deducted, please wait a few minutes and check again.',
+            'failed'  => 'The payment failed at the bank. Please try paying again, or choose cash.',
+            'error'   => 'Could not reach Razorpay right now. Please try again in a minute.',
+        ];
+        return response()->json(['result' => $result, 'message' => $messages[$result] ?? '', 'data' => $order->load('items')]);
+    }
+
     /** Customer gives up on online payment and pays cash instead. */
     public function payWithCash(Request $request, string $identifier): JsonResponse
     {

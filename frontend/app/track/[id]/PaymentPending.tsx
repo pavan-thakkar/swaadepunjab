@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { openRazorpay, startPayment } from '../../lib/razorpay';
 
@@ -9,7 +9,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 /** Shown on the tracking page while an online order is waiting for payment. */
 export default function PaymentPending({ order, onUpdated }: { order: any; onUpdated: (o: any) => void }) {
   const { customerToken } = useCart();
-  const [busy, setBusy] = useState<'pay' | 'cash' | null>(null);
+  const [busy, setBusy] = useState<'pay' | 'cash' | 'check' | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   const token = (() => {
@@ -27,6 +27,34 @@ export default function PaymentPending({ order, onUpdated }: { order: any; onUpd
     else if (r.status === 'failed') setMsg(r.message);
     setBusy(null);
   };
+
+  // Ask Razorpay right now whether the payment went through
+  const check = async (quiet = false) => {
+    if (!quiet) { setBusy('check'); setMsg(null); }
+    try {
+      const res = await fetch(`${API}/orders/${encodeURIComponent(order.order_number)}/payment/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json', Accept: 'application/json',
+          ...(token ? { 'X-Order-Token': token } : {}),
+          ...(customerToken ? { Authorization: `Bearer ${customerToken}` } : {}),
+        },
+        body: '{}',
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.result === 'paid') onUpdated({ ...order, ...j.data, is_owner: true });
+      else if (!quiet) setMsg(j.message || 'Could not check the payment. Please try again.');
+    } catch {
+      if (!quiet) setMsg('Network error. Please try again.');
+    }
+    if (!quiet) setBusy(null);
+  };
+
+  // Opening this page (e.g. after paying in the UPI app): check once straight away
+  useEffect(() => {
+    if (canAct) check(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const payCash = async () => {
     setBusy('cash'); setMsg(null);
@@ -69,6 +97,9 @@ export default function PaymentPending({ order, onUpdated }: { order: any; onUpd
             </button>
             <button type="button" className="mp-btn mp-btn-light" onClick={payCash} disabled={!!busy}>
               {busy === 'cash' ? 'Updating…' : cashLabel}
+            </button>
+            <button type="button" className="paypend-check" onClick={() => check(false)} disabled={!!busy}>
+              {busy === 'check' ? 'Checking with Razorpay…' : '✓ I have already paid — check again'}
             </button>
           </div>
         ) : (

@@ -224,6 +224,10 @@ class ReceiptSettingResource extends Resource
                                 . '<li>Start with <b>Test</b> keys (rzp_test_…) — no real money. When your Razorpay account is activated, switch to <b>Live</b> keys (rzp_live_…) and set up the webhook again in Live mode.</li>'
                                 . '</ol>'
                             )),
+                        Forms\Components\Placeholder::make('razorpay_status')
+                            ->label('Status on the website right now')
+                            ->content(fn () => \App\Services\Razorpay::statusText())
+                            ->columnSpanFull(),
                         Forms\Components\Toggle::make('razorpay_enabled')
                             ->label('Accept online payments on the website')
                             ->helperText('Needs the Key ID and Key Secret below.')
