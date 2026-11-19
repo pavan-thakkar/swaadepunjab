@@ -15,6 +15,7 @@ export default function PromoVideo({
   soundOn,
   onToggleSound,
   onEnded,
+  loop = false,
 }: {
   src: string;
   poster?: string | null;
@@ -23,6 +24,8 @@ export default function PromoVideo({
   soundOn: boolean;
   onToggleSound: () => void;
   onEnded?: () => void;
+  /** true when there is only one banner (nothing to move on to) */
+  loop?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const audible = active && hasSound && soundOn;
@@ -55,9 +58,11 @@ export default function PromoVideo({
         poster={poster || undefined}
         muted
         playsInline
-        loop={!audible}
+        loop={loop}
         preload={active ? 'auto' : 'metadata'}
-        onEnded={() => { if (audible && onEnded) onEnded(); }}
+        onEnded={() => { if (active && onEnded) onEnded(); }}
+        // A video that can't load must not block the slider
+        onError={() => { if (active && onEnded) setTimeout(onEnded, 4000); }}
         aria-hidden="true"
       />
       {hasSound && active && (
@@ -70,7 +75,7 @@ export default function PromoVideo({
             const v = ref.current;
             if (v) {
               v.muted = soundOn;
-              if (!soundOn) { v.loop = false; v.play().catch(() => {}); }
+              if (!soundOn) v.play().catch(() => {});
             }
             onToggleSound();
           }}

@@ -45,7 +45,7 @@ export default function TrackSearchPage() {
       </div>
 
       <footer>
-        <img src="/brand/logo.webp" alt="Swaad E Punjab" className="footer-logo" width={547} height={240} loading="lazy" />
+        <img src="/brand/logo.webp" alt="Swaad E Punjab" className="footer-logo" width={547} height={240} loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         <p>© 2026 <strong style={{ color: 'var(--primary)' }}>Swaad E Punjab</strong> — Track your order in real-time 🛵</p>
       </footer>
     </div>

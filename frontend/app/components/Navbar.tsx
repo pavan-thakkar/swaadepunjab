@@ -42,15 +42,21 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const plans = usePlans();
+  const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
   return (
     <nav className="navbar">
       <Link href="/" className="navbar-brand" aria-label="Swaad E Punjab — home">
-        <picture>
-          <source srcSet="/brand/logo.webp" type="image/webp" />
-          <img src="/brand/logo.png" alt="Swaad E Punjab" className="navbar-logo" width={547} height={240} />
-        </picture>
+        {logoFailed ? (
+          // If the logo file can't load, show the name instead of a broken image
+          <span className="navbar-brand-text">Swaad <span>E Punjab</span></span>
+        ) : (
+          <picture>
+            <source srcSet="/brand/logo.webp" type="image/webp" />
+            <img src="/brand/logo.png" alt="Swaad E Punjab" className="navbar-logo" width={547} height={240} onError={() => setLogoFailed(true)} />
+          </picture>
+        )}
       </Link>
       
       {/* Desktop Navbar Actions */}

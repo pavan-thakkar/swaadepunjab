@@ -335,7 +335,7 @@ export default function LoginPage() {
       <div style={{ padding: '4rem 2rem', maxWidth: 450, margin: '0 auto' }}>
         <div className="tracking-card" style={{ padding: '2.5rem', border: '1px solid var(--border)' }}>
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src="/brand/logo.webp" alt="Swaad E Punjab" className="login-logo" width={547} height={240} />
+            <img src="/brand/logo.webp" alt="Swaad E Punjab" className="login-logo" width={547} height={240} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text)' }}>Customer Login</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
               {!otpSent 

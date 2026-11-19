@@ -2366,3 +2366,11 @@ img, video { max-width: 100%; }
 .promo-sound-btn:hover { background: rgba(26,15,0,.78); }
 .promo-sound-hint { white-space: nowrap; }
 @media (max-width: 480px) { .promo-sound-btn { right: 10px; top: 10px; height: 36px; min-width: 36px; } .promo-sound-btn.on { width: 36px; } }
+
+/* Banner with only a video (no text): full, bright video */
+.promo-slide.video-only .promo-video-bg { z-index: 0; }
+.promo-slide.video-only { cursor: default; }
+
+.navbar-brand-text { font-size: 1.45rem; font-weight: 900; color: var(--text); letter-spacing: -0.02em; line-height: 1; white-space: nowrap; }
+.navbar-brand-text span { color: var(--primary); }
+@media (max-width: 768px) { .navbar-brand-text { font-size: 1.15rem; } }

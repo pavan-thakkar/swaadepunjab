@@ -34,14 +34,21 @@ class MarketingCardResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('📢 Promotional Banner Details')->schema([
+                    Forms\Components\Placeholder::make('video_only_hint')
+                        ->hiddenLabel()
+                        ->content('🎬 With a video, tag, title and text are optional. Leave them empty to show only the video.')
+                        ->visible(fn (Forms\Get $get) => filled($get('video_path')) || filled($get('video_url')))
+                        ->columnSpanFull(),
                     Forms\Components\TextInput::make('tag')
                         ->label('Promo Tag (e.g. 🔥 BEST SELLER)')
-                        ->required()
-                        ->default('🔥 BEST SELLER'),
+                        ->required(fn (Forms\Get $get) => blank($get('video_path')) && blank($get('video_url')))
+                        ->placeholder('🔥 BEST SELLER')
+                        ->maxLength(60),
                     Forms\Components\TextInput::make('title')
                         ->label('Banner Title')
-                        ->required()
-                        ->placeholder('e.g. Tandoori Paneer Butter Masala'),
+                        ->required(fn (Forms\Get $get) => blank($get('video_path')) && blank($get('video_url')))
+                        ->placeholder('e.g. Tandoori Paneer Butter Masala')
+                        ->maxLength(150),
                     Forms\Components\Textarea::make('description')
                         ->label('Banner Description')
                         ->placeholder('Write a mouth-watering description...')
@@ -128,6 +135,7 @@ class MarketingCardResource extends Resource
                     ->grow(false),
                 Tables\Columns\TextColumn::make('title')
                     ->searchable()
+                    ->placeholder('🎬 Video only')
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('price')
                     ->label('Discount/Text')

@@ -139,9 +139,9 @@ export default function HomePage() {
 
   useEffect(() => {
     if (promoSlides.length === 0) return;
-    // While a customer is listening to a banner video, don't jump to the next banner (it moves on when the video ends)
+    // A video banner stays until its video finishes (PromoVideo moves on at the end); others change every 4.5 s
     const cur = promoSlides[activeSlide];
-    if (promoSound && cur && cur.video_sound && (cur.video_path || cur.video_url)) return;
+    if (cur && (cur.video_path || cur.video_url) && promoSlides.length > 1) return;
     const timer = setInterval(() => {
       setActiveSlide(prev => (prev + 1) % promoSlides.length);
     }, 4500);
@@ -369,10 +369,14 @@ export default function HomePage() {
               const bgImage = slide.image_path 
                 ? `${API.replace('/api', '')}/storage/${slide.image_path}` 
                 : slide.image_url;
+              const hasVideo = !!(slide.video_path || slide.video_url);
+              const showMenuBtn = !!(slide.menu_item_id && items.some(i => i.id === slide.menu_item_id));
+              // Video with no text → show only the video (no dark overlay, no empty text block)
+              const hasText = !!(slide.tag || slide.title || slide.description || slide.price || showMenuBtn);
               return (
                 <div 
                   key={slide.id} 
-                  className={`promo-slide${activeSlide === idx ? ' active' : ''}`}
+                  className={`promo-slide${activeSlide === idx ? ' active' : ''}${hasVideo && !hasText ? ' video-only' : ''}`}
                 >
                   {/* background video: uploaded file first, else link (starts muted; 🔊 button if it has sound) */}
                   {(slide.video_path || slide.video_url) && (
@@ -383,6 +387,7 @@ export default function HomePage() {
                       hasSound={!!slide.video_sound}
                       soundOn={promoSound}
                       onToggleSound={() => setPromoSound(s => !s)}
+                      loop={promoSlides.length <= 1}
                       onEnded={() => setActiveSlide(prev => (prev + 1) % promoSlides.length)}
                     />
                   )}
@@ -394,17 +399,18 @@ export default function HomePage() {
                     />
                   )}
                   
+                  {hasText && <>
                   {/* sleek dark gradient overlay */}
                   <div className="promo-slide-overlay" />
 
                   {/* content text & buttons */}
                   <div className="promo-content">
-                    <span className="promo-tag">{slide.tag || 'PROMO'}</span>
-                    <h2 className="promo-title">{slide.title}</h2>
-                    <p className="promo-desc">{slide.description}</p>
+                    {slide.tag && <span className="promo-tag">{slide.tag}</span>}
+                    {slide.title && <h2 className="promo-title">{slide.title}</h2>}
+                    {slide.description && <p className="promo-desc">{slide.description}</p>}
                     <div className="promo-actions">
                       {slide.price && <span className="promo-price">{slide.price}</span>}
-                      {slide.menu_item_id && items.some(i => i.id === slide.menu_item_id) && (
+                      {showMenuBtn && (
                         <button 
                           type="button" 
                           className="promo-btn"
@@ -415,6 +421,7 @@ export default function HomePage() {
                       )}
                     </div>
                   </div>
+                  </>}
                 </div>
               );
             })}
@@ -550,7 +557,7 @@ export default function HomePage() {
       {toast && <Toast message={toast.msg} type={toast.type} />}
 
       <footer>
-        <img src="/brand/logo.webp" alt="Swaad E Punjab" className="footer-logo" width={547} height={240} loading="lazy" />
+        <img src="/brand/logo.webp" alt="Swaad E Punjab" className="footer-logo" width={547} height={240} loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
         <p>© 2026 <strong style={{ color: 'var(--primary)' }}>Swaad E Punjab</strong> — Dil se banaya, ghar tak pahunchaya 🧡</p>
       </footer>
     </div>
