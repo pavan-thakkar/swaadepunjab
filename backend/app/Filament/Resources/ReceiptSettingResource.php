@@ -209,6 +209,67 @@ class ReceiptSettingResource extends Resource
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 50), // never save empty into a required column
                     ])->columns(2),
 
+                Forms\Components\Section::make('💳 Online Payments (Razorpay)')
+                    ->description('Customers pay by UPI, card, wallet or netbanking. An order reaches the kitchen only after Razorpay confirms the payment.')
+                    ->collapsible()
+                    ->schema([
+                        Forms\Components\Placeholder::make('razorpay_help')
+                            ->hiddenLabel()
+                            ->columnSpanFull()
+                            ->content(fn () => new \Illuminate\Support\HtmlString(
+                                '<ol style="margin:0;padding-left:18px;line-height:1.7;font-size:13px">'
+                                . '<li>Razorpay Dashboard → <b>Account &amp; Settings → API Keys</b> → <b>Generate Key</b>. Copy the <b>Key ID</b> and <b>Key Secret</b> into the boxes below.</li>'
+                                . '<li>Razorpay Dashboard → <b>Account &amp; Settings → Webhooks</b> → <b>Add New Webhook</b>.<br>Webhook URL: <code style="background:#FFF1CC;padding:2px 6px;border-radius:6px;user-select:all">' . e(url('/api/razorpay/webhook')) . '</code><br>Secret: make up a long password and paste the same one below. Active events: <b>payment.captured</b>, <b>payment.failed</b>, <b>order.paid</b>.</li>'
+                                . '<li>Save, click <b>Test connection</b>, then turn on <b>Accept online payments</b>.</li>'
+                                . '<li>Start with <b>Test</b> keys (rzp_test_…) — no real money. When your Razorpay account is activated, switch to <b>Live</b> keys (rzp_live_…) and set up the webhook again in Live mode.</li>'
+                                . '</ol>'
+                            )),
+                        Forms\Components\Toggle::make('razorpay_enabled')
+                            ->label('Accept online payments on the website')
+                            ->helperText('Needs the Key ID and Key Secret below.')
+                            ->inline(false)
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('razorpay_key_id')
+                            ->label('Key ID')
+                            ->placeholder('rzp_test_xxxxxxxxxxxxxx or rzp_live_xxxxxxxxxxxxxx')
+                            ->regex('/^rzp_(test|live)_[A-Za-z0-9]+$/')
+                            ->validationMessages(['regex' => 'The Key ID starts with rzp_test_ or rzp_live_.'])
+                            ->maxLength(64)
+                            ->helperText(fn (?string $state) => str_starts_with((string) $state, 'rzp_live_') ? '🟢 LIVE mode — real payments' : (str_starts_with((string) $state, 'rzp_test_') ? '🧪 TEST mode — no real money' : null)),
+                        Forms\Components\TextInput::make('razorpay_key_secret')
+                            ->label('Key Secret')
+                            ->password()
+                            ->revealable()
+                            ->autocomplete('new-password')
+                            ->placeholder(fn ($record) => $record && filled($record->getRawOriginal('razorpay_key_secret')) ? '•••••••• saved — leave empty to keep' : 'Paste the Key Secret')
+                            ->helperText('Stored encrypted. Never shown again after saving.')
+                            ->maxLength(128)
+                            ->dehydrated(fn ($state) => filled($state)),
+                        Forms\Components\TextInput::make('razorpay_webhook_secret')
+                            ->label('Webhook Secret')
+                            ->password()
+                            ->revealable()
+                            ->autocomplete('new-password')
+                            ->placeholder(fn ($record) => $record && filled($record->getRawOriginal('razorpay_webhook_secret')) ? '•••••••• saved — leave empty to keep' : 'Same secret you typed in Razorpay Webhooks')
+                            ->helperText('Confirms payments even if the customer closes the page right after paying.')
+                            ->maxLength(128)
+                            ->dehydrated(fn ($state) => filled($state)),
+                        Forms\Components\Actions::make([
+                            Forms\Components\Actions\Action::make('testRazorpay')
+                                ->label('Test connection')
+                                ->icon('heroicon-o-signal')
+                                ->color('gray')
+                                ->action(function () {
+                                    [$ok, $msg] = \App\Services\Razorpay::testConnection();
+                                    \Filament\Notifications\Notification::make()
+                                        ->title($ok ? 'Razorpay connected' : 'Razorpay not connected')
+                                        ->body($msg . ($ok ? '' : ' (Save your changes first, then test.)'))
+                                        ->{$ok ? 'success' : 'danger'}()
+                                        ->send();
+                                }),
+                        ])->columnSpanFull(),
+                    ])->columns(3),
+
                 Forms\Components\Section::make('✏️ Customer Order Changes')
                     ->description('How long customers can add/remove items or change special instructions after placing an order.')
                     ->schema([

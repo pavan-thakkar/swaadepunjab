@@ -27,6 +27,12 @@ class ListOrders extends ListRecords
         ];
     }
 
+    public function mount(): void
+    {
+        \App\Models\Order::expireUnpaid(); // tidy up online orders that were never paid
+        parent::mount();
+    }
+
     public function getTabs(): array
     {
         return [
@@ -63,6 +69,12 @@ class ListOrders extends ListRecords
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'delivered'))
                 ->badge(fn () => \App\Models\Order::where('status', 'delivered')->count())
                 ->badgeColor('success'),
+
+            'awaiting_payment' => Tab::make('Awaiting payment')
+                ->icon('heroicon-o-credit-card')
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'awaiting_payment'))
+                ->badge(fn () => \App\Models\Order::where('status', 'awaiting_payment')->count() ?: null)
+                ->badgeColor('gray'),
 
             'cancelled' => Tab::make('Cancelled')
                 ->icon('heroicon-o-x-circle')

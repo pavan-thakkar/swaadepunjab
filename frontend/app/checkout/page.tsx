@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { getPaymentSettings, loadRazorpay, openRazorpay } from '../lib/razorpay';
 import { useCart } from '../context/CartContext';
 import Navbar from '../components/Navbar';
 import CartDrawer from '../components/CartDrawer';
@@ -155,17 +156,14 @@ export default function CheckoutPage() {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
-  // Razorpay Simulation States
-  const [showRazorpaySim, setShowRazorpaySim] = useState(false);
-  const [razorpayMethod, setRazorpayMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
-  const [simUPIApp, setSimUPIApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'other'>('gpay');
-  const [simUPIId, setSimUPIId] = useState('');
-  const [simCardNumber, setSimCardNumber] = useState('');
-  const [simCardName, setSimCardName] = useState('');
-  const [simCardExpiry, setSimCardExpiry] = useState('');
-  const [simCardCvv, setSimCardCvv] = useState('');
-  const [paymentSimulating, setPaymentSimulating] = useState(false);
-  const [simSuccess, setSimSuccess] = useState(false);
+  // Online payment (Razorpay) — switched on/off in admin
+  const [onlinePay, setOnlinePay] = useState<{ razorpay: boolean; test_mode: boolean } | null>(null);
+  useEffect(() => {
+    getPaymentSettings().then(ps => {
+      setOnlinePay(ps);
+      if (!ps.razorpay) setPayment(p => (p === 'razorpay' ? 'cash_on_delivery' : p));
+    });
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -204,14 +202,7 @@ export default function CheckoutPage() {
       document.body.appendChild(gmScript);
     }
 
-    // Load Razorpay JS SDK dynamically
-    if (!document.getElementById('razorpay-js')) {
-      const rpScript = document.createElement('script');
-      rpScript.id = 'razorpay-js';
-      rpScript.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      rpScript.async = true;
-      document.body.appendChild(rpScript);
-    }
+    // Razorpay Checkout loads only when the customer pays online (lib/razorpay.ts)
 
     return () => {
       if (mapRef.current) {
@@ -605,8 +596,16 @@ export default function CheckoutPage() {
       try {
         if (data.edit_token) localStorage.setItem(`order_edit_${data.data.order_number}`, data.edit_token);
       } catch {}
+      const orderNumber = data.data.order_number;
+      if (payment === 'razorpay' && data.payment) {
+        // The order exists but waits for payment; the server confirms it with Razorpay
+        dispatch({ type: 'CLEAR' });
+        const result = await openRazorpay(data.payment, orderNumber, data.edit_token || null, customerToken);
+        router.push(`/track/${orderNumber}/${result.status === 'paid' ? '' : '?pay=1'}`);
+        return true;
+      }
       dispatch({ type: 'CLEAR' });
-      router.push(`/track/${data.data.order_number}/`);
+      router.push(`/track/${orderNumber}/`);
       return true;
     } catch {
       setError('Network error. Check karein ki backend chal raha hai ya nahi.');
@@ -616,69 +615,18 @@ export default function CheckoutPage() {
     }
   };
 
-  const triggerRealRazorpay = (keyId: string) => {
-    const options = {
-      key: keyId,
-      amount: Math.round(grandTotal * 100), // Amount in paisa
-      currency: "INR",
-      name: "Swaad E Punjab",
-      description: "Food Order Payment",
-      handler: async function (response: any) {
-        await placeOrder(true);
-      },
-      prefill: {
-        name: form.customer_name,
-        email: form.customer_email,
-        contact: form.customer_phone
-      },
-      theme: {
-        color: "#E6A817"
-      }
-    };
-    try {
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
-    } catch (e) {
-      console.error("Razorpay open error:", e);
-      setError("Razorpay integration initialization failed. Using simulation fallback.");
-      setShowRazorpaySim(true);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (payment === 'razorpay') {
-      const razorpayKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
-      if (razorpayKey && (window as any).Razorpay) {
-        triggerRealRazorpay(razorpayKey);
-      } else {
-        // Fallback to our elegant fully-interactive simulation modal!
-        setShowRazorpaySim(true);
-      }
+    if (payment === 'razorpay' && !onlinePay?.razorpay) {
+      setError('Online payment is not available right now. Please choose cash.');
+      setPayment('cash_on_delivery');
       return;
     }
+    if (payment === 'razorpay') loadRazorpay(); // start loading the payment window early
 
     await placeOrder();
-  };
-
-  const handleSimulatedPayment = async () => {
-    setPaymentSimulating(true);
-    
-    // Simulate transaction delay
-    setTimeout(() => {
-      setSimSuccess(true);
-      setTimeout(async () => {
-        const ok = await placeOrder(true);
-        if (ok) {
-          setShowRazorpaySim(false);
-        }
-        // Reset states
-        setPaymentSimulating(false);
-        setSimSuccess(false);
-      }, 1000);
-    }, 1800);
   };
 
   return (
@@ -932,11 +880,13 @@ export default function CheckoutPage() {
             <div className="checkout-section">
               <h3>💳 Pay with</h3>
               <div className="payment-options pay-list" role="radiogroup" aria-label="Payment method">
+                {onlinePay?.razorpay && (
                 <button type="button" role="radio" aria-checked={payment === 'razorpay'} className={`payment-option pay-row${payment === 'razorpay' ? ' selected' : ''}`} onClick={() => setPayment('razorpay')}>
                   <span className="pay-radio" aria-hidden="true" />
                   <span style={{ flex: 1, textAlign: 'left' }}>UPI (GPay, PhonePe, Paytm), Card or Netbanking</span>
                   <span className="pay-tag">FASTEST</span>
                 </button>
+                )}
                 <button type="button" role="radio" aria-checked={payment === 'cash_on_delivery'} className={`payment-option pay-row${payment === 'cash_on_delivery' ? ' selected' : ''}`} onClick={() => setPayment('cash_on_delivery')}>
                   <span className="pay-radio" aria-hidden="true" />
                   <span style={{ flex: 1, textAlign: 'left' }}>{orderType === 'delivery' ? 'Cash on delivery' : 'Pay at the counter'}</span>
@@ -944,7 +894,8 @@ export default function CheckoutPage() {
               </div>
               {payment === 'razorpay' && (
                 <p style={{ marginTop: '1rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  ℹ️ Pay securely using Google Pay, PhonePe, Cards, Paytm & Netbanking via Razorpay.
+                  🔒 Pay securely using Google Pay, PhonePe, Cards, Paytm & Netbanking via Razorpay. Your order goes to the kitchen as soon as the payment is confirmed.
+                  {onlinePay?.test_mode && <strong style={{ display: 'block', color: '#B45309', marginTop: 4 }}>Test mode: no real money is charged.</strong>}
                 </p>
               )}
             </div>
@@ -1086,239 +1037,6 @@ export default function CheckoutPage() {
           </div>
         </div>
       </form>
-
-      {/* Razorpay Simulation Modal */}
-      {showRazorpaySim && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: '20px'
-        }}>
-          <div style={{
-            background: '#fff',
-            width: '100%',
-            maxWidth: '500px',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
-            fontFamily: 'system-ui, -apple-system, sans-serif'
-          }}>
-            {/* Modal Header */}
-            <div style={{
-              background: '#1e2c51',
-              color: '#fff',
-              padding: '20px',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderBottom: '1px solid #141e38'
-            }}>
-              <div>
-                <div style={{ fontSize: '0.8rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Swaad E Punjab</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 700 }}>₹{grandTotal.toFixed(0)}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#2b6cb0', background: '#ebf8ff', padding: '3px 8px', borderRadius: '4px', display: 'inline-block' }}>TEST MODE</div>
-                <div style={{ fontSize: '0.7rem', opacity: 0.6, marginTop: '4px' }}>Razorpay Secure</div>
-              </div>
-            </div>
-
-            {/* Modal Content */}
-            <div style={{ padding: '24px', minHeight: '280px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              {paymentSimulating ? (
-                /* Simulation loading state */
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '40px 0', textAlign: 'center' }}>
-                  {simSuccess ? (
-                    <>
-                      <div style={{ fontSize: '3.5rem', color: '#48bb78', marginBottom: '16px', animation: 'scaleUp 0.3s ease' }}>✓</div>
-                      <h4 style={{ color: '#2d3748', fontSize: '1.1rem', fontWeight: 700 }}>Payment Successful!</h4>
-                      <p style={{ color: '#718096', fontSize: '0.85rem', marginTop: '6px' }}>Placing your order...</p>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{
-                        border: '4px solid #e2e8f0',
-                        borderTop: '4px solid #3182ce',
-                        borderRadius: '50%',
-                        width: '45px',
-                        height: '45px',
-                        animation: 'spin 1s linear infinite',
-                        marginBottom: '20px'
-                      }} />
-                      <h4 style={{ color: '#2d3748', fontSize: '1rem', fontWeight: 600 }}>Processing Payment</h4>
-                      <p style={{ color: '#718096', fontSize: '0.82rem', marginTop: '6px' }}>Please do not close this window or press back.</p>
-                    </>
-                  )}
-                </div>
-              ) : (
-                /* Payment form inputs selector */
-                <div>
-                  <div style={{ display: 'flex', borderBottom: '1px solid #edf2f7', marginBottom: '20px' }}>
-                    <button 
-                      type="button" 
-                      onClick={() => setRazorpayMethod('upi')}
-                      style={{ flex: 1, paddingBottom: '12px', border: 'none', borderBottom: razorpayMethod === 'upi' ? '3px solid #3182ce' : 'none', background: 'transparent', fontWeight: 700, color: razorpayMethod === 'upi' ? '#3182ce' : '#718096', fontSize: '0.9rem', cursor: 'pointer' }}
-                    >
-                      📱 UPI (GPay/PhonePe)
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setRazorpayMethod('card')}
-                      style={{ flex: 1, paddingBottom: '12px', border: 'none', borderBottom: razorpayMethod === 'card' ? '3px solid #3182ce' : 'none', background: 'transparent', fontWeight: 700, color: razorpayMethod === 'card' ? '#3182ce' : '#718096', fontSize: '0.9rem', cursor: 'pointer' }}
-                    >
-                      💳 Card Payment
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setRazorpayMethod('netbanking')}
-                      style={{ flex: 1, paddingBottom: '12px', border: 'none', borderBottom: razorpayMethod === 'netbanking' ? '3px solid #3182ce' : 'none', background: 'transparent', fontWeight: 700, color: razorpayMethod === 'netbanking' ? '#3182ce' : '#718096', fontSize: '0.9rem', cursor: 'pointer' }}
-                    >
-                      🏛 Netbanking
-                    </button>
-                  </div>
-
-                  {/* Payment Body based on selection */}
-                  {razorpayMethod === 'upi' && (
-                    <div>
-                      <div style={{ fontSize: '0.85rem', color: '#4a5568', fontWeight: 600, marginBottom: '10px' }}>Preferred UPI Apps:</div>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                        <button 
-                          type="button" 
-                          onClick={() => { setSimUPIApp('gpay'); setSimUPIId('customer@okaxis'); }}
-                          style={{ flex: 1, padding: '10px', borderRadius: '6px', border: simUPIApp === 'gpay' ? '2.5px solid #3182ce' : '1px solid #cbd5e0', background: simUPIApp === 'gpay' ? '#ebf8ff' : '#fff', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}
-                        >
-                          Google Pay
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => { setSimUPIApp('phonepe'); setSimUPIId('customer@ybl'); }}
-                          style={{ flex: 1, padding: '10px', borderRadius: '6px', border: simUPIApp === 'phonepe' ? '2.5px solid #3182ce' : '1px solid #cbd5e0', background: simUPIApp === 'phonepe' ? '#ebf8ff' : '#fff', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}
-                        >
-                          PhonePe
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={() => { setSimUPIApp('paytm'); setSimUPIId('customer@paytm'); }}
-                          style={{ flex: 1, padding: '10px', borderRadius: '6px', border: simUPIApp === 'paytm' ? '2.5px solid #3182ce' : '1px solid #cbd5e0', background: simUPIApp === 'paytm' ? '#ebf8ff' : '#fff', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}
-                        >
-                          Paytm
-                        </button>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>UPI ID / VPA</label>
-                        <input 
-                          type="text" 
-                          value={simUPIId} 
-                          onChange={(e) => setSimUPIId(e.target.value)} 
-                          placeholder="e.g. customer@okaxis" 
-                          style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {razorpayMethod === 'card' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <label style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>Card Number</label>
-                        <input 
-                          type="text" 
-                          maxLength={19} 
-                          value={simCardNumber}
-                          onChange={(e) => setSimCardNumber(e.target.value.replace(/\s?/g, '').replace(/(\d{4})/g, '$1 ').trim())}
-                          placeholder="4111 2222 3333 4444" 
-                          style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
-                        />
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>Expiry Date</label>
-                          <input 
-                            type="text" 
-                            maxLength={5} 
-                            value={simCardExpiry}
-                            onChange={(e) => setSimCardExpiry(e.target.value)}
-                            placeholder="MM/YY" 
-                            style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <label style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>CVV</label>
-                          <input 
-                            type="password" 
-                            maxLength={3} 
-                            value={simCardCvv}
-                            onChange={(e) => setSimCardCvv(e.target.value)}
-                            placeholder="123" 
-                            style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
-                          />
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <label style={{ fontSize: '0.78rem', color: '#718096', fontWeight: 600 }}>Cardholder Name</label>
-                        <input 
-                          type="text" 
-                          value={simCardName} 
-                          onChange={(e) => setSimCardName(e.target.value)}
-                          placeholder="JOHN DOE" 
-                          style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.85rem', outline: 'none' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {razorpayMethod === 'netbanking' && (
-                    <div>
-                      <div style={{ fontSize: '0.85rem', color: '#4a5568', fontWeight: 600, marginBottom: '10px' }}>Select Popular Bank:</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        {['SBI', 'HDFC Bank', 'ICICI Bank', 'Axis Bank'].map((bank) => (
-                          <button 
-                            key={bank}
-                            type="button"
-                            onClick={() => alert(`Simulating checkout with ${bank}`)}
-                            style={{ padding: '10px', border: '1px solid #cbd5e0', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, background: '#fff', cursor: 'pointer' }}
-                          >
-                            🏦 {bank}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Modal Footer (Action Buttons) */}
-              {!paymentSimulating && (
-                <div style={{ display: 'flex', gap: '10px', marginTop: '24px', borderTop: '1px solid #edf2f7', paddingTop: '16px' }}>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowRazorpaySim(false)}
-                    style={{ flex: 1, padding: '12px', border: '1px solid #cbd5e0', borderRadius: '6px', color: '#718096', background: '#fff', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' }}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={handleSimulatedPayment}
-                    style={{ flex: 2, padding: '12px', border: 'none', borderRadius: '6px', color: '#fff', background: '#3182ce', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer' }}
-                  >
-                    Pay ₹{grandTotal.toFixed(0)} Securely
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ADD NEW ADDRESS MODAL OVERLAY - 3 SCREEN MATCHING SCREENSHOT DESIGN EXACTLY */}
       {showAddressModal && (

@@ -2374,3 +2374,12 @@ img, video { max-width: 100%; }
 .navbar-brand-text { font-size: 1.45rem; font-weight: 900; color: var(--text); letter-spacing: -0.02em; line-height: 1; white-space: nowrap; }
 .navbar-brand-text span { color: var(--primary); }
 @media (max-width: 768px) { .navbar-brand-text { font-size: 1.15rem; } }
+
+/* ===== Online payment pending (tracking page) ===== */
+.paypend { display: flex; gap: 14px; align-items: flex-start; background: #FFF8E7; border: 1.5px solid #F5C26B; border-radius: 18px; padding: 18px; margin-bottom: 1.5rem; }
+.paypend-icon { font-size: 1.8rem; line-height: 1; }
+.paypend-title { font-weight: 900; font-size: 1.1rem; margin-bottom: 4px; }
+.paypend-text { color: #4A3518; font-size: .92rem; line-height: 1.5; margin: 0 0 12px; }
+.paypend-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.paypend-actions .mp-btn { flex: 1; min-width: 180px; }
+.paypend-msg { margin-top: 10px; background: #FEF2F2; color: #991B1B; border-radius: 10px; padding: 8px 12px; font-size: .88rem; font-weight: 600; }

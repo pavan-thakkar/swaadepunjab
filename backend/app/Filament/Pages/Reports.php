@@ -38,19 +38,19 @@ class Reports extends Page
 
         // 1. Core KPIs (within range)
         $totalRevenue = Order::whereBetween('created_at', [$start, $end])
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->sum('total');
         $totalOrders = Order::whereBetween('created_at', [$start, $end])->count();
         $deliveredOrders = Order::whereBetween('created_at', [$start, $end])
             ->where('status', 'delivered')
             ->count();
         $averageOrderValue = Order::whereBetween('created_at', [$start, $end])
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->avg('total') ?? 0;
 
         // Today's stats
         $todayRevenue = Order::whereDate('created_at', Carbon::today())
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->sum('total');
         $todayOrders = Order::whereDate('created_at', Carbon::today())->count();
 
@@ -74,7 +74,7 @@ class Reports extends Page
         // 4. Sales by Payment Method (within range)
         $paymentBreakdown = Order::select('payment_method', DB::raw('count(*) as count'), DB::raw('sum(total) as revenue'))
             ->whereBetween('created_at', [$start, $end])
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->groupBy('payment_method')
             ->get();
 
@@ -85,7 +85,7 @@ class Reports extends Page
                 DB::raw("sum(total) as daily_revenue")
             )
             ->whereBetween('created_at', [$start, $end])
-            ->where('status', '!=', 'cancelled')
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->groupBy(DB::raw("date(created_at)"))
             ->orderBy('date', 'asc')
             ->get();

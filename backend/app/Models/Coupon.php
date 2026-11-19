@@ -72,7 +72,7 @@ class Coupon extends Model
             $digits = preg_replace('/\D/', '', $phone);
             $last10 = substr($digits, -10);
             $used = Order::where('coupon_code', $this->code)
-                ->where('status', '!=', 'cancelled')
+                ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
                 ->when($ignoreOrderId, fn ($q) => $q->where('id', '!=', $ignoreOrderId))
                 ->where('customer_phone', 'like', '%' . $last10)
                 ->count();

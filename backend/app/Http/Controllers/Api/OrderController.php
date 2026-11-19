@@ -40,6 +40,12 @@ class OrderController extends Controller
         ]);
 
         // Calculate totals from DB prices (never trust client prices)
+        Order::expireUnpaid();
+        $payOnline = ($validated['payment_method'] ?? 'cash_on_delivery') === 'razorpay';
+        if ($payOnline && ! \App\Services\Razorpay::enabled()) {
+            return response()->json(['message' => 'Online payment is not available right now. Please choose cash.'], 422);
+        }
+
         // Same dish + same choices are merged; choices are checked and priced here
         [$orderItems, $subtotal] = \App\Services\OrderLines::build($validated['items']);
 
@@ -124,8 +130,10 @@ class OrderController extends Controller
             'subtotal'             => $subtotal,
             'delivery_fee'         => $deliveryFee,
             'total'                => $total,
-            'status'               => 'pending',
+            // Online orders wait for Razorpay to confirm payment before the kitchen sees them
+            'status'               => $payOnline ? 'awaiting_payment' : 'pending',
             'payment_method'       => $validated['payment_method'] ?? 'cash_on_delivery',
+            'payment_status'       => $payOnline ? 'pending' : null,
             'special_instructions' => $validated['special_instructions'] ?? null,
             'estimated_delivery_at' => now()->addMinutes(45),
             'latitude'             => $request->latitude ?? null,
@@ -150,11 +158,115 @@ class OrderController extends Controller
         $order->items()->createMany($orderItems);
         $pricing['coupon']?->increment('used_count');
 
+        $payment = null;
+        if ($payOnline) {
+            try {
+                $payment = \App\Services\Razorpay::checkoutFor($order);
+            } catch (\RuntimeException $e) {
+                // Could not start payment: cancel this order (points/coupon come back) so the customer can retry
+                $pricing['coupon']?->decrement('used_count');
+                $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+                return response()->json(['message' => $e->getMessage(), 'payment_error' => true], 422);
+            }
+        }
+
         return response()->json([
-            'message'    => 'Order placed successfully!',
+            'message'    => $payOnline ? 'Order created. Please complete the payment.' : 'Order placed successfully!',
             'data'       => $order->load('items'),
             'edit_token' => $editToken,
+            'payment'    => $payment,
         ], 201);
+    }
+
+    /** Website: is online payment switched on? (only the public Key ID, never the secret) */
+    public function paymentSettings(): JsonResponse
+    {
+        $on = \App\Services\Razorpay::enabled();
+        return response()->json([
+            'razorpay'  => $on,
+            'key_id'    => $on ? \App\Services\Razorpay::keyId() : null,
+            'test_mode' => $on && \App\Services\Razorpay::isTestMode(),
+        ]);
+    }
+
+    /** Device that placed the order (edit token) or its logged-in owner. */
+    private function canPay(Request $request, Order $order): bool
+    {
+        $token = (string) ($request->header('X-Order-Token') ?: $request->input('edit_token', ''));
+        return ($order->edit_token && $token !== '' && hash_equals($order->edit_token, $token))
+            || \App\Support\CustomerToken::ownsOrder(\App\Support\CustomerToken::fromRequest($request), $order);
+    }
+
+    /** Start / retry online payment for an order that is waiting for payment. */
+    public function paymentStart(Request $request, string $identifier): JsonResponse
+    {
+        Order::expireUnpaid();
+        $order = Order::where('order_number', $identifier)->firstOrFail();
+        if (! $this->canPay($request, $order)) {
+            return response()->json(['message' => 'You can only pay for orders placed from this device.'], 403);
+        }
+        if ($order->payment_status === 'paid') {
+            return response()->json(['message' => 'This order is already paid.', 'paid' => true, 'data' => $order->fresh('items')]);
+        }
+        if ($order->status !== 'awaiting_payment' || $order->payment_method !== 'razorpay') {
+            return response()->json(['message' => 'This order is not waiting for online payment.'], 422);
+        }
+        try {
+            return response()->json(['payment' => \App\Services\Razorpay::checkoutFor($order)]);
+        } catch (\RuntimeException $e) {
+            $order->refresh();
+            return response()->json(['message' => $e->getMessage(), 'paid' => $order->payment_status === 'paid'], 422);
+        }
+    }
+
+    /** Razorpay Checkout finished: check the signature on the server, then mark paid. */
+    public function paymentVerify(Request $request, string $identifier): JsonResponse
+    {
+        $data = $request->validate([
+            'razorpay_order_id'   => 'required|string|max:64',
+            'razorpay_payment_id' => 'required|string|max:64',
+            'razorpay_signature'  => 'required|string|max:128',
+        ]);
+        $order = Order::where('order_number', $identifier)->firstOrFail();
+        if (! $this->canPay($request, $order)) {
+            return response()->json(['message' => 'You can only pay for orders placed from this device.'], 403);
+        }
+        if (! \App\Services\Razorpay::verifyCheckout($order, $data['razorpay_order_id'], $data['razorpay_payment_id'], $data['razorpay_signature'])) {
+            return response()->json(['message' => 'We could not confirm this payment. If money was deducted, it will be confirmed automatically in a few minutes or refunded by Razorpay.'], 422);
+        }
+        return response()->json(['message' => 'Payment received. Your order is placed!', 'data' => $order->fresh('items')]);
+    }
+
+    /** Customer gives up on online payment and pays cash instead. */
+    public function payWithCash(Request $request, string $identifier): JsonResponse
+    {
+        $order = Order::where('order_number', $identifier)->firstOrFail();
+        if (! $this->canPay($request, $order)) {
+            return response()->json(['message' => 'You can only change orders placed from this device.'], 403);
+        }
+        \App\Services\Razorpay::syncFromRazorpayOrder($order);
+        $order->refresh();
+        if ($order->payment_status === 'paid') {
+            return response()->json(['message' => 'This order is already paid online.', 'data' => $order->fresh('items')]);
+        }
+        if ($order->status !== 'awaiting_payment') {
+            return response()->json(['message' => 'This order can no longer be changed.'], 422);
+        }
+        $order->forceFill([
+            'payment_method' => 'cash_on_delivery',
+            'payment_status' => null,
+            'status'         => 'pending',
+            'created_at'     => now(),
+            'estimated_delivery_at' => now()->addMinutes(45),
+        ])->save();
+        return response()->json(['message' => 'Order placed. Please pay when you receive it.', 'data' => $order->fresh('items')]);
+    }
+
+    /** Razorpay → our server (Dashboard → Webhooks). */
+    public function razorpayWebhook(Request $request): JsonResponse
+    {
+        $ok = \App\Services\Razorpay::handleWebhook($request->getContent(), $request->header('X-Razorpay-Signature'));
+        return response()->json(['ok' => $ok], $ok ? 200 : 400);
     }
 
     /**
@@ -306,6 +418,9 @@ class OrderController extends Controller
         if ($minutes === 0 || $order->status !== 'pending' || now()->gt($deadline)) {
             return response()->json(['message' => 'This order can no longer be cancelled here. Please call the restaurant.'], 422);
         }
+        if ($order->payment_method === 'razorpay' && $order->payment_status === 'paid') {
+            return response()->json(['message' => 'This order is already paid online. Please call the restaurant to cancel it and get your refund.'], 422);
+        }
 
         if ($order->coupon_code) {
             \App\Models\Coupon::findByCode($order->coupon_code)?->decrement('used_count');
@@ -360,8 +475,19 @@ class OrderController extends Controller
         $isOwner = ($order->edit_token && $orderToken !== '' && hash_equals($order->edit_token, $orderToken))
             || \App\Support\CustomerToken::ownsOrder(\App\Support\CustomerToken::fromRequest($request), $order);
 
+        // Customer came back from paying: ask Razorpay (at most every 15 s per order)
+        if ($isOwner && $order->status === 'awaiting_payment' && $order->razorpay_order_id
+            && \Illuminate\Support\Facades\Cache::add('rzp-sync-' . $order->id, 1, 15)) {
+            \App\Services\Razorpay::syncFromRazorpayOrder($order);
+            $order->refresh()->load('items');
+        }
+        Order::expireUnpaid();
+
         $data = $order->toArray();
         $data['is_owner'] = $isOwner;
+        if (! $isOwner) {
+            unset($data['razorpay_order_id'], $data['razorpay_payment_id']);
+        }
         if (! $isOwner) {
             $last4 = substr(preg_replace('/\D/', '', (string) $order->customer_phone), -4);
             $data['customer_phone'] = '******' . $last4;

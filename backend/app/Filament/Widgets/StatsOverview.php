@@ -25,8 +25,8 @@ class StatsOverview extends BaseWidget
 
     protected function getStats(): array
     {
-        $today = Order::whereDate('created_at', today())->where('status', '!=', 'cancelled');
-        $lastWeek = Order::whereDate('created_at', today()->subWeek())->where('status', '!=', 'cancelled')
+        $today = Order::whereDate('created_at', today())->whereNotIn('status', ['cancelled', 'awaiting_payment']);
+        $lastWeek = Order::whereDate('created_at', today()->subWeek())->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->whereTime('created_at', '<=', now()->format('H:i:s'));
 
         $sales = (float) (clone $today)->sum('total');

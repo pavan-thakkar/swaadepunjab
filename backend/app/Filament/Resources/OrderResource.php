@@ -100,13 +100,19 @@ class OrderResource extends Resource
                         ->content(fn (Order $record) => match ($record->payment_method) {
                             'cash_on_delivery' => '💵 Cash on Delivery',
                             'card'             => '💳 Card',
-                            'razorpay'         => '💳 Razorpay (Online)',
+                            'razorpay'         => match ($record->payment_status) {
+                                'paid'     => '✅ Paid online (Razorpay)' . ($record->paid_at ? ' · ' . $record->paid_at->format('d M, h:i A') : '') . ($record->razorpay_payment_id ? ' · ' . $record->razorpay_payment_id : ''),
+                                'refunded' => '↩️ Refunded (Razorpay)',
+                                'failed'   => '❌ Online payment failed / not completed',
+                                default    => '⏳ Waiting for online payment',
+                            },
                             'upi_counter'      => '📱 UPI at counter',
                             default            => $record->payment_method,
                         }),
                     Forms\Components\Placeholder::make('status')
                         ->label('Order Status')
                         ->content(fn (Order $record) => match ($record->status) {
+                            'awaiting_payment' => '💳 Awaiting payment',
                             'pending'          => '⏳ Pending',
                             'accepted'         => '✅ Accepted',
                             'preparing'        => '🍳 Ready',
@@ -257,6 +263,7 @@ class OrderResource extends Resource
             Forms\Components\Section::make('📋 Order Status')->schema([
                 Forms\Components\Select::make('status')
                     ->options([
+                        'awaiting_payment' => '💳 Awaiting online payment',
                         'pending'          => '⏳ Pending',
                         'accepted'         => '✅ Accepted',
                         'preparing'        => '🍳 Ready',
@@ -351,6 +358,7 @@ class OrderResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn ($state) => match ($state) {
+                        'awaiting_payment' => '💳 Awaiting payment',
                         'pending'          => '⏳ Pending',
                         'accepted'         => '✅ Accepted',
                         'preparing'        => '🍳 Ready',
@@ -392,10 +400,13 @@ class OrderResource extends Resource
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'cash_on_delivery' => '💵 COD',
                         'card'             => '💳 Card',
-                        'razorpay'         => '💳 Razorpay',
+                        'razorpay'         => '💳 Online',
                         'upi_counter'      => '📱 UPI (counter)',
                         default            => $state,
                     })
+                    ->description(fn (Order $record) => $record->payment_method === 'razorpay'
+                        ? match ($record->payment_status) { 'paid' => '✅ Paid', 'refunded' => '↩️ Refunded', 'failed' => '❌ Not paid', default => '⏳ Waiting' }
+                        : null)
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('created_at')

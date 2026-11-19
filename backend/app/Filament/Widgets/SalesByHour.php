@@ -18,7 +18,7 @@ class SalesByHour extends Widget
 
     protected function getViewData(): array
     {
-        $rows = Order::whereDate('created_at', today())->where('status', '!=', 'cancelled')->get(['created_at', 'total']);
+        $rows = Order::whereDate('created_at', today())->whereNotIn('status', ['cancelled', 'awaiting_payment'])->get(['created_at', 'total']);
         $byHour = array_fill(11, 13, 0.0); // 11 AM .. 11 PM
         foreach ($rows as $r) {
             $h = (int) $r->created_at->timezone(config('app.timezone'))->format('G');

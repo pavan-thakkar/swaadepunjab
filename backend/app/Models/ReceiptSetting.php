@@ -35,6 +35,19 @@ class ReceiptSetting extends Model
         'loyalty_point_value',
         'loyalty_min_redeem',
         'loyalty_max_redeem_percent',
+        'razorpay_enabled',
+        'razorpay_key_id',
+        'razorpay_key_secret',
+        'razorpay_webhook_secret',
+    ];
+
+    // Payment secrets are encrypted in the database and never sent anywhere
+    protected $hidden = ['razorpay_key_secret', 'razorpay_webhook_secret'];
+
+    protected $casts = [
+        'razorpay_enabled'        => 'boolean',
+        'razorpay_key_secret'     => 'encrypted',
+        'razorpay_webhook_secret' => 'encrypted',
     ];
 
     /**

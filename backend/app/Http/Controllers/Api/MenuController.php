@@ -76,7 +76,7 @@ class MenuController extends Controller
         // 2. Ordered together (last 120 days, at least 2 orders)
         if (count($picked) < $limit) {
             $orderIds = \App\Models\OrderItem::where('menu_item_id', $menuItem->id)
-                ->whereHas('order', fn ($q) => $q->where('status', '!=', 'cancelled')->where('created_at', '>=', now()->subDays(120)))
+                ->whereHas('order', fn ($q) => $q->whereNotIn('status', ['cancelled', 'awaiting_payment'])->where('created_at', '>=', now()->subDays(120)))
                 ->latest('id')->limit(500)->pluck('order_id');
             if ($orderIds->isNotEmpty()) {
                 $together = \App\Models\OrderItem::whereIn('order_id', $orderIds)

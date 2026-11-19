@@ -6,6 +6,7 @@ import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Link from 'next/link';
 import EditOrderPanel from './EditOrderPanel';
+import PaymentPending from './PaymentPending';
 import { useLoyalty, pointsToEarn } from '../../components/LoyaltyPoints';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
@@ -245,7 +246,8 @@ export default function TrackOrderPage() {
   const currentStep = STATUSES.findIndex(s => s.key === order?.status);
   const isCancelled = order?.status === 'cancelled';
 
-  const isJustPlaced = order && (new Date().getTime() - new Date(order.created_at).getTime() < 12000);
+  const awaitingPayment = order?.status === 'awaiting_payment';
+  const isJustPlaced = order && !awaitingPayment && (new Date().getTime() - new Date(order.created_at).getTime() < 12000);
   const showConfetti = order && (order.status === 'delivered' || isJustPlaced);
 
   return (
@@ -285,8 +287,10 @@ export default function TrackOrderPage() {
               return (
                 <div className={`track-hero${isCancelled ? ' cancelled' : ''}`}>
                   <div className="track-hero-num">Order #{renderOrderNumber(order.order_number)}</div>
-                  {isCancelled ? (
-                    <><div className="track-hero-big">Order cancelled</div><div className="track-hero-sub">Any points you used have been returned.</div></>
+                  {awaitingPayment ? (
+                    <><div className="track-hero-big">Waiting for payment</div><div className="track-hero-sub">Complete the payment to send your order to the kitchen.</div></>
+                  ) : isCancelled ? (
+                    <><div className="track-hero-big">Order cancelled</div><div className="track-hero-sub">{order.payment_status === 'failed' ? 'The online payment was not completed. ' : ''}Any points you used have been returned.</div></>
                   ) : order.status === 'delivered' ? (
                     <><div className="track-hero-big">Delivered</div><div className="track-hero-sub">Enjoy your meal, {order.customer_name}!</div></>
                   ) : (
@@ -303,8 +307,11 @@ export default function TrackOrderPage() {
               );
             })()}
 
+            {/* Online order not paid yet: pay now or switch to cash */}
+            {awaitingPayment && <PaymentPending order={order} onUpdated={setOrder} />}
+
             {/* Status Stepper */}
-            {!isCancelled && (
+            {!isCancelled && !awaitingPayment && (
               <div className="tracking-card" style={{ marginBottom: '1.5rem' }}>
                 <div className="status-steps">
                   {STATUSES.map((step, index) => {

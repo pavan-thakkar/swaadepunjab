@@ -12,6 +12,7 @@ import MyPlans from '../components/MyPlans';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
 const STATUS_DETAILS: Record<string, { label: string; color: string; bg: string }> = {
+  awaiting_payment: { label: '💳 Awaiting payment', color: '#B45309', bg: 'rgba(180,83,9,0.08)' },
   pending:          { label: '⏳ Pending',         color: '#d97706', bg: 'rgba(217,119,6,0.08)' },
   accepted:         { label: '✅ Accepted',        color: '#2563eb', bg: 'rgba(37,99,235,0.08)' },
   preparing:        { label: '🍳 Ready',            color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)' },

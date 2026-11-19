@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'payment_status',
+        'razorpay_order_id',
+        'razorpay_payment_id',
+        'paid_at',
         'order_number',
         'customer_name',
         'customer_email',
@@ -63,6 +67,7 @@ class Order extends Model
     protected $appends = ['editable_until', 'can_edit'];
 
     protected $casts = [
+        'paid_at' => 'datetime',
         'subtotal'              => 'decimal:2',
         'delivery_fee'          => 'decimal:2',
         'total'                 => 'decimal:2',
@@ -106,7 +111,34 @@ class Order extends Model
 
     public function isPaidOnline(): bool
     {
-        return ! in_array($this->payment_method, ['cash_on_delivery', null, ''], true);
+        if ($this->payment_method === 'razorpay') {
+            return $this->payment_status === 'paid';
+        }
+        return ! in_array($this->payment_method, ['cash_on_delivery', 'upi_counter', null, ''], true);
+    }
+
+    /** Online orders whose payment was never finished are cancelled after this many minutes. */
+    public const PAYMENT_TIMEOUT_MINUTES = 30;
+
+    /** Cancel unpaid online orders that are too old (loyalty points come back automatically). */
+    public static function expireUnpaid(): void
+    {
+        static $done = false;
+        if ($done) return;
+        $done = true;
+        try {
+            self::where('status', 'awaiting_payment')
+                ->where('created_at', '<', now()->subMinutes(self::PAYMENT_TIMEOUT_MINUTES))
+                ->get()
+                ->each(function (self $o) {
+                    if ($o->coupon_code) {
+                        \App\Models\Coupon::findByCode($o->coupon_code)?->decrement('used_count');
+                    }
+                    $o->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+                });
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function items(): HasMany
@@ -144,6 +176,7 @@ class Order extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
+            'awaiting_payment' => 'Awaiting payment',
             'pending'          => 'Pending',
             'accepted'         => 'Accepted',
             'preparing'        => 'Preparing',
