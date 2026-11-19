@@ -259,11 +259,12 @@ class ReceiptSettingResource extends Resource
                                 ->label('Test connection')
                                 ->icon('heroicon-o-signal')
                                 ->color('gray')
-                                ->action(function () {
-                                    [$ok, $msg] = \App\Services\Razorpay::testConnection();
+                                ->action(function (Forms\Get $get) {
+                                    // Test what is typed in the boxes right now (empty secret = use the saved one)
+                                    [$ok, $msg] = \App\Services\Razorpay::testConnection($get('razorpay_key_id'), $get('razorpay_key_secret'));
                                     \Filament\Notifications\Notification::make()
                                         ->title($ok ? 'Razorpay connected' : 'Razorpay not connected')
-                                        ->body($msg . ($ok ? '' : ' (Save your changes first, then test.)'))
+                                        ->body($msg)
                                         ->{$ok ? 'success' : 'danger'}()
                                         ->send();
                                 }),

@@ -205,10 +205,10 @@ class Razorpay
     }
 
     /** Small HTTP helper with the key + secret. Returns decoded JSON or null. */
-    private static function request(string $method, string $path, array $body = []): ?array
+    private static function request(string $method, string $path, array $body = [], ?string $key = null, ?string $secret = null): ?array
     {
-        $secret = self::secret();
-        $key = self::keyId();
+        $secret = $secret ?: self::secret();
+        $key = $key ?: self::keyId();
         if (! $secret || ! $key) {
             return null;
         }
@@ -226,15 +226,20 @@ class Razorpay
         }
     }
 
-    /** Admin "Test connection" button. */
-    public static function testConnection(): array
+    /**
+     * Admin "Test connection" button. Uses the keys typed in the form; an empty box falls back to the saved value.
+     */
+    public static function testConnection(?string $typedKey = null, ?string $typedSecret = null): array
     {
-        if (! filled(self::keyId()) || ! filled(self::secret())) {
-            return [false, 'Enter both the Key ID and Key Secret first.'];
+        $key = trim((string) ($typedKey ?: self::keyId()));
+        $secret = trim((string) ($typedSecret ?: self::secret()));
+        if ($key === '' || $secret === '') {
+            return [false, 'Enter both the Key ID and Key Secret.'];
         }
-        $res = self::request('get', '/orders?count=1');
+        $res = self::request('get', '/orders?count=1', [], $key, $secret);
+        $mode = str_starts_with($key, 'rzp_test_') ? 'TEST mode — no real money' : 'LIVE mode — real payments';
         return $res !== null
-            ? [true, 'Connected to Razorpay (' . (self::isTestMode() ? 'TEST mode — no real money' : 'LIVE mode — real payments') . ').']
-            : [false, 'Razorpay rejected these keys. Check the Key ID and Key Secret (and that both are from the same mode, Test or Live).'];
+            ? [true, "Connected to Razorpay ({$mode}). Now click Save, and turn on Accept online payments."]
+            : [false, 'Razorpay rejected these keys. Copy the Key ID and Key Secret again from the downloaded key file (no extra spaces), and make sure both are from the same mode (Live or Test).'];
     }
 }
