@@ -67,7 +67,8 @@ class CouponResource extends Resource
                 Forms\Components\TextInput::make('min_order_amount')
                     ->label('Minimum Order Amount')
                     ->numeric()->prefix('₹')->default(0)
-                    ->helperText('Items total needed to use this coupon. 0 = no minimum.'),
+                    ->helperText('Items total needed to use this coupon. 0 = no minimum.')
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 0), // never save empty into a required column
             ])->columns(2),
 
             Forms\Components\Section::make('Limits')->schema([

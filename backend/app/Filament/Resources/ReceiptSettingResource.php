@@ -189,20 +189,24 @@ class ReceiptSettingResource extends Resource
                             ->label('Points earned per ₹100 spent')
                             ->numeric()->minValue(0)->default(5)
                             ->helperText('e.g. 5 → a ₹600 order earns 30 points.')
-                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled'))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 5), // never save empty into a required column
                         Forms\Components\TextInput::make('loyalty_point_value')
                             ->label('Value of 1 point')
                             ->numeric()->minValue(0.01)->default(1)->prefix('₹')
                             ->helperText('e.g. ₹1 → 100 points = ₹100 off.')
-                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled'))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 1), // never save empty into a required column
                         Forms\Components\TextInput::make('loyalty_min_redeem')
                             ->label('Minimum points to use')
                             ->numeric()->integer()->minValue(0)->default(50)
-                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled'))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 50), // never save empty into a required column
                         Forms\Components\TextInput::make('loyalty_max_redeem_percent')
                             ->label('Max part of an order paid with points')
                             ->numeric()->integer()->minValue(1)->maxValue(100)->default(50)->suffix('%')
-                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled')),
+                            ->visible(fn (Forms\Get $get) => (bool) $get('loyalty_enabled'))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 50), // never save empty into a required column
                     ])->columns(2),
 
                 Forms\Components\Section::make('✏️ Customer Order Changes')

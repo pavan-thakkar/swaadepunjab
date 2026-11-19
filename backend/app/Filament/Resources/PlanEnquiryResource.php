@@ -81,8 +81,10 @@ class PlanEnquiryResource extends Resource
                             $price = (float) $get('agreed_price');
                             $paid = (float) $state;
                             $set('payment_status', $paid <= 0 ? 'pending' : ($price > 0 && $paid >= $price ? 'paid' : 'partial'));
-                        }),
-                    Forms\Components\Select::make('payment_status')->label('Payment')->options(PlanEnquiry::PAYMENT)->native(false)->default('pending'),
+                        })
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 0), // never save empty into a required column
+                    Forms\Components\Select::make('payment_status')->label('Payment')->options(PlanEnquiry::PAYMENT)->native(false)->default('pending')
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 'pending'), // never save empty into a required column
                     Forms\Components\TextInput::make('delivery_time')->label('Delivery time')->placeholder('e.g. 1:00 PM, Mon–Sat')->maxLength(60),
                     Forms\Components\Textarea::make('customer_note')->label('Message to customer (optional)')
                         ->placeholder('e.g. Sunday closed. Call us to pause for holidays.')->rows(2)->maxLength(500)->columnSpanFull(),

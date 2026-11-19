@@ -55,7 +55,8 @@ class CategoryResource extends Resource
                     ->helperText('Used when there is no image.')
                     ->maxLength(10)
                     ->default('🍽️')
-                    ->required(fn (Forms\Get $get) => empty($get('image'))),
+                    ->required(fn (Forms\Get $get) => empty($get('image')))
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : '🍽️'), // never save empty into a required column
 
                 Forms\Components\TextInput::make('name')
                     ->label('Category Name')
@@ -82,7 +83,8 @@ class CategoryResource extends Resource
                     ->label('Sort Order')
                     ->numeric()
                     ->default(0)
-                    ->helperText('Lower number = shown first'),
+                    ->helperText('Lower number = shown first')
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 0), // never save empty into a required column
 
                 Forms\Components\Toggle::make('is_active')
                     ->label('Active (visible on frontend)')

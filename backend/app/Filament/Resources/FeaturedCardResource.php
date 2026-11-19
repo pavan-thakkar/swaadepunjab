@@ -66,7 +66,8 @@ class FeaturedCardResource extends Resource
                     ->label('Display Order')
                     ->helperText('Lower number shows first.')
                     ->numeric()
-                    ->default(0),
+                    ->default(0)
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 0), // never save empty into a required column
                 Forms\Components\Toggle::make('is_active')
                     ->label('Show on website')
                     ->default(true),

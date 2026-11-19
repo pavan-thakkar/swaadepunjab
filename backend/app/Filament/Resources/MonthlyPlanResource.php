@@ -105,7 +105,8 @@ class MonthlyPlanResource extends Resource
                 Forms\Components\TextInput::make('sort_order')
                     ->label('Order (lower shows first)')
                     ->numeric()
-                    ->default(0),
+                    ->default(0)
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 0), // never save empty into a required column
             ])->columns(2),
         ]);
     }

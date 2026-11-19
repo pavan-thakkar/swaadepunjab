@@ -75,7 +75,8 @@ class OfferResource extends Resource
                     ->label('Free Quantity')
                     ->numeric()->integer()->minValue(1)->maxValue(10)
                     ->default(1)
-                    ->visible(fn (Get $get) => $get('reward_type') === 'free_item'),
+                    ->visible(fn (Get $get) => $get('reward_type') === 'free_item')
+                    ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 1), // never save empty into a required column
 
                 Forms\Components\TextInput::make('discount_value')
                     ->label(fn (Get $get) => $get('reward_type') === 'percent_discount' ? 'Discount %' : 'Discount Amount')
