@@ -431,9 +431,16 @@ class OrderController extends Controller
             return response()->json(['message' => 'You can only cancel orders placed from this device.'], 403);
         }
 
+        // An online order that was never paid can always be cancelled (after a last check with Razorpay)
+        if ($order->status === 'awaiting_payment') {
+            \App\Services\Razorpay::syncFromRazorpayOrder($order);
+            $order->refresh();
+        }
+        $unpaidOnline = $order->status === 'awaiting_payment' && $order->payment_status !== 'paid';
+
         $minutes = Order::editWindowMinutes();
         $deadline = $order->created_at->copy()->addMinutes($minutes)->addSeconds(10);
-        if ($minutes === 0 || $order->status !== 'pending' || now()->gt($deadline)) {
+        if (! $unpaidOnline && ($minutes === 0 || $order->status !== 'pending' || now()->gt($deadline))) {
             return response()->json(['message' => 'This order can no longer be cancelled here. Please call the restaurant.'], 422);
         }
         if ($order->payment_method === 'razorpay' && $order->payment_status === 'paid') {
@@ -445,6 +452,9 @@ class OrderController extends Controller
         }
         $order->edited_at = now();
         $order->status = 'cancelled'; // loyalty points are returned automatically
+        if ($unpaidOnline) {
+            $order->payment_status = 'failed';
+        }
         $order->save();
 
         return response()->json(['message' => 'Your order has been cancelled.', 'data' => $order->fresh('items')]);

@@ -9,7 +9,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 /** Shown on the tracking page while an online order is waiting for payment. */
 export default function PaymentPending({ order, onUpdated }: { order: any; onUpdated: (o: any) => void }) {
   const { customerToken } = useCart();
-  const [busy, setBusy] = useState<'pay' | 'cash' | 'check' | null>(null);
+  const [busy, setBusy] = useState<'pay' | 'cash' | 'check' | 'cancel' | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const token = (() => {
@@ -56,6 +57,25 @@ export default function PaymentPending({ order, onUpdated }: { order: any; onUpd
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const cancelOrder = async () => {
+    if (!token) { setMsg('Open this page on the device that placed the order to cancel it.'); return; }
+    setBusy('cancel'); setMsg(null);
+    try {
+      const res = await fetch(`${API}/orders/${encodeURIComponent(order.order_number)}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ edit_token: token }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) onUpdated({ ...order, ...j.data, is_owner: true });
+      else setMsg(j.message || 'Could not cancel the order.');
+    } catch {
+      setMsg('Network error. Please try again.');
+    }
+    setBusy(null);
+    setConfirmCancel(false);
+  };
+
   const payCash = async () => {
     setBusy('cash'); setMsg(null);
     try {
@@ -101,6 +121,17 @@ export default function PaymentPending({ order, onUpdated }: { order: any; onUpd
             <button type="button" className="paypend-check" onClick={() => check(false)} disabled={!!busy}>
               {busy === 'check' ? 'Checking with Razorpay…' : '✓ I have already paid — check again'}
             </button>
+            {!confirmCancel ? (
+              <button type="button" className="paypend-check paypend-cancel" onClick={() => setConfirmCancel(true)} disabled={!!busy}>
+                ✕ I don&apos;t want this order — cancel it
+              </button>
+            ) : (
+              <div className="paypend-confirm">
+                <span>Cancel this unpaid order?</span>
+                <button type="button" className="mp-btn mp-btn-light" onClick={cancelOrder} disabled={!!busy}>{busy === 'cancel' ? 'Cancelling…' : 'Yes, cancel'}</button>
+                <button type="button" className="paypend-check" onClick={() => setConfirmCancel(false)} disabled={!!busy}>Keep it</button>
+              </div>
+            )}
           </div>
         ) : (
           <p className="paypend-text">Open this page on the phone that placed the order to pay.</p>

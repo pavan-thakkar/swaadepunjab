@@ -163,7 +163,11 @@ export default function MyPlans({ token, refreshKey = 0, title }: { token: strin
               </div>
             )}
 
-            {p.stage === 'active' && (
+            {p.stage === 'active' && (p.days_left === null || !p.total_days) && (
+              <p className="myp-msg">Your plan is active.{p.active_from ? ` Started ${fmt(p.active_from)}.` : ''} The restaurant will add the plan dates here soon.</p>
+            )}
+
+            {p.stage === 'active' && p.days_left !== null && !!p.total_days && (
               <>
                 <div className="myp-big">
                   <strong>{p.days_left} {p.days_left === 1 ? 'day' : 'days'} left</strong>

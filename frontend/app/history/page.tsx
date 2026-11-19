@@ -44,6 +44,7 @@ interface Order {
   delivery_fee: string;
   total: string;
   status: string;
+  payment_status?: string | null;
   payment_method: string;
   created_at: string;
   order_type?: string;
@@ -342,10 +343,25 @@ export default function HistoryPage() {
                   {/* Bottom Row: Total & Actions */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', borderTop: '1px solid var(--border)', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>Total Paid</span>
-                      <strong style={{ fontSize: '1.35rem', color: 'var(--success)', fontWeight: 900 }}>
-                        ₹{Number(order.total).toFixed(0)}
-                      </strong>
+                      {(() => {
+                        // Only say "paid" when it really is paid
+                        const paidOnline = order.payment_method === 'razorpay' && order.payment_status === 'paid';
+                        const unpaidOnline = order.payment_method === 'razorpay' && order.payment_status !== 'paid';
+                        const cancelled = order.status === 'cancelled';
+                        const label = cancelled ? 'Total (cancelled)'
+                          : paidOnline ? 'Total paid online'
+                          : unpaidOnline ? 'Total · not paid yet'
+                          : order.status === 'delivered' ? 'Total paid'
+                          : order.payment_method === 'upi_counter' ? 'Total · UPI at counter'
+                          : (order.order_type ?? 'delivery') === 'delivery' ? 'Total · pay on delivery' : 'Total · pay at counter';
+                        const color = cancelled ? 'var(--text-muted)' : (paidOnline || order.status === 'delivered') ? 'var(--success)' : unpaidOnline ? '#B45309' : 'var(--text)';
+                        return (<>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>{label}</span>
+                          <strong style={{ fontSize: '1.35rem', color, fontWeight: 900, textDecoration: cancelled ? 'line-through' : 'none' }}>
+                            ₹{Number(order.total).toFixed(0)}
+                          </strong>
+                        </>);
+                      })()}
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
