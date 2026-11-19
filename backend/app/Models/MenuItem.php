@@ -14,6 +14,7 @@ class MenuItem extends Model
         'price',
         'quantity_label',
         'option_groups',
+        'pairs_with',
         'image',
         'prep_time',
         'rating',
@@ -28,6 +29,7 @@ class MenuItem extends Model
         'is_featured'  => 'boolean',
         'image'        => 'array',
         'option_groups' => 'array',
+        'pairs_with'    => 'array',
     ];
 
     public function orderItems(): HasMany

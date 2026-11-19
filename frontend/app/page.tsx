@@ -7,6 +7,7 @@ import CartDrawer from './components/CartDrawer';
 import Navbar from './components/Navbar';
 import Toast from './components/Toast';
 import FeaturedCards from './components/FeaturedCards';
+import PlansSection from './components/PlansSection';
 import OfferProgress from './components/OfferProgress';
 import { searchMenu } from './lib/search';
 
@@ -428,6 +429,9 @@ export default function HomePage() {
 
       {/* What's New cards (admin: Catalog → What's New Cards) */}
       <FeaturedCards />
+
+      {/* Monthly / corporate plans (admin: Grow → Monthly Plans, shown only when switched on) */}
+      <PlansSection />
 
       {/* Categories */}
       <section className="section">

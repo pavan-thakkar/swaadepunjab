@@ -130,23 +130,25 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!item) return;
     const fetchSuggestions = async () => {
+      // Don't suggest what's already in the cart
+      const inCart = Array.from(new Set(state.items.map(i => i.menu_item_id)));
       try {
-        const res = await fetch(`${API}/menu`);
+        const res = await fetch(`${API}/menu/${item.id}/pairs?exclude=${inCart.join(',')}`, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
-          const allItems: MenuItem[] = json.data || [];
-          const filtered = allItems.filter(i => i.id !== item.id && i.is_available);
-          const sameCategory = filtered.filter(i => i.category === item.category);
-          
-          let selected: MenuItem[] = [];
-          if (sameCategory.length >= 3) {
-            selected = sameCategory.slice(0, 3);
-          } else {
-            const others = filtered.filter(i => i.category !== item.category);
-            selected = [...sameCategory, ...others].slice(0, 3);
-          }
-          setSuggestions(selected);
+          if (Array.isArray(json.data)) { setSuggestions(json.data); return; }
         }
+      } catch {}
+      // Fallback (older server): popular dishes from other categories, never variants of this dish
+      try {
+        const res = await fetch(`${API}/menu`);
+        if (!res.ok) return;
+        const json = await res.json();
+        const base = (n: string) => n.toLowerCase().split(/\s+(?:with|and|\+)\s+|[,(]/)[0].trim();
+        const all: MenuItem[] = json.data || [];
+        setSuggestions(all
+          .filter(i => i.id !== item.id && i.is_available && !inCart.includes(i.id) && i.category !== item.category && base(i.name) !== base(item.name))
+          .slice(0, 4));
       } catch (err) {
         console.error("Error fetching suggestions:", err);
       }
@@ -602,7 +604,9 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
           <div className="veg-badge-icon" title="100% Pure Veg">
             <span className="veg-badge-dot" />
           </div>
-          {item.is_featured && <span className="featured-badge-inline">⭐ Special</span>}
+          {(item as any).reason
+            ? <span className="pair-reason">{(item as any).reason}</span>
+            : item.is_featured && <span className="featured-badge-inline">⭐ Special</span>}
         </div>
 
         <div className="food-card-name">{item.name}</div>

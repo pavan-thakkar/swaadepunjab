@@ -13,11 +13,13 @@ class Category extends Model
         'emoji',
         'description',
         'is_active',
+        'is_addon',
         'sort_order',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_addon'  => 'boolean',
     ];
 
     public function menuItems(): HasMany

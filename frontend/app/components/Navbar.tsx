@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { usePlans } from '../lib/usePlans';
 
 // Delivery Scooter SVG Icon
 function ScooterIcon({ size = 26, color = '#1a1a2e' }: { size?: number; color?: string }) {
@@ -40,6 +41,7 @@ export default function Navbar() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const plans = usePlans();
   useEffect(() => { setMounted(true); }, []);
 
   return (
@@ -78,6 +80,12 @@ export default function Navbar() {
           <div className="nav-icon-container">📦</div>
           <span className="nav-label">Track</span>
         </Link>
+        {plans?.enabled && (
+          <Link href="/plans/" className="btn-secondary nav-action-btn">
+            <div className="nav-icon-container">🏢</div>
+            <span className="nav-label">Monthly Plans</span>
+          </Link>
+        )}
         <button
           className="cart-btn nav-action-btn"
           onClick={() => dispatch({ type: 'TOGGLE_CART' })}
@@ -148,6 +156,11 @@ export default function Navbar() {
             <Link href="/track" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
               <span>📦</span> Track Order
             </Link>
+            {plans?.enabled && (
+              <Link href="/plans/" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
+                <span>🏢</span> Monthly Plans (offices)
+              </Link>
+            )}
           </div>
         </div>
       )}

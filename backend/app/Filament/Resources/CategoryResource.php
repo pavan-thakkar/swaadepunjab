@@ -69,6 +69,11 @@ class CategoryResource extends Resource
                     ->label('Active (visible on frontend)')
                     ->default(true),
 
+                Forms\Components\Toggle::make('is_addon')
+                    ->label('Sides / extras category')
+                    ->helperText('Breads, papad, drinks, desserts… Suggested as "Goes well with" on main dishes.')
+                    ->default(false),
+
             ])->columns(2),
         ]);
     }
@@ -108,6 +113,9 @@ class CategoryResource extends Resource
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean()
                     ->label('Active'),
+
+                Tables\Columns\ToggleColumn::make('is_addon')
+                    ->label('Sides'),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Created')

@@ -89,6 +89,23 @@ class MenuItemResource extends Resource
                     ->label('Featured on homepage'),
             ])->columns(2),
 
+            Forms\Components\Section::make('Goes well with (optional)')
+                ->description('Pick dishes to suggest on this dish\'s page. Leave empty and the website picks automatically from what customers order together and from your sides (breads, papad…).')
+                ->collapsible()
+                ->collapsed(fn ($record) => empty($record?->pairs_with))
+                ->schema([
+                    Forms\Components\Select::make('pairs_with')
+                        ->hiddenLabel()
+                        ->multiple()
+                        ->maxItems(6)
+                        ->searchable()
+                        ->preload()
+                        ->options(fn ($record) => MenuItem::query()
+                            ->when($record, fn ($q) => $q->whereKeyNot($record->id))
+                            ->orderBy('name')->pluck('name', 'id')->all())
+                        ->placeholder('Search dishes, e.g. Butter Naan, Masala Papad'),
+                ]),
+
             Forms\Components\Section::make('Choices / options (optional)')
                 ->description('Let customers choose, e.g. "Choose bread: 2 Butter Roti / 1 Butter Naan (+₹10) / 1 Laccha Paratha (+₹20)". The dish price above is the starting price; each choice can add extra. Leave empty for a normal dish.')
                 ->collapsible()

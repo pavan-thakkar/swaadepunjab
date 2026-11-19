@@ -13,9 +13,14 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Menu routes
+// Monthly (corporate) meal plans
+Route::get('/monthly-plans', [App\Http\Controllers\Api\MonthlyPlanController::class, 'index']);
+Route::post('/monthly-plans/enquiry', [App\Http\Controllers\Api\MonthlyPlanController::class, 'enquire'])->middleware('throttle:5,1');
+
 Route::prefix('menu')->group(function () {
     Route::get('/', [MenuController::class, 'index']);
     Route::get('/{menuItem}', [MenuController::class, 'show']);
+    Route::get('/{menuItem}/pairs', [MenuController::class, 'pairs'])->middleware('throttle:120,1');
     Route::get('/{menuItem}/reviews', [App\Http\Controllers\Api\ReviewController::class, 'index']);
     Route::post('/{menuItem}/reviews', [App\Http\Controllers\Api\ReviewController::class, 'store']);
 });

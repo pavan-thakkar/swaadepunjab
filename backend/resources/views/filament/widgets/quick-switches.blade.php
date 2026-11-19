@@ -14,6 +14,13 @@
             </div>
         @endif
 
+        @if ($canPlans)
+            <div class="sp-row" style="padding: 10px 0; border-top: 1px solid #F3EAD6">
+                <div><div style="font-weight: 700; font-size: 14px">Monthly plans on website</div><div class="sp-muted">{{ $plansHint }}</div></div>
+                <button type="button" class="sp-switch" role="switch" aria-checked="{{ $plansOn ? 'true' : 'false' }}" aria-label="Monthly plans on website" wire:click="toggleMonthlyPlans"></button>
+            </div>
+        @endif
+
         <div style="padding-top: 10px; border-top: 1px solid #F3EAD6; display: flex; flex-direction: column; gap: 8px">
             <label for="sp-dish-search" style="font-weight: 700; font-size: 14px">Sold out today</label>
             <input id="sp-dish-search" type="search" class="sp-input" placeholder="Type a dish to mark sold out…" wire:model.live.debounce.300ms="dishSearch" autocomplete="off">

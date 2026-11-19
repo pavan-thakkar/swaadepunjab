@@ -33,6 +33,16 @@ class QuickSwitches extends Widget
         Notification::make()->title($s->loyalty_enabled ? 'Loyalty points ON' : 'Loyalty points OFF')->success()->send();
     }
 
+    public function toggleMonthlyPlans(): void
+    {
+        if (! auth()->user()?->hasRole(['owner', 'manager'])) {
+            return;
+        }
+        $on = ! \App\Models\MonthlyPlan::sectionEnabled();
+        \App\Models\MonthlyPlan::setSectionEnabled($on);
+        Notification::make()->title($on ? 'Monthly Plans are showing on the website' : 'Monthly Plans hidden from the website')->success()->send();
+    }
+
     public function setAvailable(int $id, bool $available): void
     {
         $dish = MenuItem::find($id);
@@ -59,6 +69,13 @@ class QuickSwitches extends Widget
                 : 'Customers can only order Take Away / Dine In',
             'loyaltyOn' => (bool) ($s->loyalty_enabled ?? false),
             'isOwner' => (bool) auth()->user()?->isOwner(),
+            'canPlans' => (bool) auth()->user()?->hasRole(['owner', 'manager']),
+            'plansOn' => \App\Models\MonthlyPlan::sectionEnabled(),
+            'plansHint' => (function () {
+                $n = \App\Models\MonthlyPlan::where('is_active', true)->count();
+                $new = \App\Models\PlanEnquiry::where('status', 'new')->count();
+                return $n . ' plan' . ($n === 1 ? '' : 's') . ($new ? " · {$new} new enquir" . ($new === 1 ? 'y' : 'ies') : '');
+            })(),
             'results' => $results,
             'soldOut' => MenuItem::where('is_available', false)->orderBy('name')->limit(12)->get(['id', 'name']),
         ];
