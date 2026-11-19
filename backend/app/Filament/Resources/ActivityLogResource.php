@@ -30,6 +30,10 @@ class ActivityLogResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Remember filters, search and sorting when the admin leaves and comes back
+            ->persistFiltersInSession()
+            ->persistSearchInSession()
+            ->persistSortInSession()
             ->defaultSort('created_at', 'desc')
             ->poll('30s')
             ->columns([

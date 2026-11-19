@@ -71,6 +71,10 @@ class DeliveryFeeSettingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Remember filters, search and sorting when the admin leaves and comes back
+            ->persistFiltersInSession()
+            ->persistSearchInSession()
+            ->persistSortInSession()
             ->columns([
                 Tables\Columns\TextColumn::make('min_distance_km')
                     ->label('Min Distance')

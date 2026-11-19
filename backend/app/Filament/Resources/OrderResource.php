@@ -288,6 +288,10 @@ class OrderResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Remember filters, search and sorting when the admin leaves and comes back
+            ->persistFiltersInSession()
+            ->persistSearchInSession()
+            ->persistSortInSession()
             ->columns([
                 Tables\Columns\TextColumn::make('order_number')
                     ->label('Order #')
