@@ -55,6 +55,7 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::HEAD_END, fn () => view('filament.admin-theme'))
             // "Back" button at the top of create / edit / view pages
             ->renderHook(PanelsRenderHook::PAGE_START, fn (array $scopes) => view('filament.back-button', ['scopes' => $scopes]))
+            ->renderHook(PanelsRenderHook::PAGE_START, fn () => view('filament.plan-renewal-banner'))
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([])

@@ -6,6 +6,7 @@ import Navbar from '../components/Navbar';
 import CartDrawer from '../components/CartDrawer';
 import { useCart } from '../context/CartContext';
 import { usePlans, planImage, rupees, MonthlyPlan } from '../lib/usePlans';
+import MyPlans, { rememberPlanRequest } from '../components/MyPlans';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -28,7 +29,7 @@ const today = () => {
 
 export default function PlansPage() {
   const info = usePlans();
-  const { userName, userPhone, userEmail } = useCart();
+  const { userName, userPhone, userEmail, customerToken } = useCart();
   const formRef = useRef<HTMLFormElement>(null);
   const [form, setForm] = useState<Form>({
     monthly_plan_id: '', name: '', company: '', phone: '', email: '', people: '', start_date: '', address: '', message: '',
@@ -36,6 +37,7 @@ export default function PlansPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Fill in what we already know about a logged-in customer
   useEffect(() => {
@@ -95,6 +97,8 @@ export default function PlansPage() {
         return;
       }
       setError(null);
+      if (json.id && json.token) rememberPlanRequest(json.id, json.token);
+      setRefreshKey(k => k + 1);
       setDone(json.message || 'Thank you! We will call you soon.');
       setForm(f => ({ ...f, people: '', start_date: '', address: '', message: '' }));
     } catch {
@@ -110,6 +114,9 @@ export default function PlansPage() {
       <CartDrawer />
 
       <main className="mp-page">
+        {/* Logged-in subscriber: their plan first (days left, payment…) */}
+        <div className="myp-wrap"><MyPlans token={customerToken} refreshKey={refreshKey} title="Your plan requests" /></div>
+
         {info === undefined && <div className="mp-loading" aria-busy="true">Loading plans…</div>}
 
         {info !== undefined && (!info || !info.enabled) && (
@@ -178,7 +185,11 @@ export default function PlansPage() {
                   <div className="mp-done" role="status">
                     <div style={{ fontSize: '2rem' }} aria-hidden="true">✅</div>
                     <strong>{done}</strong>
-                    <button type="button" className="mp-btn mp-btn-light" onClick={() => setDone(null)}>Send another request</button>
+                    <span className="mp-form-sub" style={{ margin: 0 }}>Your request and its status are shown at the top of this page.</span>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button type="button" className="mp-btn" onClick={() => document.getElementById('my-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>See my request</button>
+                      <button type="button" className="mp-btn mp-btn-light" onClick={() => setDone(null)}>Send another request</button>
+                    </div>
                   </div>
                 ) : (
                   <>

@@ -31,6 +31,7 @@ class Dashboard extends BaseDashboard
     {
         return [
             \App\Filament\Widgets\OrderAlertWidget::class,
+            \App\Filament\Widgets\PlanRenewals::class,
             \App\Filament\Widgets\StatsOverview::class,
             \App\Filament\Widgets\LiveOrdersBoard::class,
             \App\Filament\Widgets\QuickSwitches::class,

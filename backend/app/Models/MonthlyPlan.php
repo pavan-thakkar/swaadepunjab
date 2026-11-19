@@ -67,10 +67,10 @@ class MonthlyPlan extends Model
             'meal_type'      => $this->meal_type,
             'meal_label'     => self::MEAL_TYPES[$this->meal_type] ?? ucfirst((string) $this->meal_type),
             'days_per_month' => $this->days_per_month,
-            'includes'       => array_values(array_filter(array_map(
-                fn ($i) => trim(is_array($i) ? (string) ($i['item'] ?? '') : (string) $i),
-                (array) ($this->includes ?? [])
-            ))),
+            'includes'       => array_values(array_filter(array_map('trim', array_merge(...array_map(
+                fn ($i) => explode(',', is_array($i) ? (string) ($i['item'] ?? '') : (string) $i),
+                array_values((array) ($this->includes ?? [])) ?: [[]]
+            ))))),
             'min_people'     => $this->min_people,
             'image'          => $this->image,
         ];

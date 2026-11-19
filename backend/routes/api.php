@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Route;
 // Menu routes
 // Monthly (corporate) meal plans
 Route::get('/monthly-plans', [App\Http\Controllers\Api\MonthlyPlanController::class, 'index']);
+Route::get('/monthly-plans/mine', [App\Http\Controllers\Api\MonthlyPlanController::class, 'mine'])->middleware('throttle:60,1');
+Route::post('/monthly-plans/my-requests', [App\Http\Controllers\Api\MonthlyPlanController::class, 'byTokens'])->middleware('throttle:30,1');
 Route::post('/monthly-plans/enquiry', [App\Http\Controllers\Api\MonthlyPlanController::class, 'enquire'])->middleware('throttle:5,1');
 
 Route::prefix('menu')->group(function () {

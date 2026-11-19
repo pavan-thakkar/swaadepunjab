@@ -26,6 +26,46 @@ class MonthlyPlanController extends Controller
         ]);
     }
 
+    /** The logged-in customer's plans and requests (matched by phone or email). */
+    public function mine(Request $request): JsonResponse
+    {
+        $identity = \App\Support\CustomerToken::fromRequest($request);
+        if (! $identity) {
+            return response()->json(['message' => 'Please log in.'], 401);
+        }
+        $phone = \App\Support\CustomerToken::phoneFor($identity);
+
+        $rows = PlanEnquiry::with('plan')
+            ->where(function ($q) use ($phone, $identity) {
+                if ($phone) $q->orWhere('phone', $phone);
+                if ($identity['email']) $q->orWhereRaw('LOWER(email) = ?', [$identity['email']]);
+            })
+            ->where('status', '!=', 'closed')
+            ->orderByRaw("CASE status WHEN 'active' THEN 0 ELSE 1 END")
+            ->latest()
+            ->limit(10)
+            ->get()
+            // hide plans that ended more than 60 days ago
+            ->reject(fn ($e) => $e->stage() === 'ended' && $e->active_until && $e->active_until->lt(now()->subDays(60)))
+            ->map->toCustomerArray()
+            ->values();
+
+        return response()->json([
+            'data'  => $rows,
+            'phone' => $this->restaurantPhone(),
+        ]);
+    }
+
+    private function restaurantPhone(): ?string
+    {
+        try {
+            $s = \App\Models\ReceiptSetting::getSettings();
+            return $s->outlet_phone ?: null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     /** A company / customer asks to subscribe. The owner calls back to confirm. */
     public function enquire(Request $request): JsonResponse
     {
@@ -58,6 +98,7 @@ class MonthlyPlanController extends Controller
             : null;
 
         $enquiry = PlanEnquiry::create([
+            'access_token'    => \Illuminate\Support\Str::random(48),
             'monthly_plan_id' => $plan?->id,
             'plan_name'       => $plan?->name,
             'name'            => trim($data['name']),
@@ -71,9 +112,33 @@ class MonthlyPlanController extends Controller
             'status'          => 'new',
         ]);
 
+        $enquiry->load('plan');
+
         return response()->json([
             'message' => 'Thank you! We have received your request and will call you soon to confirm the plan.',
             'id'      => $enquiry->id,
+            'token'   => $enquiry->access_token,
+            'data'    => $enquiry->toCustomerArray(),
         ], 201);
+    }
+
+    /** Requests sent from this browser (it keeps id + secret token), so they show without logging in. */
+    public function byTokens(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'items'         => 'required|array|max:10',
+            'items.*.id'    => 'required|integer',
+            'items.*.token' => 'required|string|max:64',
+        ]);
+
+        $wanted = collect($data['items'])->keyBy('id');
+        $rows = PlanEnquiry::with('plan')->whereIn('id', $wanted->keys())->get()
+            ->filter(fn ($e) => $e->access_token && hash_equals($e->access_token, (string) $wanted[$e->id]['token']))
+            ->reject(fn ($e) => $e->stage() === 'ended' && $e->active_until && $e->active_until->lt(now()->subDays(60)))
+            ->sortByDesc('id')
+            ->map->toCustomerArray()
+            ->values();
+
+        return response()->json(['data' => $rows, 'phone' => $this->restaurantPhone()]);
     }
 }

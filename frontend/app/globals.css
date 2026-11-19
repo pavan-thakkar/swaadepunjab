@@ -2302,3 +2302,45 @@ img, video { max-width: 100%; }
   .mp-grid { grid-template-columns: minmax(0, 1fr); }
   .mp-card-img { height: 170px; }
 }
+
+/* ===== My Monthly Plan (customer) ===== */
+.myp-wrap:empty { display: none; }
+.myp-wrap { max-width: 760px; margin: 0 auto 28px; }
+.myp { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+.myp-card { background: #fff; border: 1.5px solid var(--border); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 6px 22px rgba(100,60,0,.07); }
+.myp-card.stage-active { border-color: #86EFAC; }
+.myp-card.ending, .myp-card.stage-ended { border-color: #FDBA74; }
+.myp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.myp-eyebrow { font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #8A5A00; }
+.myp-name { font-size: 1.2rem; font-weight: 900; margin: 2px 0 2px; line-height: 1.25; }
+.myp-sub { font-size: .85rem; color: var(--text-muted); }
+.myp-pill { font-size: .75rem; font-weight: 800; border-radius: 999px; padding: 4px 11px; white-space: nowrap; }
+.pill-active { background: #DCFCE7; color: #15803D; }
+.pill-upcoming { background: #DBEAFE; color: #1D4ED8; }
+.pill-requested { background: #FFF1CC; color: #8A5A00; }
+.pill-ended { background: #FFEDD5; color: #C2410C; }
+.myp-card.ending .pill-active { background: #FFEDD5; color: #C2410C; }
+.myp-big { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.myp-big strong { font-size: 1.6rem; font-weight: 900; color: var(--text); }
+.myp-big span { font-size: .88rem; color: var(--text-muted); font-weight: 600; }
+.myp-bar { height: 10px; background: #F3EBDA; border-radius: 999px; overflow: hidden; }
+.myp-bar span { display: block; height: 100%; background: linear-gradient(90deg, #E6A817, #FF6B00); border-radius: 999px; }
+.myp-dates { display: flex; justify-content: space-between; font-size: .78rem; color: var(--text-muted); font-weight: 600; margin-top: -4px; }
+.myp-msg { font-size: .92rem; color: #4A3518; line-height: 1.5; background: var(--bg-elevated, #FFF8E7); border-radius: 12px; padding: 10px 12px; }
+.myp-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: .9rem; border-top: 1px dashed var(--border); padding-top: 10px; }
+.myp-facts dt { color: var(--text-muted); }
+.myp-facts dd { font-weight: 700; text-align: right; margin: 0; }
+.pay-paid { color: #15803D; }
+.pay-partial, .pay-pending { color: #C2410C; }
+.myp-note { font-size: .88rem; background: #FFFBEB; border-radius: 10px; padding: 8px 12px; color: #4A3518; }
+.myp-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.myp-actions .mp-btn { flex: 1; min-width: 140px; min-height: 44px; font-size: .9rem; white-space: nowrap; padding: 0 14px; }
+.myp-more { font-weight: 800; color: #8A5A00; text-decoration: none; }
+
+.myp-title { font-size: 1.15rem; font-weight: 900; margin: 0 0 2px; }
+.myp-sent { border-top: 1px dashed var(--border); padding-top: 8px; }
+.myp-sent summary { cursor: pointer; font-weight: 800; font-size: .9rem; color: #8A5A00; padding: 4px 0; list-style-position: inside; }
+.myp-sent .myp-facts { border-top: 0; padding-top: 6px; }
+.myp-sent .myp-facts dd { overflow-wrap: anywhere; }
+.myp .myp-card { scroll-margin-top: 90px; }
+#my-plan { scroll-margin-top: 90px; }
