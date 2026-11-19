@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart, MenuItem } from '../context/CartContext';
+import { useCart, MenuItem, qtyInCart } from '../context/CartContext';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 const STORAGE = `${API.replace(/\/api\/?$/, '')}/storage`;
@@ -80,7 +80,7 @@ export default function FeaturedCards() {
               )}
               {card.menu_item && card.menu_item.is_available !== false && (() => {
                 const dish = card.menu_item!;
-                const qty = state.items.find(i => i.menu_item_id === dish.id)?.quantity || 0;
+                const qty = qtyInCart(state.items, dish.id);
                 return (
                   <div className="featured-add-bar" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                     <div className="featured-add-info">
@@ -91,7 +91,7 @@ export default function FeaturedCards() {
                       <div className="quantity-control-card featured-qty">
                         <button type="button" className="qty-control-btn" aria-label={`Remove one ${dish.name}`} onClick={() => dispatch({ type: 'DECREMENT', id: dish.id })}>−</button>
                         <span className="qty-control-val">{qty}</span>
-                        <button type="button" className="qty-control-btn" aria-label={`Add one ${dish.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: dish.id })}>+</button>
+                        <button type="button" className="qty-control-btn" aria-label={`Add one ${dish.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: dish.id, item: dish })}>+</button>
                       </div>
                     ) : (
                       <button type="button" className="featured-add-btn" aria-label={`Add ${dish.name} to cart`} onClick={() => dispatch({ type: 'ADD', item: dish })}>ADD +</button>

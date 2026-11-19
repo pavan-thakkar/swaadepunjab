@@ -586,7 +586,7 @@ export default function CheckoutPage() {
           payment_method: payment,
           latitude: orderType === 'delivery' && coordinates ? coordinates.lat : null,
           longitude: orderType === 'delivery' && coordinates ? coordinates.lng : null,
-          items: state.items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity })),
+          items: state.items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, options: (i.options || []).map(o => ({ group: o.group, choice: o.choice })) })),
           coupon_code: coupon?.code || null,
           redeem_points: usePoints ? pointsOption.points : 0,
           order_type: orderType,
@@ -956,9 +956,9 @@ export default function CheckoutPage() {
             <div className="order-summary-card">
               <h3 style={{ fontWeight: 700, marginBottom: '1rem', fontSize: '1rem' }}>🧾 Order Summary</h3>
               {state.items.map(item => (
-                <div key={item.menu_item_id} className="summary-item">
+                <div key={item.key} className="summary-item">
                   <span className="summary-name">
-                    {CATEGORY_EMOJI[item.category] || '🍽️'} {item.name}{item.quantity_label ? <small style={{ color: 'var(--text-muted, #8A7350)', fontWeight: 500 }}> ({item.quantity_label})</small> : null}
+                    {CATEGORY_EMOJI[item.category] || '🍽️'} {item.name}{item.option_label ? <small style={{ display: 'block', color: 'var(--text-muted, #8A7350)', fontWeight: 500, marginLeft: 22 }}>{item.option_label}</small> : null}{item.quantity_label ? <small style={{ color: 'var(--text-muted, #8A7350)', fontWeight: 500 }}> ({item.quantity_label})</small> : null}
                   </span>
                   <span className="summary-qty">×{item.quantity}</span>
                   <span className="summary-price">₹{(item.price * item.quantity).toFixed(0)}</span>

@@ -2,6 +2,7 @@
 
 import { useCart, firstImageUrl } from '../context/CartContext';
 import { useEffect, useState } from 'react';
+import { CartOptionSheet } from './OptionSheet';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 import { useRouter, usePathname } from 'next/navigation';
@@ -107,6 +108,7 @@ export default function CartDrawer() {
 
   return (
     <>
+      <CartOptionSheet />
       {/* Floating Sticky Cart Button with Scooter Icon */}
       {showFloatingButton && (
         <button
@@ -159,7 +161,7 @@ export default function CartDrawer() {
                 </div>
               ) : (
                 state.items.map(item => (
-                  <div key={item.menu_item_id} className="cart-item">
+                  <div key={item.key} className="cart-item">
                     <div
                       className="cart-item-clickable"
                       onClick={() => {
@@ -180,14 +182,15 @@ export default function CartDrawer() {
                       )}
                       <div className="cart-item-info">
                         <div className="cart-item-name">{item.name}</div>
+                        {item.option_label && <div className="cart-item-opts">{item.option_label}</div>}
                         {(item.quantity_label || labels[item.menu_item_id]) && <div className="qty-label">{item.quantity_label || labels[item.menu_item_id]}</div>}
                         <div className="cart-item-price">₹{(item.price * item.quantity).toFixed(0)}</div>
                       </div>
                     </div>
                     <div className="cart-item-qty">
-                      <button className="qty-btn" onClick={() => dispatch({ type: 'DECREMENT', id: item.menu_item_id })}>−</button>
+                      <button className="qty-btn" onClick={() => dispatch({ type: 'DECREMENT', id: item.key })}>−</button>
                       <span className="qty-num">{item.quantity}</span>
-                      <button className="qty-btn" onClick={() => dispatch({ type: 'INCREMENT', id: item.menu_item_id })}>+</button>
+                      <button className="qty-btn" onClick={() => dispatch({ type: 'INCREMENT', id: item.key })}>+</button>
                     </div>
                   </div>
                 ))

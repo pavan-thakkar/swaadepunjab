@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart, MenuItem } from './context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions } from './context/CartContext';
 import CartDrawer from './components/CartDrawer';
 import Navbar from './components/Navbar';
 import Toast from './components/Toast';
@@ -252,7 +252,8 @@ export default function HomePage() {
 
   const handleAddToCart = (item: MenuItem) => {
     dispatch({ type: 'ADD', item });
-    showToast(`${item.name} cart mein add ho gaya! 🛒`);
+    // dishes with choices open the options sheet first; no toast yet
+    if (!hasOptions(item)) showToast(`${item.name} cart mein add ho gaya! 🛒`);
   };
 
   const featured = items.filter(i => i.is_featured);
@@ -543,8 +544,7 @@ export default function HomePage() {
 function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item: MenuItem; onAdd: (i: MenuItem) => void; delay: number; categoryEmoji: Record<string, string>; categoryLabels: Record<string, string> }) {
   const router = require('next/navigation').useRouter();
   const { state, dispatch } = useCart();
-  const cartItem = state.items.find(i => i.menu_item_id === item.id);
-  const quantity = cartItem ? cartItem.quantity : 0;
+  const quantity = qtyInCart(state.items, item.id);
 
   const [imgIdx, setImgIdx] = useState(0);
 
@@ -662,7 +662,7 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
                 type="button" 
                 onClick={(e) => {
                   e.stopPropagation();
-                  dispatch({ type: 'INCREMENT', id: item.id });
+                  dispatch({ type: 'INCREMENT', id: item.id, item });
                 }}
                 className="qty-control-btn"
                 title="Quantity badhayein"
@@ -683,6 +683,7 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
               ADD <span style={{ fontSize: '1rem', marginLeft: '2px', fontWeight: 900 }}>+</span>
             </button>
           )}
+          {hasOptions(item) && <div className="has-opts-note">Customisable</div>}
         </div>
       </div>
     </div>
@@ -703,7 +704,7 @@ function firstImage(imageField: any): string | null {
 function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem) => void; emoji: string }) {
   const router = useRouter();
   const { state, dispatch } = useCart();
-  const qty = state.items.find(i => i.menu_item_id === item.id)?.quantity || 0;
+  const qty = qtyInCart(state.items, item.id);
   const img = firstImage(item.image);
   return (
     <div className="best-card" role="link" tabIndex={0} onClick={() => router.push(`/item/${item.id}`)} onKeyDown={e => { if (e.key === 'Enter') router.push(`/item/${item.id}`); }}>
@@ -720,7 +721,7 @@ function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem)
             <div className="quantity-control-card" style={{ minWidth: 84 }}>
               <button type="button" className="qty-control-btn" aria-label={`Remove one ${item.name}`} onClick={() => dispatch({ type: 'DECREMENT', id: item.id })}>−</button>
               <span className="qty-control-val">{qty}</span>
-              <button type="button" className="qty-control-btn" aria-label={`Add one ${item.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: item.id })}>+</button>
+              <button type="button" className="qty-control-btn" aria-label={`Add one ${item.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: item.id, item })}>+</button>
             </div>
           ) : (
             <button type="button" className="best-add" onClick={() => onAdd(item)}>ADD</button>

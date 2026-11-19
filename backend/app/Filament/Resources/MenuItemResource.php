@@ -88,6 +88,75 @@ class MenuItemResource extends Resource
                 Forms\Components\Toggle::make('is_featured')
                     ->label('Featured on homepage'),
             ])->columns(2),
+
+            Forms\Components\Section::make('Choices / options (optional)')
+                ->description('Let customers choose, e.g. "Choose bread: 2 Butter Roti / 1 Butter Naan (+₹10) / 1 Laccha Paratha (+₹20)". The dish price above is the starting price; each choice can add extra. Leave empty for a normal dish.')
+                ->collapsible()
+                ->collapsed(fn ($record) => empty($record?->option_groups))
+                ->schema([
+                    Forms\Components\Repeater::make('option_groups')
+                        ->hiddenLabel()
+                        ->addActionLabel('+ Add option group')
+                        ->reorderable()
+                        ->collapsible()
+                        ->cloneable()
+                        ->defaultItems(0)
+                        ->itemLabel(fn (array $state): ?string => ($state['name'] ?? null)
+                            ? $state['name'] . ' · ' . count($state['choices'] ?? []) . ' choices'
+                            : 'New option group')
+                        ->schema([
+                            Forms\Components\TextInput::make('name')
+                                ->label('Group name')
+                                ->placeholder('e.g. Choose bread, Choose sabji, Add-ons')
+                                ->required()
+                                ->maxLength(80)
+                                ->distinct(),
+                            Forms\Components\Select::make('type')
+                                ->label('Customer can pick')
+                                ->options(['single' => 'Only 1 choice', 'multiple' => 'Many choices'])
+                                ->default('single')
+                                ->native(false)
+                                ->live()
+                                ->required(),
+                            Forms\Components\Toggle::make('required')
+                                ->label('Must choose')
+                                ->helperText('Customer cannot add the dish without picking')
+                                ->default(true)
+                                ->inline(false),
+                            Forms\Components\TextInput::make('max')
+                                ->label('Max picks (optional)')
+                                ->numeric()
+                                ->minValue(1)
+                                ->visible(fn (Forms\Get $get) => $get('type') === 'multiple'),
+                            Forms\Components\Repeater::make('choices')
+                                ->label('Choices')
+                                ->addActionLabel('+ Add choice')
+                                ->reorderable()
+                                ->minItems(1)
+                                ->defaultItems(2)
+                                ->columns(3)
+                                ->columnSpanFull()
+                                ->schema([
+                                    Forms\Components\TextInput::make('name')
+                                        ->label('Choice')
+                                        ->placeholder('e.g. 1 Butter Naan')
+                                        ->required()
+                                        ->maxLength(80)
+                                        ->distinct(),
+                                    Forms\Components\TextInput::make('price')
+                                        ->label('Extra price')
+                                        ->numeric()
+                                        ->prefix('+₹')
+                                        ->minValue(0)
+                                        ->default(0),
+                                    Forms\Components\Toggle::make('available')
+                                        ->label('Available')
+                                        ->default(true)
+                                        ->inline(false),
+                                ]),
+                        ])
+                        ->columns(4),
+                ]),
         ]);
     }
 
@@ -123,6 +192,14 @@ class MenuItemResource extends Resource
                 Tables\Columns\TextColumn::make('price')
                     ->formatStateUsing(fn ($state) => '₹' . number_format($state, 0))
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('option_groups')
+                    ->label('Options')
+                    ->state(fn (MenuItem $record) => count($record->groups()) ? count($record->groups()) . ' group(s)' : null)
+                    ->badge()
+                    ->color('warning')
+                    ->placeholder('—')
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('quantity_label')
                     ->label('Quantity')

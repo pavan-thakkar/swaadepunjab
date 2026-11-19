@@ -62,9 +62,10 @@
             <div class="sp-muted" style="margin-top: -4px">{{ $menu->count() }} {{ $menu->count() === 1 ? 'dish' : 'dishes' }}{{ $menu->where('is_available', false)->count() ? ' · ' . $menu->where('is_available', false)->count() . ' sold out' : '' }}</div>
             <div class="cm-grid">
                 @forelse ($menu as $d)
-                    @php $q = $bill[$d->id] ?? 0; @endphp
+                    @php $q = $qtyByDish[$d->id] ?? 0; @endphp
                     <button type="button" class="cm-dish {{ ! $d->is_available ? 'out' : ($q ? 'in' : '') }}" wire:click="add({{ $d->id }})" wire:key="d-{{ $d->id }}" @disabled(! $d->is_available) aria-label="Add {{ $d->name }}, ₹{{ number_format($d->price, 0) }}{{ $q ? ', ' . $q . ' in bill' : '' }}">
                         <span style="font-size: 14px; font-weight: 700; line-height: 1.25">{{ $d->name }}</span>
+                        @if (! empty($d->option_groups))<span style="font-size: 11px; font-weight: 800; color: #9A3412">Choose options ›</span>@endif
                         @if ($d->quantity_label)<span style="font-size: 11px; font-weight: 600; color: #8A5A00">{{ $d->quantity_label }}</span>@endif
                         <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
                             <span style="font-size: 15px; font-weight: 800">₹{{ number_format($d->price, 0) }}</span>
@@ -110,12 +111,12 @@
 
             <div style="padding: 4px 18px; max-height: 340px; overflow-y: auto">
                 @forelse ($lines as $l)
-                    <div class="sp-row" style="padding: 10px 0; border-bottom: 1px solid #F3EAD6" wire:key="l-{{ $l['id'] }}">
+                    <div class="sp-row" style="padding: 10px 0; border-bottom: 1px solid #F3EAD6" wire:key="l-{{ md5($l['key']) }}">
                         <div style="flex: 1; min-width: 0"><div style="font-size: 14px; font-weight: 700">{{ $l['name'] }}</div><div class="sp-muted">₹{{ number_format($l['price'], 0) }} each</div></div>
                         <div class="cm-step">
-                            <button type="button" aria-label="Remove one {{ $l['name'] }}" wire:click="minus({{ $l['id'] }})">−</button>
+                            <button type="button" aria-label="Remove one {{ $l['name'] }}" wire:click="minus('{{ $l['key'] }}')">−</button>
                             <span style="min-width: 18px; text-align: center; font-weight: 800">{{ $l['qty'] }}</span>
-                            <button type="button" aria-label="Add one {{ $l['name'] }}" wire:click="add({{ $l['id'] }})">+</button>
+                            <button type="button" aria-label="Add one {{ $l['name'] }}" wire:click="plus('{{ $l['key'] }}')">+</button>
                         </div>
                         <strong style="width: 60px; text-align: right; font-size: 14px">₹{{ number_format($l['total'], 0) }}</strong>
                     </div>
@@ -148,6 +149,56 @@
             </div>
         </aside>
     </div>
+
+    {{-- Options picker: which bread / sabji / add-ons for this dish --}}
+    @if ($picker)
+        <div class="cm-pick-backdrop" wire:click.self="cancelPick" wire:keydown.escape.window="cancelPick">
+            <div class="cm-pick" role="dialog" aria-modal="true" aria-labelledby="cm-pick-title">
+                <div style="padding: 16px 18px; border-bottom: 1px solid #EDE0C4; display: flex; justify-content: space-between; align-items: center; gap: 10px">
+                    <div>
+                        <div id="cm-pick-title" style="font-size: 18px; font-weight: 800">{{ $picker->name }}</div>
+                        <div class="sp-muted">₹{{ number_format($picker->price, 0) }}{{ $picker->quantity_label ? ' · ' . $picker->quantity_label : '' }}</div>
+                    </div>
+                    <button type="button" wire:click="cancelPick" aria-label="Close" style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid #EDE0C4; background: #fff; font-size: 16px; cursor: pointer">✕</button>
+                </div>
+                <div style="padding: 14px 18px; overflow-y: auto; flex: 1">
+                    @php $extra = 0; @endphp
+                    @foreach ($pickerGroups as $gi => $g)
+                        @php $sel = $pick[$gi] ?? []; @endphp
+                        <div style="margin-bottom: 14px">
+                            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px">
+                                <strong style="font-size: 15px">{{ $g['name'] }}</strong>
+                                <span class="sp-muted" style="font-size: 12px">
+                                    {{ $g['type'] === 'single' ? 'Pick 1' : ($g['max'] ? 'Up to ' . $g['max'] : 'Pick any') }}{{ $g['required'] ? ' · required' : ' · optional' }}
+                                </span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px">
+                                @foreach ($g['choices'] as $ci => $c)
+                                    @php $on = in_array($ci, $sel, true); if ($on) $extra += $c['price']; @endphp
+                                    <button type="button" class="cm-choice {{ $on ? 'on' : '' }}" wire:click="togglePick({{ $gi }}, {{ $ci }})" wire:key="pk-{{ $picker->id }}-{{ $gi }}-{{ $ci }}" @disabled(! $c['available']) aria-pressed="{{ $on ? 'true' : 'false' }}">
+                                        <span style="font-weight: 700">{{ $c['name'] }}</span>
+                                        <span style="font-size: 12px">{{ ! $c['available'] ? 'Not available' : ($c['price'] > 0 ? '+₹' . number_format($c['price'], 0) : 'No extra') }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div style="padding: 14px 18px; border-top: 1px solid #EDE0C4; background: #FBF8F1; border-radius: 0 0 18px 18px">
+                    <button type="button" class="cm-go" style="width: 100%" wire:click="confirmPick">Add to bill · ₹{{ number_format((float) $picker->price + $extra, 0) }}</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    <style>
+        .cm-pick-backdrop { position: fixed; inset: 0; z-index: 60; background: rgba(26,15,0,.5); display: flex; align-items: center; justify-content: center; padding: 16px; }
+        .cm-pick { width: 100%; max-width: 620px; max-height: 86vh; background: #fff; border-radius: 18px; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+        .cm-choice { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px; min-height: 60px; border-radius: 12px; border: 2px solid #EDE0C4; background: #fff; color: #1A0F00; cursor: pointer; font: inherit; }
+        .cm-choice:hover:not(:disabled) { border-color: #E6A817; }
+        .cm-choice.on { border-color: #E6A817; background: #FFF5DD; box-shadow: inset 0 0 0 1px #E6A817; }
+        .cm-choice:disabled { opacity: .45; cursor: not-allowed; }
+    </style>
 
     {{-- Open the print window when an order is placed (falls back to the "Print again" link if the browser blocks pop-ups) --}}
     <div x-data x-on:sp-print.window="window.open($event.detail.url, '_blank', 'width=420,height=700')"></div>

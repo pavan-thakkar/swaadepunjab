@@ -4,6 +4,26 @@ import { createContext, useContext, useReducer, ReactNode, useState, useEffect }
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
+export interface OptionChoice {
+  name: string;
+  price: number | string;
+  available?: boolean;
+}
+
+export interface OptionGroup {
+  name: string;
+  type?: 'single' | 'multiple';
+  required?: boolean;
+  max?: number | string | null;
+  choices: OptionChoice[];
+}
+
+export interface ChosenOption {
+  group: string;
+  choice: string;
+  price: number;
+}
+
 export interface MenuItem {
   id: number;
   name: string;
@@ -12,6 +32,7 @@ export interface MenuItem {
   price: number;
   prep_time: number;
   quantity_label?: string | null;
+  option_groups?: OptionGroup[] | null;
   rating: number;
   is_available: boolean;
   is_featured: boolean;
@@ -19,13 +40,45 @@ export interface MenuItem {
 }
 
 export interface CartItem {
+  key: string;            // menu_item_id + chosen options
   menu_item_id: number;
   name: string;
-  price: number;
+  price: number;          // dish price + extra for options
   quantity: number;
   category: string;
   image?: string | null;
   quantity_label?: string | null;
+  options?: ChosenOption[];
+  option_label?: string;  // "Butter Naan, Extra butter"
+}
+
+/** Admin-set option groups with empty names/choices removed. */
+export function cleanGroups(item: Pick<MenuItem, 'option_groups'> | null | undefined): OptionGroup[] {
+  const raw = item?.option_groups;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(g => ({
+      ...g,
+      name: String(g?.name || '').trim(),
+      type: (g?.type === 'multiple' ? 'multiple' : 'single') as 'single' | 'multiple',
+      required: !!g?.required,
+      choices: (Array.isArray(g?.choices) ? g.choices : []).filter(c => String(c?.name || '').trim() !== ''),
+    }))
+    .filter(g => g.name && g.choices.length > 0);
+}
+
+export function hasOptions(item: Pick<MenuItem, 'option_groups'> | null | undefined): boolean {
+  return cleanGroups(item).length > 0;
+}
+
+export function lineKey(menuItemId: number, options?: { group: string; choice: string }[]): string {
+  const parts = (options || []).map(o => `${o.group}=${o.choice}`).sort();
+  return `${menuItemId}|${parts.join(';')}`;
+}
+
+/** Total quantity of a dish in the cart, across all its option lines. */
+export function qtyInCart(items: CartItem[], menuItemId: number): number {
+  return items.filter(i => i.menu_item_id === menuItemId).reduce((s, i) => s + i.quantity, 0);
 }
 
 // First photo of a menu item as a full URL (image may be a path, URL or JSON list)
@@ -43,57 +96,93 @@ export function firstImageUrl(imageField: any): string | null {
 interface CartState {
   items: CartItem[];
   isOpen: boolean;
+  picker: MenuItem | null; // dish whose options sheet is open
 }
 
 type CartAction =
-  | { type: 'ADD'; item: MenuItem }
-  | { type: 'REMOVE'; id: number }
-  | { type: 'INCREMENT'; id: number }
-  | { type: 'DECREMENT'; id: number }
+  // Dishes with options open the options sheet unless `options` is given
+  | { type: 'ADD'; item: MenuItem; options?: ChosenOption[]; quantity?: number }
+  // id: line key (string) or dish id (number → last line of that dish)
+  | { type: 'REMOVE'; id: number | string }
+  | { type: 'INCREMENT'; id: number | string; item?: MenuItem }
+  | { type: 'DECREMENT'; id: number | string }
+  | { type: 'OPEN_PICKER'; item: MenuItem }
+  | { type: 'CLOSE_PICKER' }
   | { type: 'CLEAR' }
   | { type: 'TOGGLE_CART' }
   | { type: 'CLOSE_CART' }
   | { type: 'INIT_CART'; items: CartItem[] };
 
-const initialState: CartState = { items: [], isOpen: false };
+const initialState: CartState = { items: [], isOpen: false, picker: null };
+
+function findLine(items: CartItem[], id: number | string): CartItem | undefined {
+  if (typeof id === 'string') return items.find(i => i.key === id);
+  const lines = items.filter(i => i.menu_item_id === id);
+  return lines[lines.length - 1];
+}
 
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD': {
-      const existing = state.items.find(i => i.menu_item_id === action.item.id);
+      if (!action.options && hasOptions(action.item)) {
+        return { ...state, picker: action.item };
+      }
+      const options = action.options || [];
+      const key = lineKey(action.item.id, options);
+      const qty = Math.max(1, action.quantity || 1);
+      const picker = null;
+      const existing = state.items.find(i => i.key === key);
       if (existing) {
         return {
           ...state,
-          items: state.items.map(i =>
-            i.menu_item_id === action.item.id ? { ...i, quantity: i.quantity + 1 } : i
-          ),
+          picker,
+          items: state.items.map(i => (i.key === key ? { ...i, quantity: i.quantity + qty } : i)),
         };
       }
+      const extra = options.reduce((s, o) => s + (Number(o.price) || 0), 0);
       return {
         ...state,
+        picker,
         items: [
           ...state.items,
-          { menu_item_id: action.item.id, name: action.item.name, price: action.item.price, quantity: 1, category: action.item.category, image: firstImageUrl(action.item.image), quantity_label: action.item.quantity_label || null },
+          {
+            key,
+            menu_item_id: action.item.id,
+            name: action.item.name,
+            price: Number(action.item.price) + extra,
+            quantity: qty,
+            category: action.item.category,
+            image: firstImageUrl(action.item.image),
+            quantity_label: action.item.quantity_label || null,
+            options: options.length ? options : undefined,
+            option_label: options.length ? options.map(o => o.choice).join(', ') : undefined,
+          },
         ],
       };
     }
-    case 'REMOVE':
-      return { ...state, items: state.items.filter(i => i.menu_item_id !== action.id) };
-    case 'INCREMENT':
-      return {
-        ...state,
-        items: state.items.map(i => i.menu_item_id === action.id ? { ...i, quantity: i.quantity + 1 } : i),
-      };
-    case 'DECREMENT': {
-      const item = state.items.find(i => i.menu_item_id === action.id);
-      if (item && item.quantity <= 1) {
-        return { ...state, items: state.items.filter(i => i.menu_item_id !== action.id) };
-      }
-      return {
-        ...state,
-        items: state.items.map(i => i.menu_item_id === action.id ? { ...i, quantity: i.quantity - 1 } : i),
-      };
+    case 'REMOVE': {
+      const line = findLine(state.items, action.id);
+      return line ? { ...state, items: state.items.filter(i => i !== line) } : state;
     }
+    case 'INCREMENT': {
+      // "+" on a menu card for a dish with options → let the customer choose again
+      if (typeof action.id === 'number' && action.item && hasOptions(action.item)) {
+        return { ...state, picker: action.item };
+      }
+      const line = findLine(state.items, action.id);
+      if (!line) return state;
+      return { ...state, items: state.items.map(i => (i === line ? { ...i, quantity: i.quantity + 1 } : i)) };
+    }
+    case 'DECREMENT': {
+      const line = findLine(state.items, action.id);
+      if (!line) return state;
+      if (line.quantity <= 1) return { ...state, items: state.items.filter(i => i !== line) };
+      return { ...state, items: state.items.map(i => (i === line ? { ...i, quantity: i.quantity - 1 } : i)) };
+    }
+    case 'OPEN_PICKER':
+      return { ...state, picker: action.item };
+    case 'CLOSE_PICKER':
+      return { ...state, picker: null };
     case 'CLEAR':
       return { ...state, items: [] };
     case 'TOGGLE_CART':
@@ -101,7 +190,13 @@ function cartReducer(state: CartState, action: CartAction): CartState {
     case 'CLOSE_CART':
       return { ...state, isOpen: false };
     case 'INIT_CART':
-      return { ...state, items: action.items };
+      // Older saved carts have no key: one line per dish
+      return {
+        ...state,
+        items: action.items
+          .filter(i => i && i.menu_item_id)
+          .map(i => ({ ...i, price: Number(i.price), key: i.key || lineKey(i.menu_item_id, i.options) })),
+      };
     default:
       return state;
   }

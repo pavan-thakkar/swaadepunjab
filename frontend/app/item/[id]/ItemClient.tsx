@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCart, MenuItem } from '../../context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions } from '../../context/CartContext';
 import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Toast from '../../components/Toast';
@@ -44,8 +44,7 @@ export default function ItemDetailPage() {
 
   const { state, dispatch } = useCart();
   const [item, setItem] = useState<MenuItem | null>(null);
-  const cartItem = item ? state.items.find(i => i.menu_item_id === item.id) : null;
-  const quantity = cartItem ? cartItem.quantity : 0;
+  const quantity = item ? qtyInCart(state.items, item.id) : 0;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<string | null>(null);
@@ -157,6 +156,7 @@ export default function ItemDetailPage() {
 
   const handleAddToSuggestionsCart = (suggestedItem: MenuItem) => {
     dispatch({ type: 'ADD', item: suggestedItem });
+    if (hasOptions(suggestedItem)) return;
     setToast(`${suggestedItem.name} added to cart! 🛒`);
     setTimeout(() => setToast(null), 2500);
   };
@@ -186,6 +186,7 @@ export default function ItemDetailPage() {
   const handleAddToCart = () => {
     if (!item) return;
     dispatch({ type: 'ADD', item });
+    if (hasOptions(item)) return;
     setToast(`${item.name} added to cart! 🛒`);
     setTimeout(() => setToast(null), 2500);
   };
@@ -436,7 +437,7 @@ export default function ItemDetailPage() {
                     <span className="qty-control-val" style={{ fontSize: '1.1rem' }}>{quantity}</span>
                     <button 
                       type="button" 
-                      onClick={() => dispatch({ type: 'INCREMENT', id: item.id })}
+                      onClick={() => dispatch({ type: 'INCREMENT', id: item.id, item })}
                       className="qty-control-btn"
                       style={{ fontSize: '1.4rem' }}
                       title="Quantity badhayein"
@@ -568,8 +569,7 @@ export default function ItemDetailPage() {
 function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { item: MenuItem; onAdd: (i: MenuItem) => void; categoryEmoji: Record<string, string>; categoryLabels: Record<string, string> }) {
   const router = useRouter();
   const { state, dispatch } = useCart();
-  const cartItem = state.items.find(i => i.menu_item_id === item.id);
-  const quantity = cartItem ? cartItem.quantity : 0;
+  const quantity = qtyInCart(state.items, item.id);
 
   const getFirstImage = (imageField: any) => {
     if (!imageField) return null;
@@ -658,7 +658,7 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
                 type="button" 
                 onClick={(e) => {
                   e.stopPropagation();
-                  dispatch({ type: 'INCREMENT', id: item.id });
+                  dispatch({ type: 'INCREMENT', id: item.id, item });
                 }}
                 className="qty-control-btn"
                 title="Quantity badhayein"

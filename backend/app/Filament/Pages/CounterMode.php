@@ -24,7 +24,7 @@ class CounterMode extends Page
     public string $category = 'all';
 
     // ---- The bill being edited right now (saved into $bills when switching) ----
-    /** @var array<int,int> menu_item_id => qty */
+    /** @var array<int|string,int> line key => qty ("12" for a plain dish, "12|<choices>" for a dish with options) */
     #[Session]
     public array $bill = [];
     #[Session]
@@ -48,6 +48,11 @@ class CounterMode extends Page
     public string $active = '';
 
     public ?int $lastOrderId = null;
+
+    // ---- Options picker (dish with choices like bread / sabji) ----
+    public ?int $picking = null;
+    /** @var array<int,array<int>> group index => picked choice indexes */
+    public array $pick = [];
 
     public function mount(): void
     {
@@ -164,17 +169,94 @@ class CounterMode extends Page
             Notification::make()->title('This dish is sold out')->warning()->send();
             return;
         }
-        $this->bill[$id] = min(50, ($this->bill[$id] ?? 0) + 1);
+        if ($dish->hasOptions()) {
+            // Ask which bread / sabji first; required single-choice groups start on their first available choice
+            $this->picking = $dish->id;
+            $this->pick = [];
+            foreach ($dish->groups() as $gi => $g) {
+                if ($g['type'] === 'single' && $g['required']) {
+                    foreach ($g['choices'] as $ci => $c) {
+                        if ($c['available']) { $this->pick[$gi] = [$ci]; break; }
+                    }
+                }
+            }
+            return;
+        }
+        $this->bumpLine((string) $id, 1);
+    }
+
+    /** "+" on a bill line: same dish, same choices. */
+    public function plus(string $key): void
+    {
+        if (! isset($this->bill[$key])) return;
+        $this->bumpLine($key, 1);
+    }
+
+    public function minus(string $key): void
+    {
+        if (! isset($this->bill[$key])) return;
+        $this->bill[$key]--;
+        if ($this->bill[$key] <= 0) unset($this->bill[$key]);
+        $this->storeActive();
+    }
+
+    private function bumpLine(string $key, int $by): void
+    {
+        $this->bill[$key] = min(50, ($this->bill[$key] ?? 0) + $by);
         $this->lastOrderId = null;
         $this->storeActive();
     }
 
-    public function minus(int $id): void
+    public function togglePick(int $g, int $c): void
     {
-        if (! isset($this->bill[$id])) return;
-        $this->bill[$id]--;
-        if ($this->bill[$id] <= 0) unset($this->bill[$id]);
-        $this->storeActive();
+        $dish = $this->picking ? MenuItem::find($this->picking) : null;
+        $group = $dish?->groups()[$g] ?? null;
+        if (! $group || ! isset($group['choices'][$c]) || ! $group['choices'][$c]['available']) return;
+        $cur = $this->pick[$g] ?? [];
+        if ($group['type'] === 'single') {
+            $this->pick[$g] = (in_array($c, $cur, true) && ! $group['required']) ? [] : [$c];
+            return;
+        }
+        if (in_array($c, $cur, true)) {
+            $this->pick[$g] = array_values(array_diff($cur, [$c]));
+        } elseif ($group['max'] === null || count($cur) < $group['max']) {
+            $this->pick[$g] = array_merge($cur, [$c]);
+        }
+    }
+
+    public function cancelPick(): void
+    {
+        $this->picking = null;
+        $this->pick = [];
+    }
+
+    public function confirmPick(): void
+    {
+        $dish = $this->picking ? MenuItem::find($this->picking) : null;
+        if (! $dish) { $this->cancelPick(); return; }
+        $selected = [];
+        foreach ($dish->groups() as $gi => $g) {
+            foreach ($this->pick[$gi] ?? [] as $ci) {
+                if (isset($g['choices'][$ci])) $selected[] = ['group' => $g['name'], 'choice' => $g['choices'][$ci]['name']];
+            }
+        }
+        try {
+            $dish->resolveOptions($selected);
+        } catch (\InvalidArgumentException $e) {
+            Notification::make()->title($e->getMessage())->warning()->send();
+            return;
+        }
+        $key = $dish->id . '|' . base64_encode(json_encode($selected));
+        $this->bumpLine($key, 1);
+        $this->cancelPick();
+    }
+
+    /** [menu_item_id, chosen options] from a bill line key. */
+    private static function parseKey(string|int $key): array
+    {
+        $parts = explode('|', (string) $key, 2);
+        $opts = isset($parts[1]) ? json_decode(base64_decode($parts[1]), true) : [];
+        return [(int) $parts[0], is_array($opts) ? $opts : []];
     }
 
     public function clearBill(): void
@@ -200,13 +282,26 @@ class CounterMode extends Page
         $lines = [];
         $subtotal = 0.0;
         if ($this->bill) {
-            $dishes = MenuItem::whereIn('id', array_keys($this->bill))->get()->keyBy('id');
-            foreach ($this->bill as $id => $qty) {
+            $ids = array_map(fn ($k) => self::parseKey($k)[0], array_keys($this->bill));
+            $dishes = MenuItem::whereIn('id', $ids)->get()->keyBy('id');
+            foreach ($this->bill as $key => $qty) {
+                [$id, $selected] = self::parseKey($key);
                 $d = $dishes[$id] ?? null;
                 if (! $d) continue;
-                $line = (float) $d->price * $qty;
+                try {
+                    $r = $d->resolveOptions($selected, true);
+                } catch (\InvalidArgumentException) {
+                    continue; // options changed since it was added: drop the line
+                }
+                $unit = round((float) $d->price + $r['extra'], 2);
+                $line = $unit * $qty;
                 $subtotal += $line;
-                $lines[] = ['id' => $d->id, 'name' => $d->name, 'price' => (float) $d->price, 'qty' => $qty, 'total' => $line];
+                $lines[] = [
+                    'key' => (string) $key, 'id' => $d->id,
+                    'name' => $r['label'] !== '' ? "{$d->name} ({$r['label']})" : $d->name,
+                    'options' => $r['options'] ?: null,
+                    'price' => $unit, 'qty' => $qty, 'total' => $line,
+                ];
             }
         }
         $pricing = $subtotal > 0 ? OrderPricing::calculate($subtotal, null, $this->phone ?: null) : null;
@@ -236,7 +331,7 @@ class CounterMode extends Page
         }
 
         $items = array_map(fn ($l) => [
-            'menu_item_id' => $l['id'], 'name' => $l['name'], 'price' => $l['price'], 'quantity' => $l['qty'], 'subtotal' => $l['total'],
+            'menu_item_id' => $l['id'], 'name' => $l['name'], 'options' => $l['options'], 'price' => $l['price'], 'quantity' => $l['qty'], 'subtotal' => $l['total'],
         ], $p['lines']);
         if ($p['freeLine']) {
             $items[] = $p['freeLine'];
@@ -301,7 +396,7 @@ class CounterMode extends Page
                 });
             })
             ->orderByDesc('is_available')->orderByDesc('is_featured')->orderBy('name')
-            ->get(['id', 'name', 'price', 'quantity_label', 'is_available', 'is_featured', 'category']); // all dishes, no limit
+            ->get(['id', 'name', 'price', 'quantity_label', 'option_groups', 'is_available', 'is_featured', 'category']); // all dishes, no limit
 
         $pending = Order::where('status', 'pending')->orderBy('created_at')->limit(6)->get(['id', 'order_number', 'order_type', 'total']);
 
@@ -319,7 +414,18 @@ class CounterMode extends Page
             ];
         }
 
+        // Dish counts across all option lines, for the "in bill" badge on dish buttons
+        $qtyByDish = [];
+        foreach ($this->bill as $key => $qty) {
+            $id = self::parseKey($key)[0];
+            $qtyByDish[$id] = ($qtyByDish[$id] ?? 0) + $qty;
+        }
+        $picker = $this->picking ? MenuItem::find($this->picking) : null;
+
         return array_merge($this->priced(), [
+            'qtyByDish' => $qtyByDish,
+            'picker' => $picker,
+            'pickerGroups' => $picker ? $picker->groups() : [],
             'tabs' => $tabs,
             'cats' => $cats,
             'menu' => $menu,

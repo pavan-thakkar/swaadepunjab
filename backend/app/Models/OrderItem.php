@@ -11,6 +11,7 @@ class OrderItem extends Model
         'order_id',
         'menu_item_id',
         'name',
+        'options',
         'price',
         'quantity',
         'subtotal',
@@ -21,6 +22,7 @@ class OrderItem extends Model
         'price'    => 'decimal:2',
         'subtotal' => 'decimal:2',
         'is_free'  => 'boolean',
+        'options'  => 'array',
     ];
 
     public function order(): BelongsTo

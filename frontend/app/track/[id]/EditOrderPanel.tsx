@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import OfferProgress from '../../components/OfferProgress';
+import OptionSheet from '../../components/OptionSheet';
+import { ChosenOption, hasOptions, lineKey } from '../../context/CartContext';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
-type DraftItem = { menu_item_id: number; name: string; price: number; quantity: number };
+type DraftItem = { key: string; menu_item_id: number; name: string; price: number; quantity: number; options?: { group: string; choice: string }[] };
 
 function getToken(orderNumber: string): string | null {
   try { return localStorage.getItem(`order_edit_${orderNumber}`); } catch { return null; }
@@ -23,6 +25,7 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [picking, setPicking] = useState<any | null>(null);
 
   const cancelOrder = async () => {
     setCancelling(true);
@@ -59,7 +62,9 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
 
   const startEditing = async () => {
     setItems((order.items || []).filter((i: any) => !i.is_free).map((i: any) => ({
+      key: lineKey(i.menu_item_id, i.options || []),
       menu_item_id: i.menu_item_id, name: i.name, price: Number(i.price), quantity: Number(i.quantity),
+      options: (i.options || []).map((o: any) => ({ group: o.group, choice: o.choice })),
     })));
     setNote(order.special_instructions || '');
     setMsg(null);
@@ -73,19 +78,31 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
     }
   };
 
-  const changeQty = (id: number, delta: number) => {
+  const changeQty = (key: string, delta: number) => {
     setItems(prev => prev
-      .map(i => i.menu_item_id === id ? { ...i, quantity: Math.min(20, i.quantity + delta) } : i)
+      .map(i => i.key === key ? { ...i, quantity: Math.min(20, i.quantity + delta) } : i)
       .filter(i => i.quantity > 0));
   };
 
-  const addItem = (m: any) => {
+  const addLine = (m: any, chosen: ChosenOption[], qty: number) => {
+    const key = lineKey(m.id, chosen);
+    const extra = chosen.reduce((s, o) => s + o.price, 0);
+    const label = chosen.map(o => o.choice).join(', ');
     setItems(prev => {
-      const found = prev.find(i => i.menu_item_id === m.id);
-      if (found) return prev.map(i => i.menu_item_id === m.id ? { ...i, quantity: Math.min(20, i.quantity + 1) } : i);
-      return [...prev, { menu_item_id: m.id, name: m.name, price: Number(m.price), quantity: 1 }];
+      const found = prev.find(i => i.key === key);
+      if (found) return prev.map(i => i.key === key ? { ...i, quantity: Math.min(20, i.quantity + qty) } : i);
+      return [...prev, {
+        key, menu_item_id: m.id, name: label ? `${m.name} (${label})` : m.name,
+        price: Number(m.price) + extra, quantity: qty,
+        options: chosen.map(o => ({ group: o.group, choice: o.choice })),
+      }];
     });
     setSearch('');
+  };
+
+  const addItem = (m: any) => {
+    if (hasOptions(m)) { setPicking(m); return; }
+    addLine(m, [], 1);
   };
 
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -105,7 +122,7 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
     setMsg(null);
     try {
       const body: any = { edit_token: token, special_instructions: note.trim() || null };
-      if (!paidOnline) body.items = items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity }));
+      if (!paidOnline) body.items = items.map(i => ({ menu_item_id: i.menu_item_id, quantity: i.quantity, options: i.options || [] }));
       const res = await fetch(`${API}/orders/${order.order_number}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -188,13 +205,13 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {items.map(i => (
-                  <div key={i.menu_item_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                  <div key={i.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
                     <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem' }}>{i.name}</span>
-                    <button type="button" style={qtyBtn} onClick={() => changeQty(i.menu_item_id, -1)} aria-label={`Remove one ${i.name}`}>−</button>
+                    <button type="button" style={qtyBtn} onClick={() => changeQty(i.key, -1)} aria-label={`Remove one ${i.name}`}>−</button>
                     <span style={{ minWidth: 20, textAlign: 'center', fontWeight: 800 }}>{i.quantity}</span>
-                    <button type="button" style={qtyBtn} onClick={() => changeQty(i.menu_item_id, 1)} aria-label={`Add one ${i.name}`}>+</button>
+                    <button type="button" style={qtyBtn} onClick={() => changeQty(i.key, 1)} aria-label={`Add one ${i.name}`}>+</button>
                     <span style={{ minWidth: 70, textAlign: 'right', fontSize: '0.85rem' }}>₹{(i.price * i.quantity).toFixed(2)}</span>
-                    <button type="button" onClick={() => changeQty(i.menu_item_id, -99)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem' }} aria-label={`Remove ${i.name}`}>🗑️</button>
+                    <button type="button" onClick={() => changeQty(i.key, -99)} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem' }} aria-label={`Remove ${i.name}`}>🗑️</button>
                   </div>
                 ))}
                 {items.length === 0 && <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No items — add at least one below.</div>}
@@ -213,12 +230,21 @@ export default function EditOrderPanel({ order, onUpdated }: { order: any; onUpd
                     {results.map(m => (
                       <button key={m.id} type="button" onClick={() => addItem(m)}
                         style={{ display: 'flex', width: '100%', justifyContent: 'space-between', padding: '10px 12px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text)', fontSize: '0.88rem', textAlign: 'left' }}>
-                        <span>{m.name}</span><span style={{ fontWeight: 700 }}>₹{Number(m.price).toFixed(0)} +</span>
+                        <span>{m.name}{hasOptions(m) ? <small style={{ color: 'var(--text-muted)', marginLeft: 6 }}>· choose options</small> : null}</span><span style={{ fontWeight: 700 }}>₹{Number(m.price).toFixed(0)} +</span>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
+
+              {picking && (
+                <OptionSheet
+                  item={picking}
+                  confirmLabel="Add to order"
+                  onClose={() => setPicking(null)}
+                  onConfirm={(chosen, qty) => { addLine(picking, chosen, qty); setPicking(null); }}
+                />
+              )}
 
               <OfferProgress subtotal={subtotal} compact />
               <div style={{ textAlign: 'right', fontWeight: 800 }}>

@@ -32,32 +32,16 @@ class OrderController extends Controller
             'items'                => 'required|array|min:1',
             'items.*.menu_item_id' => 'required|exists:menu_items,id',
             'items.*.quantity'     => 'required|integer|min:1|max:20',
+            'items.*.options'          => 'sometimes|nullable|array|max:30',
+            'items.*.options.*.group'  => 'required|string|max:80',
+            'items.*.options.*.choice' => 'required|string|max:80',
             'latitude'             => 'nullable|numeric',
             'longitude'            => 'nullable|numeric',
         ]);
 
         // Calculate totals from DB prices (never trust client prices)
-        $orderItems = [];
-        $subtotal   = 0;
-
-        foreach ($validated['items'] as $item) {
-            $menuItem = MenuItem::findOrFail($item['menu_item_id']);
-            if (! $menuItem->is_available) {
-                return response()->json([
-                    'message' => "{$menuItem->name} is currently unavailable.",
-                ], 422);
-            }
-            $itemSubtotal = $menuItem->price * $item['quantity'];
-            $subtotal    += $itemSubtotal;
-
-            $orderItems[] = [
-                'menu_item_id' => $menuItem->id,
-                'name'         => $menuItem->name,
-                'price'        => $menuItem->price,
-                'quantity'     => $item['quantity'],
-                'subtotal'     => $itemSubtotal,
-            ];
-        }
+        // Same dish + same choices are merged; choices are checked and priced here
+        [$orderItems, $subtotal] = \App\Services\OrderLines::build($validated['items']);
 
         $orderType   = $validated['order_type'] ?? 'delivery';
         $deliveryFee = 0;
@@ -188,6 +172,9 @@ class OrderController extends Controller
             'items.*.menu_item_id' => 'required_with:items|exists:menu_items,id',
             'items.*.quantity'     => 'required_with:items|integer|min:1|max:20',
             'items.*.is_free'      => 'sometimes|boolean',
+            'items.*.options'          => 'sometimes|nullable|array|max:30',
+            'items.*.options.*.group'  => 'required|string|max:80',
+            'items.*.options.*.choice' => 'required|string|max:80',
         ]);
 
         $order = Order::with('items')
@@ -209,13 +196,18 @@ class OrderController extends Controller
         $itemsChanged = array_key_exists('items', $validated);
 
         if ($itemsChanged && $order->isPaidOnline()) {
-            $current = $order->items->where('is_free', false)->mapWithKeys(fn ($i) => [$i->menu_item_id => (int) $i->quantity])->sort()->all();
+            $current = [];
+            foreach ($order->items->where('is_free', false) as $i) {
+                $k = \App\Services\OrderLines::key((int) $i->menu_item_id, $i->options ?? []);
+                $current[$k] = ($current[$k] ?? 0) + (int) $i->quantity;
+            }
             $wanted = [];
             foreach ($validated['items'] as $i) {
                 if (! empty($i['is_free'])) {
                     continue;
                 }
-                $wanted[$i['menu_item_id']] = ($wanted[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
+                $k = \App\Services\OrderLines::key((int) $i['menu_item_id'], $i['options'] ?? []);
+                $wanted[$k] = ($wanted[$k] ?? 0) + (int) $i['quantity'];
             }
             ksort($current); ksort($wanted);
             if ($current != $wanted) {
@@ -226,38 +218,12 @@ class OrderController extends Controller
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($order, $validated, $itemsChanged) {
             if ($itemsChanged) {
-                // Merge duplicate lines, recalculate from DB prices
-                $merged = [];
-                foreach ($validated['items'] as $i) {
-                    if (! empty($i['is_free'])) {
-                        continue;
-                    }
-                    $merged[$i['menu_item_id']] = ($merged[$i['menu_item_id']] ?? 0) + (int) $i['quantity'];
-                }
-
-                if (empty($merged)) {
+                // Merge duplicate lines, recalculate from DB prices (dishes already in the order stay allowed)
+                $paidLines = array_filter($validated['items'], fn ($i) => empty($i['is_free']));
+                if (empty($paidLines)) {
                     abort(response()->json(['message' => 'Your order needs at least one item.'], 422));
                 }
-
-                $orderItems = [];
-                $subtotal = 0;
-                foreach ($merged as $menuItemId => $qty) {
-                    $menuItem = MenuItem::findOrFail($menuItemId);
-                    $alreadyInOrder = $order->items->contains('menu_item_id', $menuItemId);
-                    if (! $menuItem->is_available && ! $alreadyInOrder) {
-                        abort(response()->json(['message' => "{$menuItem->name} is currently unavailable."], 422));
-                    }
-                    $qty = min($qty, 20);
-                    $line = $menuItem->price * $qty;
-                    $subtotal += $line;
-                    $orderItems[] = [
-                        'menu_item_id' => $menuItem->id,
-                        'name'         => $menuItem->name,
-                        'price'        => $menuItem->price,
-                        'quantity'     => $qty,
-                        'subtotal'     => $line,
-                    ];
-                }
+                [$orderItems, $subtotal] = \App\Services\OrderLines::build($paidLines, \App\Services\OrderLines::keysOf($order->items));
 
                 $deliveryFee = 0;
                 if (($order->order_type ?? 'delivery') === 'delivery') {
