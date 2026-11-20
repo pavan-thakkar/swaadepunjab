@@ -2508,3 +2508,10 @@ img, video { max-width: 100%; }
 /* Categories read left→right: row 1 = first half, row 2 = second half (matches admin order) */
 .cat3d-row { grid-auto-flow: row; grid-template-rows: none; grid-template-columns: repeat(var(--cat-cols, 9), 128px); }
 @media (max-width: 768px) { .cat3d-row { grid-template-columns: repeat(var(--cat-cols, 9), 92px); } }
+
+/* Categories: spread circles across the full width (no empty space on the right);
+   if there are too many to fit, they keep a minimum size and scroll sideways. */
+.cat3d-row { grid-template-columns: repeat(var(--cat-cols, 9), minmax(120px, 1fr)); }
+.cat3d-arrow.off { opacity: 0; pointer-events: none; }
+.cat3d-arrow { transition: opacity .2s ease; }
+@media (max-width: 768px) { .cat3d-row { grid-template-columns: repeat(var(--cat-cols, 9), 92px); } }

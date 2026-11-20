@@ -69,6 +69,22 @@ export default function HomePage() {
 
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
   const catRowRef = useRef<HTMLDivElement>(null);
+  // Show the ‹ › arrows only when there are more categories off-screen
+  const [catEdge, setCatEdge] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = catRowRef.current;
+    if (!el) return;
+    const update = () => {
+      const max = el.scrollWidth - el.clientWidth;
+      setCatEdge({ left: el.scrollLeft > 4, right: el.scrollLeft < max - 4 });
+    };
+    update();
+    el.addEventListener('scroll', update, { passive: true });
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(el);
+    window.addEventListener('resize', update);
+    return () => { el.removeEventListener('scroll', update); ro?.disconnect(); window.removeEventListener('resize', update); };
+  }, [categories.length]);
   const [categoryEmoji, setCategoryEmoji] = useState<Record<string, string>>(DEFAULT_CATEGORY_EMOJI);
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>(DEFAULT_CATEGORY_LABELS);
 
@@ -506,7 +522,7 @@ export default function HomePage() {
           <h2 className="section-title">What would you like?</h2>
         </div>
         <div className="cat3d-wrap">
-          <button type="button" className="cat3d-arrow left" aria-label="Scroll categories left"
+          <button type="button" className={`cat3d-arrow left${catEdge.left ? '' : ' off'}`} aria-label="Scroll categories left"
             onClick={() => catRowRef.current?.scrollBy({ left: -480, behavior: 'smooth' })}>‹</button>
           <div className="cat3d-row" ref={catRowRef} role="tablist" aria-label="Categories"
             // Fill row 1 left→right first, then row 2 (same order as the admin list)
@@ -541,7 +557,7 @@ export default function HomePage() {
               );
             })}
           </div>
-          <button type="button" className="cat3d-arrow right" aria-label="Scroll categories right"
+          <button type="button" className={`cat3d-arrow right${catEdge.right ? '' : ' off'}`} aria-label="Scroll categories right"
             onClick={() => catRowRef.current?.scrollBy({ left: 480, behavior: 'smooth' })}>›</button>
         </div>
       </section>
