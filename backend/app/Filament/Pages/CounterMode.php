@@ -200,6 +200,18 @@ class CounterMode extends Page
         $this->storeActive();
     }
 
+    /** "−" on a dish tile: take one off that dish (its most recently added line if it has options). */
+    public function minusDish(int $id): void
+    {
+        $keys = array_keys($this->bill);
+        for ($i = count($keys) - 1; $i >= 0; $i--) {
+            if (self::parseKey($keys[$i])[0] === $id) {
+                $this->minus((string) $keys[$i]);
+                return;
+            }
+        }
+    }
+
     private function bumpLine(string $key, int $by): void
     {
         $this->bill[$key] = min(50, ($this->bill[$key] ?? 0) + $by);
@@ -396,7 +408,7 @@ class CounterMode extends Page
                 });
             })
             ->orderByDesc('is_available')->orderByDesc('is_featured')->orderBy('name')
-            ->get(['id', 'name', 'price', 'quantity_label', 'option_groups', 'is_available', 'is_featured', 'category']); // all dishes, no limit
+            ->get(['id', 'name', 'price', 'quantity_label', 'option_groups', 'customisation_ids', 'is_available', 'is_featured', 'category']); // all dishes, no limit
 
         $pending = Order::where('status', 'pending')->orderBy('created_at')->limit(6)->get(['id', 'order_number', 'order_type', 'total']);
 

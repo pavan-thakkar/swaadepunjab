@@ -62,7 +62,7 @@ Route::get('/featured-cards', function () {
         'title'    => App\Models\SiteSetting::getValue('featured_section_title', "What's New"),
         'subtitle' => App\Models\SiteSetting::getValue('featured_section_subtitle'),
         'data'     => App\Models\FeaturedCard::where('is_active', true)
-            ->with('menuItem:id,name,price,quantity_label,option_groups,category,description,prep_time,rating,is_available,is_featured,image')
+            ->with('menuItem:id,name,price,quantity_label,option_groups,customisation_ids,category,description,prep_time,rating,is_available,is_featured,image')
             ->orderBy('sort_order')->orderBy('id')
             ->get(['id', 'title', 'badge', 'image_path', 'menu_item_id']),
     ]);

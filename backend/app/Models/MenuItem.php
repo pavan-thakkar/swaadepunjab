@@ -14,6 +14,7 @@ class MenuItem extends Model
         'price',
         'quantity_label',
         'option_groups',
+        'customisation_ids',
         'pairs_with',
         'image',
         'prep_time',
@@ -23,7 +24,7 @@ class MenuItem extends Model
     ];
 
     // Pretty web address: /item/paneer-tikka instead of /item/548
-    protected $appends = ['slug'];
+    protected $appends = ['slug', 'choice_groups'];
 
     public function getSlugAttribute(): string
     {
@@ -46,6 +47,7 @@ class MenuItem extends Model
         'is_featured'  => 'boolean',
         'image'        => 'array',
         'option_groups' => 'array',
+        'customisation_ids' => 'array',
         'pairs_with'    => 'array',
     ];
 
@@ -65,8 +67,18 @@ class MenuItem extends Model
      */
     public function groups(): array
     {
+        // Saved customisations first (from the Customisations section), then this dish's own extra groups
+        $raw = [];
+        $lib = Customisation::library();
+        foreach (array_values((array) ($this->customisation_ids ?? [])) as $cid) {
+            $c = $lib->get((int) $cid);
+            if ($c && $c->is_active) $raw[] = $c->toGroup();
+        }
+        foreach (array_values((array) ($this->option_groups ?? [])) as $g) $raw[] = $g;
+
         $out = [];
-        foreach (array_values((array) ($this->option_groups ?? [])) as $g) {
+        $seen = [];
+        foreach ($raw as $g) {
             $name = trim((string) ($g['name'] ?? ''));
             $choices = [];
             foreach (array_values((array) ($g['choices'] ?? [])) as $c) {
@@ -78,12 +90,19 @@ class MenuItem extends Model
                     'available' => (bool) ($c['available'] ?? true),
                 ];
             }
-            if ($name === '' || ! $choices) continue;
+            if ($name === '' || ! $choices || isset($seen[mb_strtolower($name)])) continue;
+            $seen[mb_strtolower($name)] = true;
             $type = ($g['type'] ?? 'single') === 'multiple' ? 'multiple' : 'single';
             $max = $type === 'single' ? 1 : (isset($g['max']) && (int) $g['max'] > 0 ? (int) $g['max'] : null);
             $out[] = ['name' => $name, 'type' => $type, 'required' => (bool) ($g['required'] ?? false), 'max' => $max, 'choices' => $choices];
         }
         return $out;
+    }
+
+    /** All choice groups for the website / counter (saved customisations + own). */
+    public function getChoiceGroupsAttribute(): array
+    {
+        return $this->groups();
     }
 
     public function hasOptions(): bool

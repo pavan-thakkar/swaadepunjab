@@ -27,7 +27,7 @@ class AppServiceProvider extends ServiceProvider
             \App\Models\Offer::class, \App\Models\Coupon::class, \App\Models\FeaturedCard::class,
             \App\Models\MarketingCard::class, \App\Models\ReceiptSetting::class, \App\Models\DeliveryFeeSetting::class,
             \App\Models\User::class, \App\Models\Review::class, \App\Models\LoyaltyTransaction::class,
-            \App\Models\MonthlyPlan::class, \App\Models\PlanEnquiry::class,
+            \App\Models\MonthlyPlan::class, \App\Models\PlanEnquiry::class, \App\Models\Customisation::class,
         ];
         foreach ($audited as $model) {
             if (class_exists($model)) {

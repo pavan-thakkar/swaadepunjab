@@ -34,6 +34,7 @@ export interface MenuItem {
   prep_time: number;
   quantity_label?: string | null;
   option_groups?: OptionGroup[] | null;
+  choice_groups?: OptionGroup[] | null; // saved customisations + this dish's own groups (from the server)
   rating: number;
   is_available: boolean;
   is_featured: boolean;
@@ -54,8 +55,8 @@ export interface CartItem {
 }
 
 /** Admin-set option groups with empty names/choices removed. */
-export function cleanGroups(item: Pick<MenuItem, 'option_groups'> | null | undefined): OptionGroup[] {
-  const raw = item?.option_groups;
+export function cleanGroups(item: Pick<MenuItem, 'option_groups' | 'choice_groups'> | null | undefined): OptionGroup[] {
+  const raw = item?.choice_groups ?? item?.option_groups;
   if (!Array.isArray(raw)) return [];
   return raw
     .map(g => ({
@@ -68,7 +69,7 @@ export function cleanGroups(item: Pick<MenuItem, 'option_groups'> | null | undef
     .filter(g => g.name && g.choices.length > 0);
 }
 
-export function hasOptions(item: Pick<MenuItem, 'option_groups'> | null | undefined): boolean {
+export function hasOptions(item: Pick<MenuItem, 'option_groups' | 'choice_groups'> | null | undefined): boolean {
   return cleanGroups(item).length > 0;
 }
 

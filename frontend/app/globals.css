@@ -2390,3 +2390,32 @@ img, video { max-width: 100%; }
 .paypend-confirm { flex-basis: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-weight: 700; font-size: .9rem; }
 .paypend-confirm .mp-btn { min-height: 38px; flex: 0 0 auto; min-width: 0; color: #991B1B; }
 .paypend-confirm .paypend-check { flex-basis: auto; padding: 0; }
+
+/* ===== Mobile dish cards: full photo visible, ADD button sits on the photo's bottom edge (Swiggy style) ===== */
+@media (max-width: 768px) {
+  .food-card { align-items: flex-start !important; }
+  .food-card-media-side { width: 140px !important; margin-bottom: 0 !important; }
+  .food-card-image-wrap { width: 140px !important; height: 132px !important; border-radius: 16px !important; }
+  .food-card-action-wrap {
+    position: relative !important;
+    bottom: auto !important; left: auto !important; right: auto !important;
+    transform: none !important;
+    margin-top: -16px !important;            /* only the top of the button overlaps the photo */
+    display: flex !important; flex-direction: column !important; align-items: center !important;
+    width: 100% !important;
+  }
+  .swiggy-add-btn {
+    min-width: 112px !important;
+    padding: 9px 22px !important;
+    font-size: 0.95rem !important;
+    border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important;
+  }
+  .quantity-control-card { min-width: 112px !important; height: 38px !important; border-radius: 10px !important; }
+  .has-opts-note { margin-top: 5px; font-size: .72rem; font-weight: 600; }
+}
+@media (max-width: 380px) {
+  .food-card-media-side { width: 120px !important; }
+  .food-card-image-wrap { width: 120px !important; height: 116px !important; }
+  .swiggy-add-btn, .quantity-control-card { min-width: 100px !important; }
+}

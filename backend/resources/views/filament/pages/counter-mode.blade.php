@@ -12,6 +12,14 @@
         .cm-dish:hover { border-color: #C98F0F; }
         .cm-dish.in { background: #FFF8E7; border-color: #C98F0F; }
         .cm-dish.out { background: #F3EFE6; cursor: not-allowed; color: #7A6A55; }
+        .cm-dish-wrap { position: relative; }
+        .cm-dish-wrap .cm-dish { width: 100%; height: 100%; }
+        .cm-dish-wrap.has-qty .cm-dish { padding-bottom: 56px; }
+        .cm-stepper { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; justify-content: space-between; background: #2C1A00; border-radius: 12px; height: 42px; padding: 0 4px; box-shadow: 0 3px 10px rgba(44,26,0,.25); }
+        .cm-stepper button { width: 44px; height: 38px; border: 0; border-radius: 10px; background: transparent; color: #FFF8E7; font-size: 22px; font-weight: 800; line-height: 1; cursor: pointer; font-family: inherit; }
+        .cm-stepper button:hover { background: rgba(255,248,231,.12); }
+        .cm-stepper button:active { transform: scale(.94); }
+        .cm-stepper span { color: #FFF8E7; font-weight: 900; font-size: 17px; min-width: 28px; text-align: center; }
         .cm-qty { background: #2C1A00; color: #FFF8E7; font-size: 13px; font-weight: 800; min-width: 28px; height: 28px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
         .cm-bill { background: #fff; border: 1px solid #EDE0C4; border-radius: 18px; display: flex; flex-direction: column; position: sticky; top: 80px; }
         .dark .cm-bill, .dark .cm-dish, .dark .cm-tab { background: rgb(24 24 27); color: #fff; border-color: rgb(63 63 70); }
@@ -63,15 +71,25 @@
             <div class="cm-grid">
                 @forelse ($menu as $d)
                     @php $q = $qtyByDish[$d->id] ?? 0; @endphp
-                    <button type="button" class="cm-dish {{ ! $d->is_available ? 'out' : ($q ? 'in' : '') }}" wire:click="add({{ $d->id }})" wire:key="d-{{ $d->id }}" @disabled(! $d->is_available) aria-label="Add {{ $d->name }}, ₹{{ number_format($d->price, 0) }}{{ $q ? ', ' . $q . ' in bill' : '' }}">
+                    <div class="cm-dish-wrap {{ $q && $d->is_available ? 'has-qty' : '' }}" wire:key="d-{{ $d->id }}">
+                    <button type="button" class="cm-dish {{ ! $d->is_available ? 'out' : ($q ? 'in' : '') }}" wire:click="add({{ $d->id }})" @disabled(! $d->is_available) aria-label="Add {{ $d->name }}, ₹{{ number_format($d->price, 0) }}{{ $q ? ', ' . $q . ' in bill' : '' }}">
                         <span style="font-size: 14px; font-weight: 700; line-height: 1.25">{{ $d->name }}</span>
-                        @if (! empty($d->option_groups))<span style="font-size: 11px; font-weight: 800; color: #9A3412">Choose options ›</span>@endif
+                        @if ($d->hasOptions())<span style="font-size: 11px; font-weight: 800; color: #9A3412">Choose options ›</span>@endif
                         @if ($d->quantity_label)<span style="font-size: 11px; font-weight: 600; color: #8A5A00">{{ $d->quantity_label }}</span>@endif
                         <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
                             <span style="font-size: 15px; font-weight: 800">₹{{ number_format($d->price, 0) }}</span>
-                            @if (! $d->is_available)<span style="font-size: 11px; font-weight: 800; color: #9F1D1D">SOLD OUT</span>@elseif ($q)<span class="cm-qty">{{ $q }}</span>@endif
+                            @if (! $d->is_available)<span style="font-size: 11px; font-weight: 800; color: #9F1D1D">SOLD OUT</span>@endif
                         </span>
                     </button>
+                    @if ($q && $d->is_available)
+                        {{-- − qty + right on the tile, so the order taker never has to scroll the bill --}}
+                        <div class="cm-stepper" role="group" aria-label="{{ $d->name }} quantity">
+                            <button type="button" wire:click="minusDish({{ $d->id }})" aria-label="Remove one {{ $d->name }}">−</button>
+                            <span aria-live="polite">{{ $q }}</span>
+                            <button type="button" wire:click="add({{ $d->id }})" aria-label="Add one {{ $d->name }}">+</button>
+                        </div>
+                    @endif
+                    </div>
                 @empty
                     <div class="sp-empty" style="grid-column: 1 / -1">No dishes match.</div>
                 @endforelse
