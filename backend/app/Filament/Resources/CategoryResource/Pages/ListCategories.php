@@ -36,7 +36,26 @@ class ListCategories extends ListRecords
                         ->body($none ? 'No dish photos yet in: ' . implode(', ', array_slice($none, 0, 8)) . (count($none) > 8 ? '…' : '') : null)
                         ->success()->send();
                 }),
+            Actions\Action::make('renumber')
+                ->label('Renumber 1, 2, 3…')
+                ->icon('heroicon-o-bars-arrow-down')
+                ->color('gray')
+                ->requiresConfirmation()
+                ->modalHeading('Renumber categories?')
+                ->modalDescription('Keeps the current order but gives every category its own number (1, 2, 3…), so no two share a number. The website uses the same order.')
+                ->action(function () {
+                    $i = 0;
+                    foreach (\App\Models\Category::orderBy('sort_order')->orderBy('name')->get() as $c) {
+                        $c->update(['sort_order' => ++$i]);
+                    }
+                    \Filament\Notifications\Notification::make()->title('Categories renumbered')->success()->send();
+                }),
             Actions\CreateAction::make(),
         ];
+    }
+
+    public function getSubheading(): ?string
+    {
+        return 'Drag rows (⇅ button) to set the order. The website shows categories — and the full menu — in this same order.';
     }
 }

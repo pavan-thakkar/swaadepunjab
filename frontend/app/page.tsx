@@ -302,12 +302,27 @@ export default function HomePage() {
   }, [allSlides.length]);
 
   const featured = items.filter(i => i.is_featured);
-  const regular  = items.filter(i => !i.is_featured);
   // Search shows every match (bestsellers too). Without search, the full menu skips the
   // bestsellers already shown above; a single category shows all its dishes.
-  const shownItems: MenuItem[] = searchResults
-    ? searchResults
-    : category === 'all' && featured.length > 0 ? regular : items;
+  const shownItems: MenuItem[] = searchResults ? searchResults : items;
+
+  // Full menu: dishes grouped by category, in the same order as the admin Categories list
+  const menuGroups = useMemo(() => {
+    if (searchResults || category !== 'all') return null;
+    const byCat = new Map<string, MenuItem[]>();
+    for (const it of items) {
+      if (!byCat.has(it.category)) byCat.set(it.category, []);
+      byCat.get(it.category)!.push(it);
+    }
+    const groups: { key: string; label: string; emoji: string; items: MenuItem[] }[] = [];
+    for (const c of categories) {
+      if (c.key === 'all') continue;
+      const list = byCat.get(c.key);
+      if (list?.length) { groups.push({ key: c.key, label: c.label, emoji: c.emoji, items: list }); byCat.delete(c.key); }
+    }
+    byCat.forEach((list, key) => groups.push({ key, label: categoryLabels[key] || key, emoji: '🍽️', items: list })); // any left over
+    return groups;
+  }, [items, categories, searchResults, category, categoryLabels]);
 
   return (
     <div className="page-wrapper">
@@ -581,11 +596,28 @@ export default function HomePage() {
             {searchQuery && <button type="button" className="btn-secondary" style={{ marginTop: '1rem' }} onClick={clearSearch}>Show full menu</button>}
           </div>
         ) : (
-          <div className="menu-grid">
-            {shownItems.map((item, i) => (
-              <FoodCard key={item.id} item={item} onAdd={handleAddToCart} delay={i * 60} categoryEmoji={categoryEmoji} categoryLabels={categoryLabels} />
-            ))}
-          </div>
+          menuGroups ? (
+            <div className="menu-groups">
+              {menuGroups.map(g => (
+                <div key={g.key} className="menu-group" id={`cat-${g.key}`}>
+                  <h3 className="menu-group-title">
+                    {g.label} <span>{g.items.length}</span>
+                  </h3>
+                  <div className="menu-grid">
+                    {g.items.map((item, i) => (
+                      <FoodCard key={item.id} item={item} onAdd={handleAddToCart} delay={Math.min(i, 6) * 60} categoryEmoji={categoryEmoji} categoryLabels={categoryLabels} />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="menu-grid">
+              {shownItems.map((item, i) => (
+                <FoodCard key={item.id} item={item} onAdd={handleAddToCart} delay={i * 60} categoryEmoji={categoryEmoji} categoryLabels={categoryLabels} />
+              ))}
+            </div>
+          )
         )}
       </section>
 

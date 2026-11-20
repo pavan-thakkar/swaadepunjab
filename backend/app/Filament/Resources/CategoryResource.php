@@ -108,11 +108,18 @@ class CategoryResource extends Resource
             ->persistSortInSession()
             ->columns([
                 Tables\Columns\ImageColumn::make('image')
-                    ->label('')
+                    ->label('Photo')
                     ->disk('public')
                     ->circular()
-                    ->size(36)
-                    ->defaultImageUrl(null),
+                    ->size(44)
+                    // No saved image yet → show the dish photo the website is using automatically
+                    ->defaultImageUrl(function (Category $record) {
+                        $path = array_key_first($record->dishPhotos(1));
+                        return $path ? (str_starts_with($path, 'http') ? $path : asset('storage/' . $path)) : null;
+                    })
+                    ->tooltip(fn (Category $record) => filled($record->image)
+                        ? 'Saved category photo'
+                        : ($record->dishPhotos(1) ? 'Automatic (from a dish photo) — click "Fill missing images" or "Choose dish photo" to save it' : 'No photo — add dish photos or upload one')),
 
                 Tables\Columns\TextColumn::make('emoji')
                     ->label('')
@@ -193,7 +200,8 @@ class CategoryResource extends Resource
                         ->requiresConfirmation(),
                 ]),
             ])
-            ->defaultSort('sort_order', 'asc')
+            // Same order as the website: Order number, then name. Drag rows to change it.
+            ->defaultSort(fn ($query) => $query->orderBy('sort_order')->orderBy('name'))
             ->reorderable('sort_order');
     }
 

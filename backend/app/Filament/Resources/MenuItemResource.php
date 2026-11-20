@@ -281,7 +281,9 @@ class MenuItemResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('category');
+            // Same order as the website: category order, then dish order. Filter one category, then drag to reorder its dishes.
+            ->defaultSort(fn ($query) => $query->menuOrder())
+            ->reorderable('sort_order');
     }
 
     public static function getPages(): array

@@ -136,7 +136,7 @@ Route::get('/reviews/history', [App\Http\Controllers\Api\ReviewController::class
 Route::get('/categories', function () {
     return response()->json([
         'data' => App\Models\Category::where('is_active', true)
-            ->orderBy('sort_order', 'asc')
+            ->orderBy('sort_order', 'asc')->orderBy('name') // same order as the admin list
             ->get()
     ]);
 });

@@ -31,7 +31,7 @@ class MenuController extends Controller
             $query->where('is_featured', true);
         }
 
-        $items = $query->orderBy('is_featured', 'desc')->orderBy('rating', 'desc')->get();
+        $items = $query->menuOrder()->get(); // same order as admin: category order, then dish order
 
         return response()->json([
             'data'       => $items,

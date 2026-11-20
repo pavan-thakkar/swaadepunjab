@@ -11,6 +11,7 @@ class MenuItem extends Model
         'name',
         'description',
         'category',
+        'sort_order',
         'price',
         'quantity_label',
         'option_groups',
@@ -166,6 +167,16 @@ class MenuItem extends Model
             'options' => $options,
             'label'   => implode(', ', array_column($options, 'choice')),
         ];
+    }
+
+    /** Menu order everywhere: category order (admin Categories), then dish order, then name. */
+    public function scopeMenuOrder($query)
+    {
+        return $query
+            ->orderBy(Category::select('sort_order')->whereColumn('categories.slug', 'menu_items.category')->limit(1))
+            ->orderBy(Category::select('name')->whereColumn('categories.slug', 'menu_items.category')->limit(1))
+            ->orderBy('menu_items.sort_order')
+            ->orderBy('menu_items.name');
     }
 
     public function scopeAvailable($query)

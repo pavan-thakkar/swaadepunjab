@@ -10,6 +10,11 @@ class ListMenuItems extends ListRecords
 {
     protected static string $resource = MenuItemResource::class;
 
+    public function getSubheading(): ?string
+    {
+        return 'Shown in the same order as the website (category order, then dish order). To reorder dishes: filter one category, then use the ⇅ button and drag.';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
