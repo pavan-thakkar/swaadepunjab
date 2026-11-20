@@ -2492,3 +2492,8 @@ img, video { max-width: 100%; }
   .cat3d-emoji { font-size: 2rem; }
   .cat3d-label { font-size: .78rem; max-width: 88px; }
 }
+
+/* "All" circle: category photos fade one into the next */
+.cat3d-plate img.cat3d-slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.06); transition: opacity .7s ease, transform 2.2s ease; }
+.cat3d-plate img.cat3d-slide.on { opacity: 1; transform: scale(1); }
+@media (prefers-reduced-motion: reduce) { .cat3d-plate img.cat3d-slide { transition: none; } }

@@ -282,6 +282,25 @@ export default function HomePage() {
     return map;
   }, [allItems]);
 
+  // "All" circle shows every category's photo in turn
+  const allSlides = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const c of categories) {
+      if (c.key === 'all') continue;
+      const ph = c.image || catPhotos[c.key];
+      if (ph && !seen.has(ph)) { seen.add(ph); out.push(ph); }
+    }
+    return out;
+  }, [categories, catPhotos]);
+  const [allSlide, setAllSlide] = useState(0);
+  useEffect(() => {
+    if (allSlides.length < 2) return;
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const t = setInterval(() => setAllSlide(i => (i + 1) % allSlides.length), 2200);
+    return () => clearInterval(t);
+  }, [allSlides.length]);
+
   const featured = items.filter(i => i.is_featured);
   const regular  = items.filter(i => !i.is_featured);
   // Search shows every match (bestsellers too). Without search, the full menu skips the
@@ -489,10 +508,16 @@ export default function HomePage() {
                   onClick={() => { setCategory(c.key); setSearchQuery(''); setSearch(''); }}
                 >
                   <span className="cat3d-plate">
-                    {photo
+                    {c.key === 'all' && allSlides.length > 1 ? (
+                      // Rotating photos of all categories (fades from one to the next)
+                      allSlides.map((src, i) => (
+                        <img key={src} src={src} alt="" loading={i < 2 ? 'eager' : 'lazy'}
+                          className={`cat3d-slide${i === allSlide % allSlides.length ? ' on' : ''}`} />
+                      ))
+                    ) : photo
                       ? <img src={photo} alt="" loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.removeAttribute('hidden'); }} />
                       : null}
-                    <span className="cat3d-emoji" hidden={!!photo}>{c.emoji}</span>
+                    <span className="cat3d-emoji" hidden={!!photo || (c.key === 'all' && allSlides.length > 1)}>{c.emoji}</span>
                   </span>
                   <span className="cat3d-label">{c.label}</span>
                 </button>
