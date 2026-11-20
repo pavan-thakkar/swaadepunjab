@@ -33,6 +33,31 @@ class ViewOrder extends ViewRecord
                         ->send();
                 }),
 
+            Actions\Action::make('refund')
+                ->label('Refund via Razorpay')
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->color('danger')
+                ->visible(fn () => \App\Filament\Support\RefundForm::canRefund($this->record))
+                ->modalHeading('Refund money to the customer')
+                ->modalDescription('Money goes back to the customer\'s UPI / card / bank in 5–7 working days. This cannot be undone.')
+                ->modalSubmitActionLabel('Refund now')
+                ->fillForm(fn () => \App\Filament\Support\RefundForm::fill($this->record))
+                ->form(fn () => \App\Filament\Support\RefundForm::schema($this->record))
+                ->action(function (array $data) {
+                    \App\Filament\Support\RefundForm::handle($this->record, $data);
+                    $this->record->refresh();
+                }),
+
+            Actions\Action::make('rating_link')
+                ->label(fn () => $this->record->order_rating ? 'Rated ' . $this->record->order_rating . '★' : 'Send rating link')
+                ->icon('heroicon-o-star')
+                ->color(fn () => $this->record->order_rating ? ((int) $this->record->order_rating <= 2 ? 'danger' : 'success') : 'gray')
+                ->visible(fn () => $this->record->status === 'delivered' && preg_match('/\d{10}/', (string) $this->record->customer_phone))
+                ->modalHeading(fn () => $this->record->order_rating ? 'Customer rating' : 'Ask the customer to rate this order')
+                ->modalContent(fn () => view('filament.rating-link', ['order' => $this->record]))
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Close'),
+
             Actions\Action::make('print_bill')
                 ->label('Print Receipt')
                 ->icon('heroicon-o-printer')

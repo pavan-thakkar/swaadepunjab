@@ -237,6 +237,65 @@ class Razorpay
     }
 
     /** Small HTTP helper with the key + secret. Returns decoded JSON or null. */
+    /** How much of this online payment can still be refunded. */
+    public static function refundable(Order $order): float
+    {
+        if ($order->payment_method !== 'razorpay' || ! in_array($order->payment_status, ['paid', 'refunded'], true) || ! $order->razorpay_payment_id) {
+            return 0.0;
+        }
+        return max(0, round((float) $order->total - (float) $order->refund_amount, 2));
+    }
+
+    /**
+     * Refund money to the customer through Razorpay (goes back to their UPI / card / bank in 5–7 days).
+     *
+     * @return array{0: bool, 1: string} [ok, message]
+     */
+    public static function refund(Order $order, float $amount, ?string $note = null): array
+    {
+        $max = self::refundable($order);
+        $amount = round($amount, 2);
+        if ($max <= 0) {
+            return [false, 'Nothing left to refund on this order.'];
+        }
+        if ($amount <= 0 || $amount > $max) {
+            return [false, 'Refund amount must be between ₹1 and ₹' . number_format($max, 2) . '.'];
+        }
+        $key = self::keyId();
+        $secret = self::secret();
+        if (! $key || ! $secret) {
+            return [false, 'Razorpay keys are missing — add them in Store & Receipt Config.'];
+        }
+
+        try {
+            $res = Http::withBasicAuth($key, $secret)->acceptJson()->timeout(20)
+                ->post(self::API . '/payments/' . $order->razorpay_payment_id . '/refund', array_filter([
+                    'amount' => (int) round($amount * 100),
+                    'notes'  => array_filter(['order' => $order->order_number, 'reason' => $note ? mb_substr($note, 0, 200) : null]),
+                ]));
+        } catch (\Throwable $e) {
+            Log::warning('Razorpay refund failed: ' . $e->getMessage());
+            return [false, 'Could not reach Razorpay. Please try again.'];
+        }
+
+        if (! $res->successful()) {
+            $msg = $res->json('error.description') ?: 'Razorpay refused the refund.';
+            Log::warning('Razorpay refund error', ['order' => $order->id, 'status' => $res->status(), 'body' => mb_substr($res->body(), 0, 500)]);
+            return [false, $msg];
+        }
+
+        $refunded = round((float) $order->refund_amount + $amount, 2);
+        $order->forceFill([
+            'refund_amount'      => $refunded,
+            'refunded_at'        => now(),
+            'razorpay_refund_id' => (string) $res->json('id'),
+            'refund_note'        => $note ? mb_substr($note, 0, 255) : $order->refund_note,
+            'payment_status'     => $refunded >= (float) $order->total - 0.01 ? 'refunded' : 'paid',
+        ])->save();
+
+        return [true, '₹' . number_format($amount, 2) . ' refund started (' . $res->json('id') . '). It reaches the customer in 5–7 working days.'];
+    }
+
     private static function request(string $method, string $path, array $body = [], ?string $key = null, ?string $secret = null): ?array
     {
         $secret = $secret ?: self::secret();

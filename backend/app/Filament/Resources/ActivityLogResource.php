@@ -17,8 +17,8 @@ class ActivityLogResource extends Resource
     protected static ?string $model = ActivityLog::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-list';
-    protected static ?string $navigationLabel = 'Activity Log';
-    protected static ?string $pluralModelLabel = 'Activity Log';
+    protected static ?string $navigationLabel = 'Staff Activity';
+    protected static ?string $pluralModelLabel = 'Staff Activity';
     protected static ?string $navigationGroup = 'Settings';
     protected static ?int $navigationSort = 91;
 

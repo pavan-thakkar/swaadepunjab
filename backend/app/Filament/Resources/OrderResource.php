@@ -101,8 +101,8 @@ class OrderResource extends Resource
                             'cash_on_delivery' => '💵 Cash on Delivery',
                             'card'             => '💳 Card',
                             'razorpay'         => match ($record->payment_status) {
-                                'paid'     => '✅ Paid online (Razorpay)' . ($record->paid_at ? ' · ' . $record->paid_at->format('d M, h:i A') : '') . ($record->razorpay_payment_id ? ' · ' . $record->razorpay_payment_id : ''),
-                                'refunded' => '↩️ Refunded (Razorpay)',
+                                'refunded' => '↩️ Refunded ₹' . number_format((float) $record->refund_amount, 2) . ($record->refunded_at ? ' · ' . $record->refunded_at->format('d M, h:i A') : '') . ($record->razorpay_refund_id ? ' · ' . $record->razorpay_refund_id : ''),
+                                'paid'     => '✅ Paid online (Razorpay)' . ($record->paid_at ? ' · ' . $record->paid_at->format('d M, h:i A') : '') . ($record->razorpay_payment_id ? ' · ' . $record->razorpay_payment_id : '') . ((float) $record->refund_amount > 0 ? ' · ↩️ ₹' . number_format((float) $record->refund_amount, 2) . ' refunded' : ''),
                                 'failed'   => '❌ Online payment failed / not completed',
                                 default    => '⏳ Waiting for online payment',
                             },

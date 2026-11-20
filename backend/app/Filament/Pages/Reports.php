@@ -37,9 +37,10 @@ class Reports extends Page
         $end = Carbon::parse($this->endDate)->endOfDay();
 
         // 1. Core KPIs (within range)
-        $totalRevenue = Order::whereBetween('created_at', [$start, $end])
+        // Sales minus partial refunds on orders that were still delivered
+        $totalRevenue = (float) Order::whereBetween('created_at', [$start, $end])
             ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
-            ->sum('total');
+            ->sum(\Illuminate\Support\Facades\DB::raw('total - COALESCE(refund_amount, 0)'));
         $totalOrders = Order::whereBetween('created_at', [$start, $end])->count();
         // GST collected (orders billed with GST)
         $rangeGst = (float) Order::whereBetween('created_at', [$start, $end])
@@ -53,9 +54,9 @@ class Reports extends Page
             ->avg('total') ?? 0;
 
         // Today's stats
-        $todayRevenue = Order::whereDate('created_at', Carbon::today())
+        $todayRevenue = (float) Order::whereDate('created_at', Carbon::today())
             ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
-            ->sum('total');
+            ->sum(\Illuminate\Support\Facades\DB::raw('total - COALESCE(refund_amount, 0)'));
         $todayOrders = Order::whereDate('created_at', Carbon::today())->count();
 
         // 2. Order Status Breakdown (within range)

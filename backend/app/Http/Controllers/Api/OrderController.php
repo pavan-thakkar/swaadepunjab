@@ -184,6 +184,51 @@ class OrderController extends Controller
     }
 
     /** Website: is online payment switched on? (only the public Key ID, never the secret) */
+    /** Rating page: order summary (needs the secret from the rating link). */
+    public function ratingShow(Request $request, string $identifier): JsonResponse
+    {
+        $order = Order::with('items')->where('order_number', $identifier)->first();
+        if (! $order || ! hash_equals($order->ratingToken(), (string) $request->query('t', ''))) {
+            return response()->json(['message' => 'This rating link is not valid.'], 404);
+        }
+        return response()->json([
+            'order_number' => $order->order_number,
+            'name'         => trim(explode(' ', (string) $order->customer_name)[0] ?? ''),
+            'date'         => $order->created_at?->format('d M Y, h:i A'),
+            'status'       => $order->status,
+            'items'        => $order->items->map(fn ($i) => ['name' => $i->name, 'quantity' => (int) $i->quantity])->values(),
+            'total'        => (float) $order->total,
+            'rating'       => $order->order_rating,
+            'feedback'     => $order->order_feedback,
+        ]);
+    }
+
+    /** Save the customer's rating (1–5 stars + optional comment). */
+    public function ratingStore(Request $request, string $identifier): JsonResponse
+    {
+        $data = $request->validate([
+            't'        => 'required|string|max:64',
+            'rating'   => 'required|integer|min:1|max:5',
+            'feedback' => 'nullable|string|max:1000',
+        ]);
+        $order = Order::where('order_number', $identifier)->first();
+        if (! $order || ! hash_equals($order->ratingToken(), $data['t'])) {
+            return response()->json(['message' => 'This rating link is not valid.'], 404);
+        }
+        if ($order->status === 'cancelled' || $order->status === 'awaiting_payment') {
+            return response()->json(['message' => 'This order can\'t be rated.'], 422);
+        }
+        $order->forceFill([
+            'order_rating'   => (int) $data['rating'],
+            'order_feedback' => trim((string) ($data['feedback'] ?? '')) ?: null,
+            'rated_at'       => now(),
+            // A new low rating needs a fresh call
+            'feedback_called_at' => (int) $data['rating'] <= 2 ? null : $order->feedback_called_at,
+        ])->save();
+
+        return response()->json(['message' => 'Thank you for your feedback!', 'rating' => $order->order_rating]);
+    }
+
     public function paymentSettings(): JsonResponse
     {
         $on = \App\Services\Razorpay::enabled();
@@ -522,6 +567,9 @@ class OrderController extends Controller
 
         $data = $order->toArray();
         $data['is_owner'] = $isOwner;
+        if ($isOwner && $order->status === 'delivered') {
+            $data['rating_url_query'] = 'o=' . urlencode((string) $order->order_number) . '&t=' . $order->ratingToken();
+        }
         if (! $isOwner) {
             unset($data['razorpay_order_id'], $data['razorpay_payment_id']);
         }

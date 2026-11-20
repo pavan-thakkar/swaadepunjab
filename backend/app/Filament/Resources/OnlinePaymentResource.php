@@ -133,7 +133,9 @@ class OnlinePaymentResource extends Resource
                         'success' => 'success', 'failed' => 'danger', 'waiting' => 'warning', 'refunded' => 'gray',
                     ][$state] ?? 'gray')
                     ->description(fn (Order $r) => match (static::state($r)) {
-                        'success' => $r->paid_at ? 'Paid ' . $r->paid_at->format('d M, h:i A') : null,
+                        'success' => ($r->paid_at ? 'Paid ' . $r->paid_at->format('d M, h:i A') : '')
+                            . ((float) $r->refund_amount > 0 ? ' · ₹' . number_format((float) $r->refund_amount, 2) . ' refunded' : ''),
+                        'refunded' => '₹' . number_format((float) $r->refund_amount, 2) . ' refunded' . ($r->refunded_at ? ' ' . $r->refunded_at->format('d M') : ''),
                         'failed'  => $r->payment_status === 'failed' ? 'Payment declined / failed' : 'Not paid — order cancelled',
                         'waiting' => 'Customer has not finished paying',
                         default   => null,
@@ -188,6 +190,17 @@ class OnlinePaymentResource extends Resource
                             ->{$res === 'paid' ? 'success' : ($res === 'error' ? 'danger' : 'warning')}()
                             ->send();
                     }),
+                Tables\Actions\Action::make('refund')
+                    ->label('Refund')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('danger')
+                    ->visible(fn (Order $r) => \App\Filament\Support\RefundForm::canRefund($r))
+                    ->modalHeading('Refund money to the customer')
+                    ->modalDescription('Money goes back to the customer\'s UPI / card / bank in 5–7 working days. This cannot be undone.')
+                    ->modalSubmitActionLabel('Refund now')
+                    ->fillForm(fn (Order $r) => \App\Filament\Support\RefundForm::fill($r))
+                    ->form(fn (Order $r) => \App\Filament\Support\RefundForm::schema($r))
+                    ->action(fn (Order $r, array $data) => \App\Filament\Support\RefundForm::handle($r, $data)),
                 Tables\Actions\Action::make('order')
                     ->label('Order')
                     ->icon('heroicon-o-eye')

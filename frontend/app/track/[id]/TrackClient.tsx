@@ -8,6 +8,7 @@ import Link from 'next/link';
 import EditOrderPanel from './EditOrderPanel';
 import PaymentPending from './PaymentPending';
 import { useLoyalty, pointsToEarn } from '../../components/LoyaltyPoints';
+import OrderRating from '../../components/OrderRating';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -452,6 +453,12 @@ export default function TrackOrderPage() {
                 <h2 style={{ marginBottom: '0.5rem', fontWeight: 900 }}>Enjoy your meal!</h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem' }}>Thank you for choosing Swaad E Punjab.</p>
                 
+                {/* Overall order rating (1–5 stars) */}
+                {order.rating_url_query && (() => {
+                  const q = new URLSearchParams(order.rating_url_query);
+                  return <OrderRating orderNumber={q.get('o') || ''} token={q.get('t') || ''} compact />;
+                })()}
+
                 {/* Review Request Section */}
                 <div style={{ 
                   borderTop: '1px solid var(--border)', 

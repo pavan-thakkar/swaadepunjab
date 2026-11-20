@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let alarmNeeded     = false;
     let audioUnlocked   = false;
     let lastCount       = -1;
+    let pendingCount    = 0;
     let notifShown      = false;
     let activeNotif     = null;
     let wakeLock        = null;
@@ -87,6 +88,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let latestOrder = null;
+    const ORDERS_URL = '/admin/orders?activeTab=pending';
+
     function sendBrowserNotification(count) {
         if (notifShown) return;
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
@@ -94,7 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeNotif) { try { activeNotif.close(); } catch(e){} }
 
         activeNotif = new Notification('🔔 New Order!', {
-            body: `${count} new order${count > 1 ? 's' : ''} need your attention — Swaad E Punjab`,
+            body: latestOrder
+                ? `${latestOrder.type} · ${latestOrder.name} · ₹${Math.round(latestOrder.total)}` + (count > 1 ? ` (+${count - 1} more waiting)` : '')
+                : `${count} new order${count > 1 ? 's' : ''} need your attention — Swaad E Punjab`,
             icon: '/favicon.ico',
             badge: '/favicon.ico',
             tag: 'swaad-order',
@@ -104,7 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activeNotif.onclick = () => {
             window.focus();
-            window.location.href = '/admin';
+            window.location.href = ORDERS_URL;
             activeNotif.close();
         };
 
@@ -187,28 +193,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return audioCtx;
     }
 
+    // Loud two-tone "phone ring" (easy to hear in a busy kitchen)
     function playChime() {
         try {
             const ctx = getCtx();
             const now = ctx.currentTime;
-            [[900,0.00,0.9,0.40],[660,0.28,0.8,0.70],[440,0.58,0.7,1.10]]
-                .forEach(([freq,delay,vol,dur]) => {
-                    const osc = ctx.createOscillator(), gain = ctx.createGain();
-                    osc.connect(gain); gain.connect(ctx.destination);
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(freq, now+delay);
-                    gain.gain.setValueAtTime(vol, now+delay);
-                    gain.gain.exponentialRampToValueAtTime(0.001, now+delay+dur);
-                    osc.start(now+delay); osc.stop(now+delay+dur);
-                });
-        } catch(e) { console.warn('[Alarm] Chime error:', e); }
+            const master = ctx.createGain();
+            const comp = ctx.createDynamicsCompressor();
+            master.gain.value = 0.9;
+            master.connect(comp); comp.connect(ctx.destination);
+            for (let burst = 0; burst < 2; burst++) {
+                const start = now + burst * 0.75;
+                for (let i = 0; i < 12; i++) {             // fast trill = classic ring
+                    const t = start + i * 0.05;
+                    const osc = ctx.createOscillator(), g = ctx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(i % 2 ? 1320 : 990, t);
+                    g.gain.setValueAtTime(0.0001, t);
+                    g.gain.exponentialRampToValueAtTime(0.35, t + 0.008);
+                    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.048);
+                    osc.connect(g); g.connect(master);
+                    osc.start(t); osc.stop(t + 0.05);
+                }
+            }
+        } catch(e) { console.warn('[Alarm] Ring error:', e); }
     }
 
     function startAlarm() {
         if (alarmRunning) return;
         alarmRunning = true;
         playChime();
-        alarmInterval = setInterval(playChime, 2500);
+        alarmInterval = setInterval(playChime, 3000);
         updateUI();
     }
 
@@ -294,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span style="color:#94a3b8;font-size:13px;font-weight:700;">Alarm muted on this device — pending orders still exist</span>
                     </div>
                     <div style="display:flex;gap:8px;">
-                        <a href="/admin" style="background:#1e293b;color:#f59e0b;border:1px solid #f59e0b;padding:7px 14px;border-radius:99px;font-size:12px;font-weight:700;text-decoration:none;">📋 Go to Dashboard</a>
+                        <a href="${ORDERS_URL}" style="background:#1e293b;color:#f59e0b;border:1px solid #f59e0b;padding:7px 14px;border-radius:99px;font-size:12px;font-weight:700;text-decoration:none;">📋 Open orders</a>
                         <button onclick="window.unmuteDevice()" style="background:#f59e0b;color:#1e293b;border:none;padding:7px 16px;border-radius:99px;font-size:12px;font-weight:900;cursor:pointer;">🔔 Unmute</button>
                     </div>`;
             } else {
@@ -302,11 +317,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:20px;display:inline-block;animation:bellRing 0.35s ease infinite alternate;">🔔</span>
                         <div>
-                            <span style="color:#fbbf24;font-size:13px;font-weight:900;">NEW ORDER ALARM RINGING</span>
-                            <a href="/admin" style="color:#64748b;font-size:11px;margin-left:10px;text-decoration:underline;">→ Go to Dashboard</a>
+                            <span style="color:#fbbf24;font-size:14px;font-weight:900;">${pendingCount > 1 ? pendingCount + ' NEW ORDERS' : 'NEW ORDER'} WAITING</span>
+                            ${latestOrder ? `<span style="color:#e2e8f0;font-size:13px;margin-left:10px;">${latestOrder.type} · ${String(latestOrder.name || '').replace(/[<>&]/g, '')} · ₹${Math.round(latestOrder.total)}</span>` : ''}
+                            <div style="color:#94a3b8;font-size:11px;">Keeps ringing until the order is accepted or rejected</div>
                         </div>
                     </div>
+                    <div style="display:flex;gap:8px;">
+                    <a href="${ORDERS_URL}" style="background:#f59e0b;color:#1e293b;padding:8px 18px;border-radius:99px;font-size:13px;font-weight:900;text-decoration:none;">Open orders →</a>
                     <button onclick="window.muteDevice()" style="background:#374151;color:#f1f5f9;border:1px solid #4b5563;padding:7px 16px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;">🔇 Silence on this device</button>
+                    </div>
                     <style>@keyframes bellRing{from{transform:rotate(-15deg);}to{transform:rotate(15deg);}}</style>`;
             }
         } else {
@@ -336,7 +355,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function poll() {
         fetch('/admin/alarm/pending-count', { credentials: 'same-origin' })
             .then(r => r.json())
-            .then(({ count = 0 }) => {
+            .then(({ count = 0, latest = null }) => {
+                latestOrder = latest;
+                pendingCount = count;
                 const muted = sessionStorage.getItem('swaad_alarm_muted') === '1';
 
                 // New order arrived — reset mute & notif so alarm fires again

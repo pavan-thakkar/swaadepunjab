@@ -8,6 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'order_rating',
+        'order_feedback',
+        'rated_at',
+        'rating_link_sent_at',
+        'feedback_called_at',
+        'feedback_called_by',
+        'feedback_note',
+        'refund_amount',
+        'refunded_at',
+        'razorpay_refund_id',
+        'refund_note',
         'gst_amount',
         'gst_rate',
         'gst_mode',
@@ -71,6 +82,12 @@ class Order extends Model
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'refunded_at' => 'datetime',
+        'rated_at' => 'datetime',
+        'rating_link_sent_at' => 'datetime',
+        'feedback_called_at' => 'datetime',
+        'order_rating' => 'integer',
+        'refund_amount' => 'decimal:2',
         'subtotal'              => 'decimal:2',
         'delivery_fee'          => 'decimal:2',
         'total'                 => 'decimal:2',
@@ -97,8 +114,46 @@ class Order extends Model
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::error('Loyalty update failed: ' . $e->getMessage());
                 }
+                // Ask for a rating on WhatsApp after delivery (only when a WhatsApp gateway is set up)
+                if ($order->status === 'delivered' && ! $order->rating_link_sent_at && ! $order->order_rating) {
+                    try {
+                        if (\App\Services\WhatsAppGateway::configured() && \App\Services\WhatsAppGateway::send($order->customer_phone, $order->ratingMessage())) {
+                            $order->forceFill(['rating_link_sent_at' => now()])->saveQuietly();
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('Rating WhatsApp failed: ' . $e->getMessage());
+                    }
+                }
             }
         });
+    }
+
+    /** Secret part of the rating link (works on any phone, no login needed). */
+    public function ratingToken(): string
+    {
+        return substr(hash_hmac('sha256', 'rate|' . $this->id . '|' . $this->order_number, (string) config('app.key')), 0, 24);
+    }
+
+    public function ratingUrl(): string
+    {
+        $site = rtrim((string) (config('app.frontend_url') ?: env('FRONTEND_URL', 'https://swaadepunjab.com')), '/');
+        return $site . '/rate/?o=' . urlencode((string) $this->order_number) . '&t=' . $this->ratingToken();
+    }
+
+    public function ratingMessage(): string
+    {
+        $first = trim(explode(' ', (string) $this->customer_name)[0] ?? '');
+        return "Hi {$first}! 🙏 Thank you for ordering from Swaad E Punjab.\n\nHow was your food? Please rate your order (takes 10 seconds):\n" . $this->ratingUrl();
+    }
+
+    /** Low ratings that nobody has called about yet. */
+    public static function badRatingsToCall(): int
+    {
+        try {
+            return static::whereNotNull('order_rating')->where('order_rating', '<=', 2)->whereNull('feedback_called_at')->count();
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     public function getEditableUntilAttribute(): ?string

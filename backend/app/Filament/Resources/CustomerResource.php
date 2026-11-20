@@ -93,35 +93,63 @@ class CustomerResource extends Resource
                 Tables\Columns\TextColumn::make('total_orders')
                     ->label('Orders')
                     ->badge()
-                    ->color('info')
+                    ->color(fn ($state) => (int) $state >= 5 ? 'success' : ((int) $state <= 1 ? 'gray' : 'info'))
+                    ->description(fn ($record) => (int) $record->total_orders >= 5 ? 'Regular' : ((int) $record->total_orders <= 1 ? 'New' : null))
                     ->sortable(),
-
                 Tables\Columns\TextColumn::make('total_spent')
                     ->label('Total Spent')
-                    ->formatStateUsing(fn ($state) => '₹' . number_format((float)$state, 2))
+                    ->formatStateUsing(fn ($state) => '₹' . number_format((float) $state, 2))
+                    ->description(fn ($record) => (int) $record->total_orders > 0 ? 'avg ₹' . number_format((float) $record->total_spent / (int) $record->total_orders, 0) . ' / order' : null)
                     ->sortable()
                     ->color('success')
                     ->weight('bold'),
-
                 Tables\Columns\TextColumn::make('last_order_at')
                     ->label('Last Order')
-                    ->dateTime('d M Y, h:i A')
+                    ->dateTime('d M Y')
+                    ->description(fn ($record) => $record->last_order_at ? $record->last_order_at->diffForHumans() : null)
+                    ->color(fn ($record) => $record->last_order_at && $record->last_order_at->lt(now()->subDays(30)) ? 'danger' : null)
                     ->sortable(),
+                Tables\Columns\TextColumn::make('first_order_at')
+                    ->label('Customer since')
+                    ->date('d M Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('city')
-                    ->options([
-                        'gadhinagar' => 'Gandhinagar',
-                        'ahmedabad'  => 'Ahmedabad',
-                    ]),
+                Tables\Filters\SelectFilter::make('inactive')
+                    ->label('Not ordered for')
+                    ->placeholder('Any time')
+                    ->options(['15' => '15+ days', '30' => '30+ days', '60' => '60+ days', '90' => '90+ days'])
+                    ->query(fn ($query, array $data) => filled($data['value'] ?? null)
+                        ? $query->havingRaw('MAX(created_at) < ?', [now()->subDays((int) $data['value'])])
+                        : $query),
+                Tables\Filters\SelectFilter::make('min_orders')
+                    ->label('Orders')
+                    ->placeholder('Any')
+                    ->options(['1' => 'Only 1 (new)', '2' => '2 or more', '5' => '5 or more (regulars)', '10' => '10 or more'])
+                    ->query(function ($query, array $data) {
+                        $v = $data['value'] ?? null;
+                        if (! filled($v)) return $query;
+                        $expr = "SUM(CASE WHEN status NOT IN ('cancelled','awaiting_payment') THEN 1 ELSE 0 END)";
+                        return $v === '1' ? $query->havingRaw("{$expr} = 1") : $query->havingRaw("{$expr} >= ?", [(int) $v]);
+                    }),
             ])
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
             ->actions([
-                Tables\Actions\ViewAction::make()
-                    ->label('View Profile')
-                    ->modalHeading('Customer Profile Details')
+                Tables\Actions\Action::make('profile')
+                    ->label('Profile')
+                    ->icon('heroicon-o-user-circle')
+                    ->color('gray')
+                    ->modalHeading(fn ($record) => $record->customer_name . ' · ' . $record->customer_phone)
+                    ->modalContent(fn ($record) => view('filament.customer-profile', ['c' => $record, 's' => Customer::summary((string) $record->customer_phone)]))
+                    ->modalWidth('3xl')
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
-                
+                Tables\Actions\Action::make('call')
+                    ->label('Call')
+                    ->icon('heroicon-o-phone')
+                    ->color('info')
+                    ->url(fn ($record) => 'tel:+91' . substr(preg_replace('/\D/', '', (string) $record->customer_phone), -10)),
                 Tables\Actions\Action::make('whatsapp_single')
                     ->label('WhatsApp')
                     ->icon('heroicon-o-chat-bubble-left-right')
@@ -130,7 +158,7 @@ class CustomerResource extends Resource
                         Forms\Components\Textarea::make('message')
                             ->label('Message Content')
                             ->required()
-                            ->default(fn ($record) => "Hello {$record->customer_name}!\n\n")
+                            ->default(fn ($record) => "Hello {$record->customer_name}! 🙏\n\nWe miss you at Swaad E Punjab. Order again: https://swaadepunjab.com")
                             ->rows(3),
                     ])
                     ->action(function ($record, array $data) {
@@ -152,7 +180,7 @@ class CustomerResource extends Resource
                         ->form([
                             Forms\Components\Textarea::make('message')
                                 ->label('Marketing Message')
-                                ->default("Hello!\n\nWe have a special discount for you today at Swaad E Punjab! Use code PUNJAB10 to get 10% off on your next order.\n\nOrder now: http://localhost:3000")
+                                ->default("Hello!\n\nWe have a special discount for you today at Swaad E Punjab! Use code PUNJAB10 to get 10% off on your next order.\n\nOrder now: https://swaadepunjab.com")
                                 ->required()
                                 ->rows(4),
                         ])

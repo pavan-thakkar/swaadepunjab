@@ -2538,3 +2538,24 @@ img, video { max-width: 100%; }
     font-size: .7rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; pointer-events: none;
   }
 }
+
+/* ===== Order rating (/rate and tracking page) ===== */
+.ordrate-page { max-width: 560px; margin: 0 auto; padding: 32px 16px 80px; }
+.ordrate-card { background: #fff; border: 1px solid var(--border); border-radius: 20px; padding: 26px 22px; box-shadow: 0 8px 28px rgba(100,60,0,.08); text-align: center; }
+.ordrate-card.compact { box-shadow: none; padding: 18px 14px; margin-bottom: 1.5rem; background: #FFFBF2; }
+.ordrate-title { font-size: 1.45rem; font-weight: 900; margin: 0 0 6px; }
+.ordrate-sub { font-size: 1.1rem; font-weight: 800; margin: 0 0 4px; }
+.ordrate-muted { color: var(--text-muted); font-size: .9rem; margin: 4px 0; }
+.ordrate-items { font-size: .88rem; color: #5b4a2e; margin: 8px 0 4px; }
+.ordrate-stars { display: flex; justify-content: center; gap: 6px; margin: 16px 0 4px; }
+.ordrate-stars button, .ordrate-stars span { font-size: 2.6rem; line-height: 1; color: #E5D9C3; background: none; border: 0; cursor: pointer; padding: 2px; transition: transform .12s ease, color .12s ease; }
+.ordrate-stars button.on, .ordrate-stars span.on { color: #F5A524; }
+.ordrate-stars button:hover { transform: scale(1.12); }
+.ordrate-stars.static span { cursor: default; font-size: 2rem; }
+.ordrate-label { font-weight: 800; color: #8A5A00; min-height: 1.4em; }
+.ordrate-text { width: 100%; margin-top: 14px; border: 1.5px solid var(--border); border-radius: 12px; padding: 10px 12px; font: inherit; resize: vertical; }
+.ordrate-btn { display: inline-block; margin-top: 12px; min-width: 180px; padding: 12px 20px; border: 0; border-radius: 12px; background: linear-gradient(135deg, #E6A817, #C98F0F); color: #1A0F00; font-weight: 800; font-size: 1rem; cursor: pointer; text-decoration: none; }
+.ordrate-btn:disabled { opacity: .6; }
+.ordrate-err { color: #B91C1C; font-weight: 600; margin-top: 8px; }
+.ordrate-done p { margin: 6px 0; }
+@media (max-width: 480px) { .ordrate-stars button { font-size: 2.3rem; } }
