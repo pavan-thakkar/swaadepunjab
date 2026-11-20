@@ -508,7 +508,9 @@ export default function HomePage() {
         <div className="cat3d-wrap">
           <button type="button" className="cat3d-arrow left" aria-label="Scroll categories left"
             onClick={() => catRowRef.current?.scrollBy({ left: -480, behavior: 'smooth' })}>‹</button>
-          <div className="cat3d-row" ref={catRowRef} role="tablist" aria-label="Categories">
+          <div className="cat3d-row" ref={catRowRef} role="tablist" aria-label="Categories"
+            // Fill row 1 left→right first, then row 2 (same order as the admin list)
+            style={{ ['--cat-cols' as string]: Math.max(1, Math.ceil(categories.length / 2)) } as React.CSSProperties}>
             {categories.map(c => {
               const isActive = category === c.key;
               // Admin photo first; otherwise a photo of one of this category's dishes

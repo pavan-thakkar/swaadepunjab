@@ -2504,3 +2504,7 @@ img, video { max-width: 100%; }
 .menu-group-title { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 900; color: var(--text); margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid #F1E4C6; }
 .menu-group-title span { font-size: .8rem; font-weight: 800; color: #8A5A00; background: #FFF1CC; border-radius: 999px; padding: 2px 9px; }
 @media (max-width: 768px) { .menu-group-title { font-size: 1.1rem; margin-bottom: 4px; } }
+
+/* Categories read left→right: row 1 = first half, row 2 = second half (matches admin order) */
+.cat3d-row { grid-auto-flow: row; grid-template-rows: none; grid-template-columns: repeat(var(--cat-cols, 9), 128px); }
+@media (max-width: 768px) { .cat3d-row { grid-template-columns: repeat(var(--cat-cols, 9), 92px); } }
