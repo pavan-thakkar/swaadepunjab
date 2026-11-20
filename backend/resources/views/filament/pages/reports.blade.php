@@ -67,6 +67,9 @@
                     <p class="text-xs font-semibold uppercase tracking-wider text-gray-400">Range Sales</p>
                     <h3 class="text-2xl font-bold text-gray-900 dark:text-white mt-1">₹{{ number_format($totalRevenue, 2) }}</h3>
                     <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Excludes cancelled orders</p>
+                    @if(($rangeGst ?? 0) > 0)
+                        <p class="text-[11px] text-amber-700 dark:text-amber-400 mt-1 font-semibold">GST collected: ₹{{ number_format($rangeGst, 2) }}</p>
+                    @endif
                 </div>
                 <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg text-emerald-500">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -377,6 +380,12 @@
                             <span>SUB TOTAL:</span>
                             <span>₹{{ number_format($bill->subtotal, 0) }}</span>
                         </div>
+                        @foreach(\App\Services\Gst::billLines($bill) as [$gLabel, $gAmt])
+                        <div style="display: flex; justify-content: space-between;">
+                            <span>{{ $bill->gst_mode === 'inclusive' ? 'INCL. ' : '' }}{{ strtoupper($gLabel) }}:</span>
+                            <span>{{ $bill->gst_mode === 'inclusive' ? '' : '+' }}₹{{ number_format($gAmt, 2) }}</span>
+                        </div>
+                        @endforeach
                         <div style="display: flex; justify-content: space-between;">
                             <span>DELIVERY FEE:</span>
                             <span>₹{{ number_format($bill->delivery_fee, 0) }}</span>
@@ -384,7 +393,7 @@
                         <div style="border-top: 1px solid black; margin: 4px 0;"></div>
                         <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 11px;">
                             <span>TOTAL AMOUNT:</span>
-                            <span>₹{{ number_format($bill->total, 0) }}</span>
+                            <span>₹{{ number_format($bill->total, fmod((float) $bill->total, 1) ? 2 : 0) }}</span>
                         </div>
                     </div>
                     @if($bill->special_instructions)

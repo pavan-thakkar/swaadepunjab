@@ -149,13 +149,16 @@
             <div style="padding: 14px 18px 18px; border-top: 1px solid #EDE0C4; display: flex; flex-direction: column; gap: 10px; background: #FBF8F1; border-radius: 0 0 18px 18px">
                 <div class="sp-row" style="font-size: 14px"><span>Items ({{ array_sum(array_column($lines, 'qty')) }})</span><span>₹{{ number_format($subtotal, 0) }}</span></div>
                 @if ($discount > 0)<div class="sp-row" style="font-size: 14px; color: #11622F; font-weight: 700"><span>Offer: {{ $offer?->title }}</span><span>−₹{{ number_format($discount, 0) }}</span></div>@endif
-                <div class="sp-row" style="font-size: 22px; font-weight: 900"><span>Total</span><span>₹{{ number_format($total, 0) }}</span></div>
+                @if (($gst['gst_amount'] ?? 0) > 0)
+                    <div class="sp-row" style="font-size: 13px; color: #6B5A3E"><span>GST {{ rtrim(rtrim(number_format($gst['gst_rate'], 2), '0'), '.') }}%{{ $gst['gst_mode'] === 'inclusive' ? ' (included)' : '' }}</span><span>{{ $gst['gst_mode'] === 'inclusive' ? '' : '+' }}₹{{ number_format($gst['gst_amount'], 2) }}</span></div>
+                @endif
+                <div class="sp-row" style="font-size: 22px; font-weight: 900"><span>Total</span><span>₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span></div>
                 <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'cash' ? 'true' : 'false' }}" wire:click="$set('payment', 'cash')">Cash</button>
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'upi' ? 'true' : 'false' }}" wire:click="$set('payment', 'upi')">UPI</button>
                 </div>
                 <button type="button" class="cm-go" wire:click="placeOrder" wire:loading.attr="disabled" @disabled(! count($lines))>
-                    <span wire:loading.remove wire:target="placeOrder">Place order &amp; print · ₹{{ number_format($total, 0) }}</span>
+                    <span wire:loading.remove wire:target="placeOrder">Place order &amp; print · ₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span>
                     <span wire:loading wire:target="placeOrder">Placing…</span>
                 </button>
                 @if ($lastOrder)

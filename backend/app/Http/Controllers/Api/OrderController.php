@@ -101,7 +101,9 @@ class OrderController extends Controller
             $pointsDiscount = $r['discount'];
         }
 
-        $total = max(0, $subtotal - $discount - $couponDiscount - $pointsDiscount) + $deliveryFee;
+        $foodAfterDiscounts = max(0, $subtotal - $discount - $couponDiscount - $pointsDiscount);
+        $gst = \App\Services\Gst::calculate($foodAfterDiscounts);
+        $total = round($foodAfterDiscounts + $gst['add'] + $deliveryFee, 2);
 
         $pickupTime = $validated['pickup_time'] ?? null;
         if ($pickupTime) {
@@ -147,6 +149,9 @@ class OrderController extends Controller
             'coupon_discount'      => $couponDiscount,
             'points_redeemed'      => $pointsUsed,
             'points_discount'      => $pointsDiscount,
+            'gst_amount'           => $gst['gst_amount'],
+            'gst_rate'             => $gst['gst_rate'],
+            'gst_mode'             => $gst['gst_mode'],
         ]);
         if ($pointsUsed > 0) {
             \App\Models\LoyaltyTransaction::create([
@@ -401,7 +406,11 @@ class OrderController extends Controller
                     $order->points_redeemed = $keep;
                     $order->points_discount = round($keep * $s['point_value'], 2);
                 }
-                $order->total = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount'] - (float) $order->points_discount) + $deliveryFee;
+                $foodAfterDiscounts = max(0, $subtotal - $applied['discount'] - $pricing['coupon_discount'] - (float) $order->points_discount);
+                // Keep the GST rate the order was placed with
+                $gst = \App\Services\Gst::forExistingOrder($order, $foodAfterDiscounts);
+                $order->gst_amount = $gst['gst_amount'];
+                $order->total = round($foodAfterDiscounts + $gst['add'] + $deliveryFee, 2);
             }
 
             if (array_key_exists('special_instructions', $validated)) {

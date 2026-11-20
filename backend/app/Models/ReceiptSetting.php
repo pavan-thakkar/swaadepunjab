@@ -39,6 +39,9 @@ class ReceiptSetting extends Model
         'razorpay_key_id',
         'razorpay_key_secret',
         'razorpay_webhook_secret',
+        'gst_enabled',
+        'gst_rate',
+        'gst_mode',
     ];
 
     // Payment secrets are encrypted in the database and never sent anywhere
@@ -46,6 +49,8 @@ class ReceiptSetting extends Model
 
     protected $casts = [
         'razorpay_enabled'        => 'boolean',
+        'gst_enabled'             => 'boolean',
+        'gst_rate'                => 'float',
         'razorpay_key_secret'     => 'encrypted',
         'razorpay_webhook_secret' => 'encrypted',
     ];

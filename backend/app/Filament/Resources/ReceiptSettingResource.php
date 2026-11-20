@@ -64,6 +64,51 @@ class ReceiptSettingResource extends Resource
                             ->placeholder('e.g. 123, Food Court, Corporate Tower, Amritsar'),
                     ])->columns(2),
 
+                Forms\Components\Section::make('🧾 GST on Bill')
+                    ->description('Choose whether GST is charged on orders, and how. Applies to new website and counter orders; old orders keep what they were billed.')
+                    ->schema([
+                        Forms\Components\Toggle::make('gst_enabled')
+                            ->label('Charge GST on bills')
+                            ->helperText('OFF = no GST line on the bill, website or reports.')
+                            ->default(false)
+                            ->live()
+                            ->columnSpanFull(),
+                        Forms\Components\Radio::make('gst_mode')
+                            ->label('How is GST charged?')
+                            ->options([
+                                'exclusive' => 'Add GST on top of the price  (₹200 food + 5% = customer pays ₹210)',
+                                'inclusive' => 'Price already includes GST  (customer pays ₹200; bill shows ₹190.48 + ₹9.52 GST)',
+                            ])
+                            ->default('exclusive')
+                            ->live()
+                            ->visible(fn (Forms\Get $get) => (bool) $get('gst_enabled'))
+                            ->dehydrateStateUsing(fn ($state) => in_array($state, ['exclusive', 'inclusive'], true) ? $state : 'exclusive')
+                            ->columnSpanFull(),
+                        Forms\Components\TextInput::make('gst_rate')
+                            ->label('GST rate')
+                            ->numeric()->minValue(0)->maxValue(28)->step(0.01)
+                            ->suffix('%')
+                            ->default(5)
+                            ->helperText('Restaurants usually charge 5% (CGST 2.5% + SGST 2.5%). The bill shows CGST and SGST as half each.')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('gst_enabled'))
+                            ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : 5),
+                        Forms\Components\Placeholder::make('gst_example')
+                            ->label('Example on a ₹200 order')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('gst_enabled'))
+                            ->content(function (Forms\Get $get) {
+                                $rate = (float) ($get('gst_rate') ?: 0);
+                                if ($rate <= 0) {
+                                    return 'Enter a rate above 0%.';
+                                }
+                                if ($get('gst_mode') === 'inclusive') {
+                                    $gst = round(200 - 200 / (1 + $rate / 100), 2);
+                                    return 'Customer pays ₹200.00 — food ₹' . number_format(200 - $gst, 2) . ' + GST ₹' . number_format($gst, 2);
+                                }
+                                $gst = round(200 * $rate / 100, 2);
+                                return 'Food ₹200.00 + GST ₹' . number_format($gst, 2) . ' = customer pays ₹' . number_format(200 + $gst, 2);
+                            }),
+                    ])->columns(2),
+
                 Forms\Components\Section::make('💬 Automated WhatsApp Marketing Gateway Config')
                     ->description('Integrate with any bulk WhatsApp API provider (e.g. UltraMsg, Wati, Twilio, or custom gateways) for 1-click background broadcasts.')
                     ->schema([

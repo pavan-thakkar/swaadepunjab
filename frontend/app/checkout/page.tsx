@@ -10,6 +10,7 @@ import Link from 'next/link';
 import OfferProgress, { useOffers, computeOffer } from '../components/OfferProgress';
 import { useLoyalty, pointsToEarn, redeemable } from '../components/LoyaltyPoints';
 import QuickAdds from '../components/QuickAdds';
+import { useGst, calcGst, gstLabel, money } from '../lib/gst';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -394,7 +395,10 @@ export default function CheckoutPage() {
   const pointsDiscount = usePoints ? pointsOption.discount : 0;
   const earnPoints = pointsToEarn(Math.max(0, amountAfterDiscounts - pointsDiscount), loyalty.settings);
 
-  const grandTotal = Math.max(0, amountAfterDiscounts - pointsDiscount) + activeDeliveryFee;
+  // GST (Admin → Store & Receipt Config): on the food amount after discounts, same as the bill
+  const gstSettings = useGst();
+  const gst = calcGst(Math.max(0, amountAfterDiscounts - pointsDiscount), gstSettings);
+  const grandTotal = Math.round((Math.max(0, amountAfterDiscounts - pointsDiscount) + (gst?.add || 0) + activeDeliveryFee) * 100) / 100;
 
   const handleSearchAddress = async () => {
     if (!searchQuery.trim()) return;
@@ -1001,11 +1005,16 @@ export default function CheckoutPage() {
                     <span>{distanceKm.toFixed(1)} KM</span>
                   </div>
                 )}
+                {gst && gst.amount > 0 && (
+                  <div className="cart-total-row" style={gst.mode === 'inclusive' ? { fontSize: '0.82rem', color: 'var(--text-muted)' } : undefined}>
+                    <span>{gstLabel(gst)}</span><span>{gst.mode === 'inclusive' ? '' : '+'}₹{gst.amount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="cart-total-row"><span>Delivery charge</span><span>₹{activeDeliveryFee.toFixed(0)}</span></div>
               </div>
               <div className="summary-total">
                 <span>To pay</span>
-                <span>₹{grandTotal.toFixed(0)}</span>
+                <span>₹{money(grandTotal)}</span>
               </div>
               {(offerCalc.discount + couponDiscount + pointsDiscount) > 0 && (
                 <div className="savings-chip">
@@ -1032,7 +1041,7 @@ export default function CheckoutPage() {
             )}
 
             <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '15px', fontSize: '1rem' }} disabled={loading}>
-              {loading ? 'Placing your order…' : payment === 'razorpay' ? `Pay ₹${grandTotal.toFixed(0)} & place order` : `Place order · ₹${grandTotal.toFixed(0)}`}
+              {loading ? 'Placing your order…' : payment === 'razorpay' ? `Pay ₹${money(grandTotal)} & place order` : `Place order · ₹${money(grandTotal)}`}
             </button>
           </div>
         </div>

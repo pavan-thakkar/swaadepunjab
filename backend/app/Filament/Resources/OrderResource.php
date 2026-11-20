@@ -240,6 +240,15 @@ class OrderResource extends Resource
                     ->numeric()
                     ->prefix('− ₹')
                     ->disabled(),
+                Forms\Components\TextInput::make('gst_amount')
+                    ->label(fn (?Order $record) => $record && $record->gst_rate
+                        ? 'GST ' . rtrim(rtrim(number_format((float) $record->gst_rate, 2), '0'), '.') . '%' . ($record->gst_mode === 'inclusive' ? ' (included in price)' : ' (added)')
+                        : 'GST')
+                    ->numeric()
+                    ->prefix('₹')
+                    ->placeholder('No GST')
+                    ->disabled()
+                    ->dehydrated(false),
                 Forms\Components\TextInput::make('distance_km')
                     ->label('Calculated Distance')
                     ->numeric()

@@ -382,6 +382,12 @@ export default function TrackOrderPage() {
                 {Number(order.discount) > 0 && (
                   <div className="cart-total-row" style={{ color: 'var(--success)', fontWeight: 700 }}><span>Offer{order.offer_title ? `: ${order.offer_title}` : ''}</span><span>−₹{Number(order.discount).toFixed(2)}</span></div>
                 )}
+                {Number(order.gst_amount) > 0 && (
+                  <div className="cart-total-row" style={order.gst_mode === 'inclusive' ? { fontSize: '0.82rem', color: 'var(--text-muted)' } : undefined}>
+                    <span>GST {Number(Number(order.gst_rate || 0).toFixed(2))}%{order.gst_mode === 'inclusive' ? ' (included in price)' : ''}</span>
+                    <span>{order.gst_mode === 'inclusive' ? '' : '+'}₹{Number(order.gst_amount).toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="cart-total-row"><span>Delivery fee</span><span>₹{Number(order.delivery_fee).toFixed(2)}</span></div>
                 <div className="cart-total-row grand"><span>Total</span><span style={{ color: 'var(--primary)' }}>₹{Number(order.total).toFixed(2)}</span></div>
               </div>

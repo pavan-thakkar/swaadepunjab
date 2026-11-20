@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'gst_amount',
+        'gst_rate',
+        'gst_mode',
         'payment_status',
         'razorpay_order_id',
         'razorpay_payment_id',
@@ -79,6 +82,8 @@ class Order extends Model
         'discount'              => 'decimal:2',
         'coupon_discount'       => 'decimal:2',
         'points_discount'       => 'decimal:2',
+        'gst_amount'            => 'decimal:2',
+        'gst_rate'              => 'float',
         'points_redeemed'       => 'integer',
     ];
 

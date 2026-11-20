@@ -41,6 +41,10 @@ class Reports extends Page
             ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
             ->sum('total');
         $totalOrders = Order::whereBetween('created_at', [$start, $end])->count();
+        // GST collected (orders billed with GST)
+        $rangeGst = (float) Order::whereBetween('created_at', [$start, $end])
+            ->whereNotIn('status', ['cancelled', 'awaiting_payment'])
+            ->sum('gst_amount');
         $deliveredOrders = Order::whereBetween('created_at', [$start, $end])
             ->where('status', 'delivered')
             ->count();
@@ -100,6 +104,7 @@ class Reports extends Page
             'startDate'         => $this->startDate,
             'endDate'           => $this->endDate,
             'totalRevenue'      => $totalRevenue,
+            'rangeGst'          => $rangeGst,
             'totalOrders'       => $totalOrders,
             'deliveredOrders'   => $deliveredOrders,
             'averageOrderValue' => $averageOrderValue,

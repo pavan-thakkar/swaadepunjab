@@ -103,6 +103,21 @@
             <span>-₹{{ number_format($order->coupon_discount, 0) }}</span>
         </div>
         @endif
+        @php $gstLines = \App\Services\Gst::billLines($order); $gstIncl = $order->gst_mode === 'inclusive'; @endphp
+        @if($gstLines)
+            @if($gstIncl)
+            <div style="display: flex; justify-content: space-between; font-weight: normal; font-size: 9px;">
+                <span>TAXABLE VALUE:</span>
+                <span>₹{{ number_format(max(0, $order->subtotal - $order->discount - $order->points_discount - $order->coupon_discount) - $order->gst_amount, 2) }}</span>
+            </div>
+            @endif
+            @foreach($gstLines as [$gLabel, $gAmt])
+            <div style="display: flex; justify-content: space-between; font-weight: normal;{{ $gstIncl ? ' font-size: 9px;' : '' }}">
+                <span>{{ $gstIncl ? 'INCL. ' : '' }}{{ strtoupper($gLabel) }}:</span>
+                <span>{{ $gstIncl ? '' : '+' }}₹{{ number_format($gAmt, 2) }}</span>
+            </div>
+            @endforeach
+        @endif
         <div style="display: flex; justify-content: space-between; font-weight: normal;">
             <span>DELIVERY FEE:</span>
             <span>₹{{ number_format($order->delivery_fee, 0) }}</span>
@@ -110,7 +125,7 @@
         <div style="border-top: 1px solid black; margin: 6px 0;"></div>
         <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;">
             <span>TOTAL AMOUNT:</span>
-            <span>₹{{ number_format($order->total, 0) }}</span>
+            <span>₹{{ number_format($order->total, fmod((float) $order->total, 1) ? 2 : 0) }}</span>
         </div>
     </div>
 

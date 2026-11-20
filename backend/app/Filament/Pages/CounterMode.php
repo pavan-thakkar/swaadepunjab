@@ -318,13 +318,15 @@ class CounterMode extends Page
         }
         $pricing = $subtotal > 0 ? OrderPricing::calculate($subtotal, null, $this->phone ?: null) : null;
         $discount = $pricing ? (float) $pricing['offer_discount'] : 0.0;
+        $gst = \App\Services\Gst::calculate(max(0, $subtotal - $discount));
         return [
             'lines' => $lines,
             'subtotal' => $subtotal,
             'discount' => $discount,
             'freeLine' => $pricing['free_line'] ?? null,
             'offer' => $pricing['offer'] ?? null,
-            'total' => max(0, $subtotal - $discount),
+            'total' => round(max(0, $subtotal - $discount) + $gst['add'], 2),
+            'gst' => $gst,
             'pricing' => $pricing,
         ];
     }
@@ -365,6 +367,9 @@ class CounterMode extends Page
             'offer_id'              => $p['offer']?->id,
             'offer_title'           => $p['offer']?->title,
             'total'                 => $p['total'],
+            'gst_amount'            => $p['gst']['gst_amount'],
+            'gst_rate'              => $p['gst']['gst_rate'],
+            'gst_mode'              => $p['gst']['gst_mode'],
             'status'                => 'accepted',
             'payment_method'        => $this->payment === 'upi' ? 'upi_counter' : 'cash_on_delivery',
             'special_instructions'  => trim($this->note) ?: null,

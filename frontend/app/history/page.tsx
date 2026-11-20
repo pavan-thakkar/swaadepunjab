@@ -358,7 +358,7 @@ export default function HistoryPage() {
                         return (<>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block' }}>{label}</span>
                           <strong style={{ fontSize: '1.35rem', color, fontWeight: 900, textDecoration: cancelled ? 'line-through' : 'none' }}>
-                            ₹{Number(order.total).toFixed(0)}
+                            ₹{(n => Number.isInteger(n) ? n.toFixed(0) : n.toFixed(2))(Math.round(Number(order.total) * 100) / 100)}
                           </strong>
                         </>);
                       })()}

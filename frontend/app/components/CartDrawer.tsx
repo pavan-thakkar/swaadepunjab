@@ -8,6 +8,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 import { useRouter, usePathname } from 'next/navigation';
 import OfferProgress, { useOffers, computeOffer } from './OfferProgress';
 import { itemPath } from '../lib/itemPath';
+import { useGst, calcGst, gstLabel, money } from '../lib/gst';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   special_combo:  '🍱',
@@ -73,6 +74,8 @@ export default function CartDrawer() {
   const { state, dispatch, total, itemCount } = useCart();
   const offers = useOffers();
   const offerCalc = computeOffer(total, offers);
+  const gstSettings = useGst();
+  const cartGst = calcGst(Math.max(0, total - offerCalc.discount), gstSettings);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -213,7 +216,12 @@ export default function CartDrawer() {
                       <span>Offer discount</span><span>−₹{offerCalc.discount.toFixed(0)}</span>
                     </div>
                   )}
-                  <div className="cart-total-row grand"><span>Total</span><span>₹{(total - offerCalc.discount).toFixed(0)}</span></div>
+                  {cartGst && cartGst.amount > 0 && (
+                    <div className="cart-total-row" style={cartGst.mode === 'inclusive' ? { fontSize: '0.8rem', color: 'var(--text-muted)' } : undefined}>
+                      <span>{gstLabel(cartGst)}</span><span>{cartGst.mode === 'inclusive' ? '' : '+'}₹{cartGst.amount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="cart-total-row grand"><span>Total</span><span>₹{money(Math.max(0, total - offerCalc.discount) + (cartGst?.add || 0))}</span></div>
                 </div>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '8px', marginBottom: '12px' }}>
                   * Delivery charges will be calculated on the next page based on your address.

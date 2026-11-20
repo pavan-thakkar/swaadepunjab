@@ -121,6 +121,9 @@ Route::get('/store-info', function () {
     ]);
 });
 
+// GST settings (website cart shows the GST line the same way the bill will)
+Route::get('/gst-settings', fn () => response()->json(App\Services\Gst::publicArray()));
+
 // Delivery Settings route
 Route::get('/delivery-settings', function () {
     return response()->json([

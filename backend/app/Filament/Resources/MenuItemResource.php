@@ -265,6 +265,35 @@ class MenuItemResource extends Resource
                     ->label('Featured'),
             ])
             ->filters([
+                // Sort by: name / price / newest. Empty = website order (category order, then dish order)
+                Tables\Filters\SelectFilter::make('sort_by')
+                    ->label('Sort by')
+                    ->placeholder('Website order')
+                    ->options([
+                        'name_asc'   => 'Name A → Z (ascending)',
+                        'name_desc'  => 'Name Z → A (descending)',
+                        'price_asc'  => 'Price low → high',
+                        'price_desc' => 'Price high → low',
+                        'newest'     => 'Newest first',
+                        'oldest'     => 'Oldest first',
+                    ])
+                    ->query(function ($query, array $data) {
+                        return match ($data['value'] ?? null) {
+                            'name_asc'   => $query->orderBy('menu_items.name', 'asc'),
+                            'name_desc'  => $query->orderBy('menu_items.name', 'desc'),
+                            'price_asc'  => $query->orderBy('menu_items.price', 'asc')->orderBy('menu_items.name'),
+                            'price_desc' => $query->orderBy('menu_items.price', 'desc')->orderBy('menu_items.name'),
+                            'newest'     => $query->orderBy('menu_items.created_at', 'desc')->orderBy('menu_items.id', 'desc'),
+                            'oldest'     => $query->orderBy('menu_items.created_at', 'asc')->orderBy('menu_items.id', 'asc'),
+                            default      => $query,
+                        };
+                    })
+                    ->indicateUsing(fn (array $data) => match ($data['value'] ?? null) {
+                        'name_asc' => 'Sorted: Name A → Z', 'name_desc' => 'Sorted: Name Z → A',
+                        'price_asc' => 'Sorted: Price low → high', 'price_desc' => 'Sorted: Price high → low',
+                        'newest' => 'Sorted: Newest first', 'oldest' => 'Sorted: Oldest first',
+                        default => null,
+                    }),
                 Tables\Filters\SelectFilter::make('category')
                     ->options(fn () => \App\Models\Category::all()->mapWithKeys(function ($cat) {
                         return [$cat->slug => ($cat->emoji ? $cat->emoji . ' ' : '') . $cat->name];
@@ -272,6 +301,9 @@ class MenuItemResource extends Resource
                 Tables\Filters\TernaryFilter::make('is_available')->label('Available'),
                 Tables\Filters\TernaryFilter::make('is_featured')->label('Featured'),
             ])
+            // Show Sort by + filters above the list (no need to open the funnel)
+            ->filtersLayout(Tables\Enums\FiltersLayout::AboveContent)
+            ->filtersFormColumns(['sm' => 2, 'lg' => 4])
             ->actions([
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make(),
