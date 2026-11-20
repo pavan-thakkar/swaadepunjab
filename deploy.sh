@@ -92,8 +92,8 @@ sshpass -p "$SSH_PASS" rsync -az --delete \
 # Remove any old database dumps from the live site (rsync skips *.sql, so delete them here)
 sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST \
   "rm -f $REMOTE_FRONTEND/*.sql $REMOTE_FRONTEND/backend/public/info.php && \
-   find $REMOTE_FRONTEND -path $REMOTE_FRONTEND/backend -prune -o -type d -exec chmod 755 {} + && \
-   find $REMOTE_FRONTEND -path $REMOTE_FRONTEND/backend -prune -o -type f -exec chmod 644 {} +"
+   find $REMOTE_FRONTEND -path $REMOTE_FRONTEND/backend -prune -o -type d -exec chmod 755 {} + ; \
+   find $REMOTE_FRONTEND -path $REMOTE_FRONTEND/backend -prune -o -type f -exec chmod 644 {} + ; true" || true
 
 # Write .htaccess after rsync (rsync may overwrite it)
 sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USER@$SSH_HOST 'cat > /home/u360309011/domains/swaadepunjab.com/public_html/.htaccess << '"'"'HTA'"'"'

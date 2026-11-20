@@ -1,20 +1,18 @@
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  
-  # Handle item fallback
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^item/.*$ /item/1.html [L]
-
-  # Handle track fallback
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule ^track/.*$ /track/demo.html [L]
-
-  # Handle general SPA routing fallback
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteCond %{REQUEST_FILENAME}\.html -f
-  RewriteRule ^(.*)$ $1.html [L]
+  # Never serve the Laravel backend folder (.env, database, logs) through the main domain
+  RewriteRule ^backend(/.*)?$ - [F,L]
+  # Never serve hidden files (.env, .git) or database/backup files
+  RewriteRule (^|/)\.(?!well-known) - [F,L]
+  RewriteRule \.(sql|sqlite|log|bak|env)$ - [F,L,NC]
+  # Real files and folders are served as they are
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  # Dish pages (/item/chana-jeera-rice) and order tracking pages share one built page
+  RewriteRule ^item/.+$ /item/1/index.html [L]
+  RewriteRule ^track/.+$ /track/demo/index.html [L]
+  # Anything else unknown goes to the home page
+  RewriteRule ^ /index.html [L]
 </IfModule>
