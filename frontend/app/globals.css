@@ -2515,3 +2515,26 @@ img, video { max-width: 100%; }
 .cat3d-arrow.off { opacity: 0; pointer-events: none; }
 .cat3d-arrow { transition: opacity .2s ease; }
 @media (max-width: 768px) { .cat3d-row { grid-template-columns: repeat(var(--cat-cols, 9), 92px); } }
+
+/* ===== Desktop dish cards: ADD button sits exactly on the photo's bottom edge (half on photo, half below),
+   "Customisable" shows neatly under it without pushing the button up ===== */
+@media (min-width: 769px) {
+  .food-card-action-wrap {
+    bottom: -19px; right: 16px; left: auto; transform: none;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .swiggy-add-btn, .quantity-control-card {
+    min-width: 112px; height: 38px; min-height: 38px; border-radius: 10px;
+  }
+  .swiggy-add-btn {
+    padding: 0 20px; font-size: .92rem; font-weight: 800; letter-spacing: .05em;
+    background: #fff; color: var(--primary-text, #8A5A00);
+    border: 1px solid var(--primary-dark, #C98F0F);
+    box-shadow: 0 4px 14px rgba(70,40,0,.16);
+  }
+  .swiggy-add-btn:hover { background: var(--primary); color: #1A0F00; transform: translateY(-1px); }
+  .has-opts-note {
+    position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px;
+    font-size: .7rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; pointer-events: none;
+  }
+}

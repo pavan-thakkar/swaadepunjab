@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart, MenuItem, qtyInCart } from '../context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions } from '../context/CartContext';
 import { itemPath } from '../lib/itemPath';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
@@ -67,7 +67,7 @@ export default function FeaturedCards() {
           return (
             <div
               key={card.id}
-              className={`featured-card${clickable ? ' clickable' : ''}`}
+              className={`featured-card${clickable ? ' clickable' : ''}${card.menu_item && card.menu_item.is_available !== false ? ' has-bar' : ''}`}
               role={clickable ? 'link' : undefined}
               tabIndex={clickable ? 0 : undefined}
               onClick={() => clickable && router.push(card.menu_item ? itemPath(card.menu_item) : `/item/${card.menu_item_id}/`)}
@@ -86,7 +86,7 @@ export default function FeaturedCards() {
                   <div className="featured-add-bar" onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
                     <div className="featured-add-info">
                       <span className="featured-add-name">{dish.name}{dish.quantity_label ? <span className="qty-label" style={{ display: 'inline', marginLeft: 6 }}>· {dish.quantity_label}</span> : null}</span>
-                      <span className="featured-add-price">₹{Number(dish.price).toFixed(0)}</span>
+                      <span className="featured-add-price">₹{Number(dish.price).toFixed(0)}{hasOptions(dish) && <span className="featured-add-opts">Customisable</span>}</span>
                     </div>
                     {qty > 0 ? (
                       <div className="quantity-control-card featured-qty">
@@ -95,7 +95,7 @@ export default function FeaturedCards() {
                         <button type="button" className="qty-control-btn" aria-label={`Add one ${dish.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: dish.id, item: dish })}>+</button>
                       </div>
                     ) : (
-                      <button type="button" className="featured-add-btn" aria-label={`Add ${dish.name} to cart`} onClick={() => dispatch({ type: 'ADD', item: dish })}>ADD +</button>
+                      <button type="button" className="featured-add-btn" aria-label={`Add ${dish.name} to cart`} onClick={() => dispatch({ type: 'ADD', item: dish })}>ADD<span className="featured-add-plus">+</span></button>
                     )}
                   </div>
                 );
@@ -111,6 +111,7 @@ export default function FeaturedCards() {
           gap: 18px;
           overflow-x: auto;
           scroll-snap-type: x mandatory;
+          align-items: flex-start;
           padding: 4px 2px 14px;
           scrollbar-width: none;
         }
@@ -135,21 +136,32 @@ export default function FeaturedCards() {
           color: #fff; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.04em;
           padding: 5px 10px; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
         }
+        /* Dish strip under the photo; the ADD button sits half on the photo, half on the strip */
+        .featured-card.has-bar { aspect-ratio: auto; overflow: visible; background: #fff; display: flex; flex-direction: column; }
+        .featured-card.has-bar > img { aspect-ratio: 16 / 9; height: auto; border-radius: 16px 16px 0 0; }
         .featured-add-bar {
-          position: absolute; left: 10px; right: 10px; bottom: 10px;
-          display: flex; align-items: center; justify-content: space-between; gap: 10px;
-          background: rgba(255,255,255,0.96); border-radius: 12px; padding: 8px 8px 8px 12px;
-          box-shadow: 0 4px 14px rgba(0,0,0,0.18); cursor: default;
+          position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          background: #fff; border-radius: 0 0 16px 16px; padding: 12px 150px 12px 16px; min-height: 64px; cursor: default;
+        }
+        .featured-add-bar > .featured-add-btn, .featured-add-bar > .featured-qty {
+          position: absolute; right: 16px; top: -21px; z-index: 2;
         }
         .featured-add-info { display: flex; flex-direction: column; min-width: 0; }
-        .featured-add-name { font-size: 0.85rem; font-weight: 700; color: #1A0F00; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .featured-add-price { font-size: 0.9rem; font-weight: 800; color: #1A0F00; }
+        .featured-add-name { font-size: 0.95rem; font-weight: 700; color: #1A0F00; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .featured-add-price { font-size: 0.95rem; margin-top: 2px; font-weight: 800; color: #1A0F00; }
+        .featured-add-opts { margin-left: 8px; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); }
         .featured-add-btn {
-          flex-shrink: 0; min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px;
-          background: var(--primary); color: #1A0F00; font: inherit; font-weight: 800; font-size: 0.88rem; cursor: pointer;
+          flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+          min-width: 112px; height: 42px; padding: 0 20px; border-radius: 10px;
+          background: #fff; color: var(--primary-text, #8A5A00); border: 1px solid var(--primary-dark, #C98F0F);
+          font: inherit; font-weight: 800; font-size: 0.92rem; letter-spacing: 0.05em; cursor: pointer;
+          box-shadow: 0 4px 12px rgba(70,40,0,0.16);
+          transition: background .2s ease, color .2s ease, transform .15s ease, box-shadow .2s ease;
         }
-        .featured-add-btn:hover { background: var(--primary-dark); }
-        .featured-qty { flex-shrink: 0; min-width: 96px; height: 40px; }
+        .featured-add-plus { font-size: 1.1rem; font-weight: 900; line-height: 1; }
+        .featured-add-btn:hover { background: var(--primary); color: #1A0F00; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(230,168,23,0.35); }
+        .featured-add-btn:active { transform: scale(0.96); }
+        .featured-qty { flex-shrink: 0; min-width: 112px; height: 42px; border-radius: 10px; box-shadow: 0 4px 12px rgba(70,40,0,0.16); }
         .featured-arrows { display: flex; gap: 8px; }
         .featured-arrows button {
           width: 38px; height: 38px; border-radius: 50%;
