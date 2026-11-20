@@ -154,6 +154,32 @@ class CategoryResource extends Resource
                 Tables\Filters\TernaryFilter::make('is_active')->label('Active'),
             ])
             ->actions([
+                Tables\Actions\Action::make('dishPhoto')
+                    ->label('Choose dish photo')
+                    ->icon('heroicon-o-photo')
+                    ->color('gray')
+                    ->modalHeading(fn (Category $record) => 'Photo for ' . $record->name)
+                    ->modalDescription('Pick one of this category\'s dish photos. It is copied, so it stays even if the dish photo changes later.')
+                    ->form(fn (Category $record) => [
+                        Forms\Components\Radio::make('photo')
+                            ->hiddenLabel()
+                            ->required()
+                            ->options(collect($record->dishPhotos())->mapWithKeys(fn ($name, $path) => [
+                                $path => new \Illuminate\Support\HtmlString(
+                                    '<span style="display:inline-flex;align-items:center;gap:12px">'
+                                    . '<img src="' . e(asset('storage/' . $path)) . '" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;box-shadow:0 4px 10px rgba(0,0,0,.18)">'
+                                    . '<span style="font-weight:600">' . e($name) . '</span></span>'
+                                ),
+                            ])->all())
+                            ->columns(2)
+                            ->helperText(fn () => $record->dishPhotos() ? null : 'No dish in this category has a photo yet. Add photos in Menu Items first.'),
+                    ])
+                    ->action(function (Category $record, array $data) {
+                        $ok = $record->useDishPhoto($data['photo']);
+                        \Filament\Notifications\Notification::make()
+                            ->title($ok ? 'Category photo updated' : 'Could not copy that photo')
+                            ->{$ok ? 'success' : 'danger'}()->send();
+                    }),
                 Tables\Actions\EditAction::make(),
                 Tables\Actions\DeleteAction::make()
                     ->requiresConfirmation()

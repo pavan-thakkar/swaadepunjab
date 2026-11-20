@@ -9,6 +9,8 @@ import Toast from './components/Toast';
 import FeaturedCards from './components/FeaturedCards';
 import PlansSection from './components/PlansSection';
 import PromoVideo from './components/PromoVideo';
+import Icon from './components/Icon';
+import DeliveryScooter from './components/DeliveryScooter';
 import OfferProgress from './components/OfferProgress';
 import { searchMenu } from './lib/search';
 import { itemPath } from './lib/itemPath';
@@ -66,6 +68,7 @@ export default function HomePage() {
   const [showSuggest, setShowSuggest] = useState(false);
 
   const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
+  const catRowRef = useRef<HTMLDivElement>(null);
   const [categoryEmoji, setCategoryEmoji] = useState<Record<string, string>>(DEFAULT_CATEGORY_EMOJI);
   const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>(DEFAULT_CATEGORY_LABELS);
 
@@ -265,6 +268,20 @@ export default function HomePage() {
     if (!hasOptions(item)) showToast(`${item.name} cart mein add ho gaya! 🛒`);
   };
 
+  // A dish photo for every category without its own image (bestsellers first); "All" gets a bestseller photo
+  const catPhotos = useMemo(() => {
+    const map: Record<string, string> = {};
+    const list = [...allItems].sort((x, y) => Number(!!y.is_featured) - Number(!!x.is_featured) || Number(y.rating || 0) - Number(x.rating || 0));
+    for (const it of list) {
+      if (!it.is_available) continue;
+      const img = firstImage(it.image);
+      if (!img) continue;
+      if (!map.all) map.all = img;
+      if (!map[it.category]) map[it.category] = img;
+    }
+    return map;
+  }, [allItems]);
+
   const featured = items.filter(i => i.is_featured);
   const regular  = items.filter(i => !i.is_featured);
   // Search shows every match (bestsellers too). Without search, the full menu skips the
@@ -289,13 +306,13 @@ export default function HomePage() {
         <div className="status-pills">
           {delivery && (
             delivery.available ? (
-              <span className="status-pill open"><span className="status-dot" />Open{delivery.hours ? ` · Delivery ${delivery.hours}` : ' · Delivering now'}</span>
+              <span className="status-pill open"><DeliveryScooter size={22} color="currentColor" />Open{delivery.hours ? ` · Delivery ${delivery.hours}` : ' · Delivering now'}</span>
             ) : (
-              <span className="status-pill closed"><span className="status-dot" />Delivery closed · Take Away open</span>
+              <span className="status-pill closed"><span className="status-scooter-off"><DeliveryScooter size={22} color="currentColor" /></span>Delivery closed · Take Away open</span>
             )
           )}
           <span className="status-pill"><span className="veg-mark" />100% Pure Veg</span>
-          <span className="status-pill">30–45 min</span>
+          <span className="status-pill"><Icon name="clock" size={14} />30–45 min</span>
         </div>
 
         <div ref={dropdownRef} style={{ position: 'relative', width: '100%' }}>
@@ -454,44 +471,36 @@ export default function HomePage() {
         <div className="section-header">
           <h2 className="section-title">What would you like?</h2>
         </div>
-        <div className="categories">
-          {categories.map((c, i) => {
-            const isActive = category === c.key;
-            const gradients = [
-              'linear-gradient(135deg,#f97316,#ef4444)',
-              'linear-gradient(135deg,#f59e0b,#f97316)',
-              'linear-gradient(135deg,#eab308,#f59e0b)',
-              'linear-gradient(135deg,#22c55e,#16a34a)',
-              'linear-gradient(135deg,#a855f7,#7c3aed)',
-              'linear-gradient(135deg,#ec4899,#f43f5e)',
-              'linear-gradient(135deg,#06b6d4,#3b82f6)',
-              'linear-gradient(135deg,#f43f5e,#e11d48)',
-            ];
-            const gradient = gradients[i % gradients.length];
-            return (
-              <button
-                key={c.key}
-                className={`story-circle${isActive ? ' active' : ''}`}
-                onClick={() => { setCategory(c.key); setSearchQuery(''); setSearch(''); }}
-              >
-                <span
-                  className="story-ring"
-                  style={{ background: isActive ? gradient : 'transparent', borderColor: isActive ? 'transparent' : 'var(--border)' }}
+        <div className="cat3d-wrap">
+          <button type="button" className="cat3d-arrow left" aria-label="Scroll categories left"
+            onClick={() => catRowRef.current?.scrollBy({ left: -480, behavior: 'smooth' })}>‹</button>
+          <div className="cat3d-row" ref={catRowRef} role="tablist" aria-label="Categories">
+            {categories.map(c => {
+              const isActive = category === c.key;
+              // Admin photo first; otherwise a photo of one of this category's dishes
+              const photo = c.image || catPhotos[c.key] || null;
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`cat3d${isActive ? ' active' : ''}`}
+                  onClick={() => { setCategory(c.key); setSearchQuery(''); setSearch(''); }}
                 >
-                  <span
-                    className="story-inner"
-                    style={{ background: isActive ? '#fff' : '#f9f5ee' }}
-                  >
-                    {c.image
-                      ? <img src={c.image} alt="" className="story-img" loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.removeAttribute('hidden'); }} />
+                  <span className="cat3d-plate">
+                    {photo
+                      ? <img src={photo} alt="" loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.removeAttribute('hidden'); }} />
                       : null}
-                    <span className="story-emoji" hidden={!!c.image}>{c.emoji}</span>
+                    <span className="cat3d-emoji" hidden={!!photo}>{c.emoji}</span>
                   </span>
-                </span>
-                <span className={`story-label${isActive ? ' active' : ''}`}>{c.label}</span>
-              </button>
-            );
-          })}
+                  <span className="cat3d-label">{c.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button type="button" className="cat3d-arrow right" aria-label="Scroll categories right"
+            onClick={() => catRowRef.current?.scrollBy({ left: 480, behavior: 'smooth' })}>›</button>
         </div>
       </section>
 

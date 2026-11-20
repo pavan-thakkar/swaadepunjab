@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { usePlans } from '../lib/usePlans';
+import Icon from './Icon';
 
 // Delivery Scooter SVG Icon
 function ScooterIcon({ size = 26, color = '#1a1a2e' }: { size?: number; color?: string }) {
@@ -67,7 +68,7 @@ export default function Navbar() {
               Hi, {userName || 'Customer'} 👋
             </span>
             <Link href="/history" className="btn-secondary nav-action-btn">
-              <div className="nav-icon-container">📜</div>
+              <div className="nav-icon-container"><Icon name="orders" /></div>
               <span className="nav-label">Orders</span>
             </Link>
             <button 
@@ -75,23 +76,23 @@ export default function Navbar() {
               className="btn-secondary nav-action-btn logout-btn" 
               title="Logout"
             >
-              <div className="nav-icon-container">🚪</div>
+              <div className="nav-icon-container"><Icon name="logout" /></div>
               <span className="nav-label">Logout</span>
             </button>
           </>
         ) : (
           <Link href="/login" className="btn-secondary nav-action-btn">
-            <div className="nav-icon-container">👤</div>
+            <div className="nav-icon-container"><Icon name="user" /></div>
             <span className="nav-label">Login</span>
           </Link>
         )}
         <Link href="/track" className="btn-secondary nav-action-btn">
-          <div className="nav-icon-container">📦</div>
+          <div className="nav-icon-container"><Icon name="track" /></div>
           <span className="nav-label">Track</span>
         </Link>
         {plans?.enabled && (
           <Link href="/plans/" className="btn-secondary nav-action-btn">
-            <div className="nav-icon-container">🏢</div>
+            <div className="nav-icon-container"><Icon name="building" /></div>
             <span className="nav-label">Monthly Plans</span>
           </Link>
         )}
@@ -138,13 +139,13 @@ export default function Navbar() {
               </div>
             )}
             <Link href="/" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
-              <span>🏠</span> Home
+              <Icon name="home" /> Home
             </Link>
             
             {userPhone || userEmail ? (
               <>
                 <Link href="/history" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
-                  <span>📜</span> My Orders
+                  <Icon name="orders" /> My Orders
                 </Link>
                 <button 
                   className="mobile-menu-item logout-menu-btn" 
@@ -153,21 +154,21 @@ export default function Navbar() {
                     setShowLogoutConfirm(true);
                   }}
                 >
-                  <span>🚪</span> Logout
+                  <Icon name="logout" /> Logout
                 </button>
               </>
             ) : (
               <Link href="/login" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
-                <span>👤</span> Login / Register
+                <Icon name="user" /> Login / Register
               </Link>
             )}
             
             <Link href="/track" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
-              <span>📦</span> Track Order
+              <Icon name="track" /> Track Order
             </Link>
             {plans?.enabled && (
               <Link href="/plans/" className="mobile-menu-item" onClick={() => setMenuOpen(false)}>
-                <span>🏢</span> Monthly Plans (offices)
+                <Icon name="building" /> Monthly Plans (offices)
               </Link>
             )}
           </div>
