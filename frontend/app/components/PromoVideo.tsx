@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from 'react';
  * Background video for a promo banner.
  * Browsers only autoplay muted video, so it always starts muted; the 🔊 button turns sound on.
  * Only the banner on screen plays — the others are paused so two sounds never overlap.
+ * Sound is heard only while the banner is actually visible: scrolling it off screen (or switching tab) mutes it,
+ * scrolling back brings the sound back (if the customer had turned it on).
  */
 export default function PromoVideo({
   src,
@@ -28,7 +30,23 @@ export default function PromoVideo({
   loop?: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
-  const audible = active && hasSound && soundOn;
+  // Is the banner on screen? (at least ~40% of it visible, and the browser tab is in front)
+  const [inView, setInView] = useState(true);
+  const [tabVisible, setTabVisible] = useState(true);
+  useEffect(() => {
+    const box = ref.current?.parentElement;
+    if (!box || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting && e.intersectionRatio >= 0.4), { threshold: [0, 0.4, 0.6, 1] });
+    io.observe(box);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => {
+    const onVis = () => setTabVisible(document.visibilityState === 'visible');
+    onVis();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+  const audible = active && hasSound && soundOn && inView && tabVisible;
   // A tall / square video in a wide banner would be cropped badly → show it whole, with a soft blurred copy behind
   const [fitWhole, setFitWhole] = useState(false);
   const checkFit = () => {
