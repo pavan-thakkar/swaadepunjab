@@ -101,8 +101,43 @@ class MarketingCardResource extends Resource
                         ->required()
                         ->numeric()
                         ->default(0),
-                ])->columns(2)
+                ])->columns(2),
+
+                Forms\Components\Section::make('🕐 Show at certain times')
+                    ->description('Show this banner only during these hours, e.g. the Evening Breakfast video from 3:30 PM to 7 PM. Leave off to show it all day.')
+                    ->collapsible()
+                    ->collapsed(fn ($record) => ! $record?->time_limited)
+                    ->schema([
+                        Forms\Components\Toggle::make('time_limited')
+                            ->label('Show only at certain times')
+                            ->live()
+                            ->columnSpanFull(),
+                        Forms\Components\Select::make('available_from')
+                            ->label('From')
+                            ->options(fn () => self::times())
+                            ->native(false)
+                            ->required(fn (Forms\Get $get) => (bool) $get('time_limited'))
+                            ->visible(fn (Forms\Get $get) => (bool) $get('time_limited')),
+                        Forms\Components\Select::make('available_until')
+                            ->label('Until')
+                            ->options(fn () => self::times())
+                            ->native(false)
+                            ->required(fn (Forms\Get $get) => (bool) $get('time_limited'))
+                            ->different('available_from')
+                            ->helperText('Late-night works too, e.g. 10 PM → 2 AM. Outside these hours the banner is hidden.')
+                            ->visible(fn (Forms\Get $get) => (bool) $get('time_limited')),
+                    ])->columns(2),
             ]);
+    }
+
+    private static function times(): array
+    {
+        $out = [];
+        for ($m = 0; $m < 24 * 60; $m += 30) {
+            $hm = sprintf('%02d:%02d', intdiv($m, 60), $m % 60);
+            $out[$hm] = \App\Support\TimeWindow::format($hm);
+        }
+        return $out;
     }
 
     public static function table(Table $table): Table
@@ -136,7 +171,10 @@ class MarketingCardResource extends Resource
                 Tables\Columns\TextColumn::make('title')
                     ->searchable()
                     ->placeholder('🎬 Video only')
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->description(fn ($record) => $record->schedule
+                        ? '🕐 ' . $record->schedule['label'] . ($record->schedule['now'] ? ' · showing now' : ' · not now')
+                        : null),
                 Tables\Columns\TextColumn::make('price')
                     ->label('Discount/Text')
                     ->searchable()

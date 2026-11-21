@@ -176,7 +176,3 @@ Route::post('/auth/firebase', [AuthController::class, 'firebaseLogin'])->middlew
 Route::get('/places/autocomplete', [PlacesController::class, 'autocomplete']);
 Route::get('/places/geocode', [PlacesController::class, 'geocode']);
 Route::get('/places/reverse', [PlacesController::class, 'reverse']);
-
-
-
-

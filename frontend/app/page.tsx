@@ -63,7 +63,7 @@ export default function HomePage() {
   const [search, setSearch]       = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [promoSlides, setPromoSlides] = useState<any[]>([]);
+  const [allPromoSlides, setPromoSlides] = useState<any[]>([]);
   const [activeSlide, setActiveSlide] = useState(0);
   const [promoSound, setPromoSound] = useState(false); // customer turned banner video sound on
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -76,7 +76,13 @@ export default function HomePage() {
   const [categories, setCategories] = useState<any[]>([]);
   // Timed sections from the admin (e.g. "Breakfast · 4 PM – 7 PM"), shown only during their hours
   const [timedSections, setTimedSections] = useState<{ id: number; title: string; subtitle?: string | null; emoji?: string | null; from: string; until: string; label: string; items: MenuItem[] }[]>([]);
-  const [, setClockTick] = useState(0);
+  const [clockTick, setClockTick] = useState(0);
+  // Promo banners with a schedule (Admin → Promo Banners → "Show at certain times") appear only in their hours
+  const promoSlides = useMemo(
+    () => allPromoSlides.filter(sl => !sl.schedule || isOnNow({ availability: { from: sl.schedule.from, until: sl.schedule.until, label: '', hide: true, now: true } })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allPromoSlides, clockTick],
+  );
   const [catsReady, setCatsReady] = useState(false);
   const [itemsReady, setItemsReady] = useState(false);
   const [splash, setSplash] = useState<'show' | 'hiding' | 'gone'>(() => (splashDone ? 'gone' : 'show'));
@@ -196,6 +202,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (promoSlides.length === 0) return;
+    if (activeSlide >= promoSlides.length) { setActiveSlide(0); return; }
     // A video banner stays until its video finishes (PromoVideo moves on at the end); others change every 4.5 s
     const cur = promoSlides[activeSlide];
     if (cur && (cur.video_path || cur.video_url) && promoSlides.length > 1) return;
