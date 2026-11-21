@@ -40,6 +40,12 @@ class ListOrders extends ListRecords
                 ->icon('heroicon-o-list-bullet')
                 ->badge(fn () => \App\Models\Order::count()),
 
+            'unsettled' => Tab::make('Unsettled bills')
+                ->icon('heroicon-o-banknotes')
+                ->modifyQueryUsing(fn (Builder $query) => $query->unsettled())
+                ->badge(fn () => \App\Models\Order::query()->unsettled()->count() ?: null)
+                ->badgeColor('danger'),
+
             'pending' => Tab::make('Pending')
                 ->icon('heroicon-o-clock')
                 ->modifyQueryUsing(fn (Builder $query) => $query->where('status', 'pending'))

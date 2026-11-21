@@ -14,6 +14,40 @@ class ViewOrder extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\ActionGroup::make([
+                Actions\Action::make('print_kot')->label('KOT (kitchen)')->icon('heroicon-o-fire')
+                    ->url(fn () => route('admin.order.print', ['order' => $this->record->id, 'type' => 'kot']), shouldOpenInNewTab: true),
+                Actions\Action::make('print_bill')->label('Bill')->icon('heroicon-o-document-text')
+                    ->url(fn () => route('admin.order.print', ['order' => $this->record->id, 'type' => 'bill']), shouldOpenInNewTab: true),
+                Actions\Action::make('print_both')->label('KOT + Bill')->icon('heroicon-o-document-duplicate')
+                    ->url(fn () => route('admin.order.print', ['order' => $this->record->id, 'type' => 'both']), shouldOpenInNewTab: true),
+            ])->label('Print')->icon('heroicon-o-printer')->color('gray')->button(),
+
+            Actions\Action::make('settle')
+                ->label('Settle bill')
+                ->icon('heroicon-o-banknotes')
+                ->color('danger')
+                ->visible(fn () => $this->record->needsSettlement())
+                ->modalHeading('Settle bill')
+                ->modalWidth('lg')
+                ->modalSubmitActionLabel('Settle bill')
+                ->fillForm(fn () => \App\Filament\Support\SettleBill::fill($this->record))
+                ->form(fn () => \App\Filament\Support\SettleBill::schema($this->record))
+                ->action(function (array $data, Actions\Action $action) {
+                    if (! \App\Filament\Support\SettleBill::apply($this->record, $data)) $action->halt();
+                    $this->record->refresh();
+                }),
+
+            Actions\Action::make('unsettle')
+                ->label('Undo settle')
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->color('gray')
+                ->visible(fn () => filled($this->record->settle_mode) && \App\Filament\Support\SettleBill::canUndo())
+                ->requiresConfirmation()
+                ->modalHeading('Undo this settlement?')
+                ->modalDescription('The bill will show as Unsettled again. Use this only to fix a wrong mode, then settle it again.')
+                ->action(function () { $this->record->unsettle(); $this->record->refresh(); }),
+
             Actions\Action::make('check_payment')
                 ->label('Check payment with Razorpay')
                 ->icon('heroicon-o-arrow-path')

@@ -371,12 +371,16 @@ class CounterMode extends Page
             'gst_rate'              => $p['gst']['gst_rate'],
             'gst_mode'              => $p['gst']['gst_mode'],
             'status'                => 'accepted',
-            'payment_method'        => $this->payment === 'upi' ? 'upi_counter' : 'cash_on_delivery',
+            'payment_method'        => match ($this->payment) { 'upi' => 'upi_counter', 'card' => 'card', default => 'cash_on_delivery' },
             'special_instructions'  => trim($this->note) ?: null,
             'prep_time_minutes'     => $prep,
             'estimated_delivery_at' => now()->addMinutes($prep),
         ]);
         $order->items()->createMany($items);
+        // Paid at the counter → the bill is settled right away (Pay later stays Unsettled for the cashier)
+        if (in_array($this->payment, ['cash', 'upi', 'card'], true)) {
+            $order->settle($this->payment, [], 'Counter Mode');
+        }
 
         $this->lastOrderId = $order->id;
         // This bill is done: close its tab and move to another open bill (or a fresh one)

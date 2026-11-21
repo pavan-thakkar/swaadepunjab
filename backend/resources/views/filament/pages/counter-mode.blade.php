@@ -154,9 +154,14 @@
                     <div class="sp-row" style="font-size: 13px; color: #6B5A3E"><span>GST {{ rtrim(rtrim(number_format($gst['gst_rate'], 2), '0'), '.') }}%{{ $gst['gst_mode'] === 'inclusive' ? ' (included)' : '' }}</span><span>{{ $gst['gst_mode'] === 'inclusive' ? '' : '+' }}₹{{ number_format($gst['gst_amount'], 2) }}</span></div>
                 @endif
                 <div class="sp-row" style="font-size: 22px; font-weight: 900"><span>Total</span><span>₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span></div>
-                <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+                <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'cash' ? 'true' : 'false' }}" wire:click="$set('payment', 'cash')">Cash</button>
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'upi' ? 'true' : 'false' }}" wire:click="$set('payment', 'upi')">UPI</button>
+                    <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'card' ? 'true' : 'false' }}" wire:click="$set('payment', 'card')">Card</button>
+                    <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'later' ? 'true' : 'false' }}" wire:click="$set('payment', 'later')" title="Customer pays after eating — settle the bill later from Orders">Pay later</button>
+                </div>
+                <div style="font-size: 12px; color: #6B5A3E; margin-top: -4px">
+                    {{ $payment === 'later' ? 'Bill stays “Unsettled” — settle it from Orders when the customer pays.' : 'Bill is settled as ' . strtoupper($payment) . ' when you place the order.' }}
                 </div>
                 <button type="button" class="cm-go" wire:click="placeOrder" wire:loading.attr="disabled" @disabled(! count($lines))>
                     <span wire:loading.remove wire:target="placeOrder">Place order &amp; print · ₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span>

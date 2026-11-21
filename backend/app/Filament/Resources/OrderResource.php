@@ -50,6 +50,13 @@ class OrderResource extends Resource
                     Forms\Components\Placeholder::make('customer')
                         ->label('Customer')
                         ->content(fn (Order $record) => "👤 {$record->customer_name} ({$record->customer_phone})"),
+                    Forms\Components\Placeholder::make('settlement_display')
+                        ->label('Bill settlement')
+                        ->content(fn (Order $record) => new \Illuminate\Support\HtmlString(
+                            '<b style="color:' . ($record->isSettled() ? '#15803D' : ($record->needsSettlement() ? '#DC2626' : '#6B7280')) . '">' . e($record->settleLabel()) . '</b>'
+                            . (($l = \App\Filament\Support\SettleBill::byLine($record)) ? '<div style="font-size:12px;color:#6B5A3E">' . e($l) . '</div>' : '')
+                            . ($record->settle_note ? '<div style="font-size:12px;color:#6B5A3E">Note: ' . e($record->settle_note) . '</div>' : '')
+                        )),
                     Forms\Components\Placeholder::make('order_type_display')
                         ->label('Order Type')
                         ->content(fn (Order $record) => match ($record->order_type) {
@@ -420,6 +427,14 @@ class OrderResource extends Resource
                         : null)
                     ->grow(false),
 
+                Tables\Columns\TextColumn::make('settle_mode')
+                    ->label('Bill')
+                    ->state(fn (Order $record) => $record->settleLabel())
+                    ->badge()
+                    ->color(fn (Order $record) => $record->isSettled() ? 'success' : ($record->needsSettlement() ? 'danger' : 'gray'))
+                    ->description(fn (Order $record) => \App\Filament\Support\SettleBill::byLine($record))
+                    ->grow(false),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Ordered At')
                     ->dateTime('d M, h:i A')
@@ -473,6 +488,51 @@ class OrderResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
 
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('print_kot')
+                        ->label('KOT (kitchen)')
+                        ->icon('heroicon-o-fire')
+                        ->url(fn (Order $record) => route('admin.order.print', ['order' => $record->id, 'type' => 'kot']), shouldOpenInNewTab: true),
+                    Tables\Actions\Action::make('print_bill_slip')
+                        ->label('Bill')
+                        ->icon('heroicon-o-document-text')
+                        ->url(fn (Order $record) => route('admin.order.print', ['order' => $record->id, 'type' => 'bill']), shouldOpenInNewTab: true),
+                    Tables\Actions\Action::make('print_both')
+                        ->label('KOT + Bill')
+                        ->icon('heroicon-o-document-duplicate')
+                        ->url(fn (Order $record) => route('admin.order.print', ['order' => $record->id, 'type' => 'both']), shouldOpenInNewTab: true),
+                ])
+                    ->label('Print')
+                    ->icon('heroicon-o-printer')
+                    ->color('gray')
+                    ->button()
+                    ->tooltip('Print KOT for the kitchen or the customer bill'),
+
+                Tables\Actions\Action::make('settle')
+                    ->label('Settle')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('danger')
+                    ->button()
+                    ->visible(fn (?Order $record) => $record && $record->needsSettlement())
+                    ->modalHeading('Settle bill')
+                    ->modalWidth('lg')
+                    ->modalSubmitActionLabel('Settle bill')
+                    ->fillForm(fn (Order $record) => \App\Filament\Support\SettleBill::fill($record))
+                    ->form(fn (Order $record) => \App\Filament\Support\SettleBill::schema($record))
+                    ->action(function (Order $record, array $data, Tables\Actions\Action $action) {
+                        if (! \App\Filament\Support\SettleBill::apply($record, $data)) $action->halt();
+                    }),
+
+                Tables\Actions\Action::make('unsettle')
+                    ->label('Undo settle')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('gray')
+                    ->visible(fn (?Order $record) => $record && filled($record->settle_mode) && \App\Filament\Support\SettleBill::canUndo())
+                    ->requiresConfirmation()
+                    ->modalHeading('Undo this settlement?')
+                    ->modalDescription(fn (Order $record) => "Bill {$record->order_number} will show as Unsettled again and leave the day's Hisab. Use this only to fix a wrong mode, then settle it again.")
+                    ->action(fn (Order $record) => $record->unsettle()),
+
                 Tables\Actions\Action::make('accept')
                     ->label('Accept')
                     ->icon('heroicon-o-check-circle')
@@ -506,6 +566,32 @@ class OrderResource extends Resource
                 Tables\Actions\DeleteAction::make()->label('Delete'),
             ])
             ->bulkActions([
+                Tables\Actions\BulkAction::make('settle_many')
+                    ->label('Settle selected')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('danger')
+                    ->modalHeading('Settle all selected bills')
+                    ->modalDescription('Every selected bill that is still unsettled gets the same payment mode. Settled, cancelled and unpaid online orders are skipped.')
+                    ->modalSubmitActionLabel('Settle')
+                    ->form([
+                        Forms\Components\ToggleButtons::make('mode')->label('Paid by')
+                            ->options(['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card'])
+                            ->icons(['cash' => 'heroicon-o-banknotes', 'upi' => 'heroicon-o-device-phone-mobile', 'card' => 'heroicon-o-credit-card'])
+                            ->colors(['cash' => 'success', 'upi' => 'info', 'card' => 'warning'])
+                            ->inline()->required()->default('cash'),
+                    ])
+                    ->action(function (\Illuminate\Support\Collection $records, array $data) {
+                        $n = 0; $sum = 0.0;
+                        foreach ($records as $o) {
+                            if ($o->needsSettlement()) { $o->settle($data['mode']); $n++; $sum += (float) $o->total; }
+                        }
+                        \Filament\Notifications\Notification::make()
+                            ->title($n ? "{$n} bill" . ($n > 1 ? 's' : '') . ' settled — ₹' . number_format($sum, 2) : 'Nothing to settle')
+                            ->body($n < $records->count() ? ($records->count() - $n) . ' skipped (already settled / cancelled / unpaid online)' : null)
+                            ->{$n ? 'success' : 'warning'}()->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),

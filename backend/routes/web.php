@@ -37,6 +37,17 @@ Route::get('/admin/orders/{order}/print', function (\App\Models\Order $order) {
     return view('admin.print-order', ['order' => $order->load('items'), 'type' => $type]);
 })->middleware(['web'])->name('admin.order.print');
 
+// Printable hisab (day settlement) slip — fits an 80 mm bill printer or A4
+Route::get('/admin/hisab/print', function () {
+    $user = auth()->guard('web')->user();
+    abort_unless($user && $user->is_active, 403);
+    $day = \Carbon\Carbon::parse(request('date') ?: \App\Filament\Pages\DaySettlement::businessToday()->toDateString());
+    return view('admin.hisab-print', \App\Filament\Pages\DaySettlement::summary($day) + [
+        'day' => $day, 'closing' => \App\Models\DayClosing::whereDate('business_date', $day->toDateString())->first(),
+        'outlet' => \App\Models\ReceiptSetting::first(),
+    ]);
+})->middleware(['web'])->name('admin.hisab.print');
+
 // Printable list of monthly-plan meals for one day
 Route::get('/admin/plan-deliveries/print', function () {
     $user = auth()->guard('web')->user();

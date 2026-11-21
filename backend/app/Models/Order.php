@@ -8,6 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'settle_mode',
+        'settle_cash',
+        'settle_upi',
+        'settle_card',
+        'settled_at',
+        'settled_by',
+        'settled_by_name',
+        'settle_note',
         'order_rating',
         'order_feedback',
         'rated_at',
@@ -82,6 +90,10 @@ class Order extends Model
 
     protected $casts = [
         'paid_at' => 'datetime',
+        'settled_at' => 'datetime',
+        'settle_cash' => 'decimal:2',
+        'settle_upi' => 'decimal:2',
+        'settle_card' => 'decimal:2',
         'refunded_at' => 'datetime',
         'rated_at' => 'datetime',
         'rating_link_sent_at' => 'datetime',
@@ -175,6 +187,93 @@ class Order extends Model
             return $this->payment_status === 'paid';
         }
         return ! in_array($this->payment_method, ['cash_on_delivery', 'upi_counter', null, ''], true);
+    }
+
+    // ---------------- Settle Bill ----------------
+
+    public const SETTLE_MODES = ['cash' => '💵 Cash', 'upi' => '📱 UPI', 'card' => '💳 Card', 'split' => '➗ Split', 'online' => '🌐 Online'];
+
+    /** Paid on the website through Razorpay → counts as settled automatically. */
+    public function isPaidViaRazorpay(): bool
+    {
+        return $this->payment_method === 'razorpay' && in_array($this->payment_status, ['paid', 'refunded'], true);
+    }
+
+    public function isSettled(): bool
+    {
+        return filled($this->settle_mode) || $this->isPaidViaRazorpay();
+    }
+
+    /** Needs a cashier to settle it: a real order (not cancelled / unpaid online) with no settlement yet. */
+    public function needsSettlement(): bool
+    {
+        return ! in_array($this->status, ['cancelled', 'awaiting_payment'], true) && ! $this->isSettled();
+    }
+
+    public function scopeUnsettled($q)
+    {
+        return $q->whereNotIn('status', ['cancelled', 'awaiting_payment'])
+            ->whereNull('settle_mode')
+            ->where(fn ($w) => $w->where('payment_method', '!=', 'razorpay')->orWhereNull('payment_method')
+                ->orWhereNotIn('payment_status', ['paid', 'refunded'])->orWhereNull('payment_status'));
+    }
+
+    /** Best guess of how the customer paid, used as the default in the Settle Bill form. */
+    public function suggestedSettleMode(): string
+    {
+        return match ($this->payment_method) {
+            'upi_counter' => 'upi',
+            'card'        => 'card',
+            default       => 'cash',
+        };
+    }
+
+    public function settleLabel(): string
+    {
+        if ($this->settle_mode) return self::SETTLE_MODES[$this->settle_mode] ?? $this->settle_mode;
+        if ($this->isPaidViaRazorpay()) return self::SETTLE_MODES['online'];
+        return in_array($this->status, ['cancelled', 'awaiting_payment'], true) ? '—' : '⚠️ Unsettled';
+    }
+
+    /** Money by mode for this bill: ['cash'=>, 'upi'=>, 'card'=>, 'online'=>]. */
+    public function settledSplit(): array
+    {
+        $out = ['cash' => 0.0, 'upi' => 0.0, 'card' => 0.0, 'online' => 0.0];
+        if ($this->settle_mode) {
+            $out['cash'] = (float) $this->settle_cash; $out['upi'] = (float) $this->settle_upi; $out['card'] = (float) $this->settle_card;
+            if ($this->settle_mode === 'online') $out['online'] = (float) $this->total;
+        } elseif ($this->isPaidViaRazorpay()) {
+            $out['online'] = (float) $this->total;
+        }
+        return $out;
+    }
+
+    /** Record how this bill was paid. $split is only used for mode 'split'. */
+    public function settle(string $mode, array $split = [], ?string $note = null, ?\App\Models\User $by = null): void
+    {
+        $by = $by ?? auth()->user();
+        $total = round((float) $this->total, 2);
+        $cash = $upi = $card = 0.0;
+        match ($mode) {
+            'cash'  => $cash = $total,
+            'upi'   => $upi = $total,
+            'card'  => $card = $total,
+            'split' => [$cash, $upi, $card] = [round((float) ($split['cash'] ?? 0), 2), round((float) ($split['upi'] ?? 0), 2), round((float) ($split['card'] ?? 0), 2)],
+            default => null,
+        };
+        $this->update([
+            'settle_mode' => $mode, 'settle_cash' => $cash, 'settle_upi' => $upi, 'settle_card' => $card,
+            'settled_at' => now(), 'settled_by' => $by?->id, 'settled_by_name' => $by?->name, 'settle_note' => $note ?: null,
+        ]);
+        \App\Models\ActivityLog::record('settle', "Settled bill {$this->order_number} ₹" . number_format($total, 2) . ' — ' . strip_tags(self::SETTLE_MODES[$mode] ?? $mode)
+            . ($mode === 'split' ? " (cash ₹{$cash}, UPI ₹{$upi}, card ₹{$card})" : ''), $this, [], $by);
+    }
+
+    public function unsettle(): void
+    {
+        $was = $this->settleLabel();
+        $this->update(['settle_mode' => null, 'settle_cash' => 0, 'settle_upi' => 0, 'settle_card' => 0, 'settled_at' => null, 'settled_by' => null, 'settled_by_name' => null, 'settle_note' => null]);
+        \App\Models\ActivityLog::record('unsettle', "Undid settlement of bill {$this->order_number} (was {$was})", $this);
     }
 
     /** Online orders whose payment was never finished are cancelled after this many minutes. */
