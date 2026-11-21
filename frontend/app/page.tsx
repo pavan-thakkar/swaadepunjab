@@ -74,6 +74,9 @@ export default function HomePage() {
 
   // Start empty: real categories from the admin load first (no placeholder categories flash)
   const [categories, setCategories] = useState<any[]>([]);
+  // Timed sections from the admin (e.g. "Breakfast · 4 PM – 7 PM"), shown only during their hours
+  const [timedSections, setTimedSections] = useState<{ id: number; title: string; subtitle?: string | null; emoji?: string | null; from: string; until: string; label: string; items: MenuItem[] }[]>([]);
+  const [, setClockTick] = useState(0);
   const [catsReady, setCatsReady] = useState(false);
   const [itemsReady, setItemsReady] = useState(false);
   const [splash, setSplash] = useState<'show' | 'hiding' | 'gone'>(() => (splashDone ? 'gone' : 'show'));
@@ -173,6 +176,11 @@ export default function HomePage() {
     fetchPromoSlides();
     fetchAllItems();
     fetchCategories();
+    fetch(`${API}/menu-sections`).then(r => r.json()).then(d => setTimedSections(Array.isArray(d.data) ? d.data : [])).catch(() => {});
+    // Re-check timed sections / selling hours every minute while the page is open
+    const clock = setInterval(() => setClockTick(t => t + 1), 60000);
+    (window as any).__spClock && clearInterval((window as any).__spClock);
+    (window as any).__spClock = clock;
     fetch(`${API}/delivery-status`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => setDelivery({ available: d.available !== false, hours: d.hours || null }))
@@ -598,6 +606,29 @@ export default function HomePage() {
             onClick={() => catRowRef.current?.scrollBy({ left: 480, behavior: 'smooth' })}>›</button>
         </div>
       </section>
+
+      {/* Timed sections (Admin → Timed Menus), only during their hours */}
+      {category === 'all' && !searchQuery && timedSections
+        .filter(sec => isOnNow({ availability: { from: sec.from, until: sec.until, label: sec.label, hide: false, now: true } }))
+        .map(sec => {
+          const list = sec.items.filter(i => !isHiddenNow(i));
+          if (!list.length) return null;
+          return (
+            <section key={`ts${sec.id}`} className="section timed-section" style={{ paddingTop: 0 }}>
+              <div className="section-header">
+                <div>
+                  <h2 className="section-title">{sec.emoji ? `${sec.emoji} ` : ''}{sec.title}</h2>
+                  <div className="timed-sub"><span className="timed-badge">🕐 {sec.label}</span>{sec.subtitle ? <span>{sec.subtitle}</span> : null}</div>
+                </div>
+              </div>
+              <div className="best-grid">
+                {list.map(item => (
+                  <BestCard key={item.id} item={item} onAdd={handleAddToCart} emoji={categoryEmoji[item.category] || '🍽️'} />
+                ))}
+              </div>
+            </section>
+          );
+        })}
 
       {/* Featured */}
       {category === 'all' && !searchQuery && featured.length > 0 && (

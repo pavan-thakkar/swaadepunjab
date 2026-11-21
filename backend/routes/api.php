@@ -64,9 +64,29 @@ Route::get('/featured-cards', function () {
         'title'    => App\Models\SiteSetting::getValue('featured_section_title', "What's New"),
         'subtitle' => App\Models\SiteSetting::getValue('featured_section_subtitle'),
         'data'     => App\Models\FeaturedCard::where('is_active', true)
-            ->with('menuItem:id,name,price,quantity_label,option_groups,customisation_ids,category,description,prep_time,rating,is_available,is_featured,image')
+            ->with('menuItem:id,name,price,quantity_label,option_groups,customisation_ids,category,description,prep_time,rating,is_available,is_featured,image,time_limited,available_from,available_until,outside_hours')
             ->orderBy('sort_order')->orderBy('id')
             ->get(['id', 'title', 'badge', 'image_path', 'menu_item_id']),
+    ]);
+});
+
+// Timed sections (e.g. Breakfast 4–7 PM) with their dishes; the website shows each one only during its hours
+Route::get('/menu-sections', function () {
+    $sections = App\Models\MenuSection::activeList();
+    $ids = collect($sections)->flatMap(fn ($s) => $s->dishIds())->unique()->values()->all();
+    $dishes = $ids ? App\Models\MenuItem::whereIn('id', $ids)->where('is_available', true)->get()->keyBy('id') : collect();
+    return response()->json([
+        'data' => collect($sections)->map(fn ($s) => [
+            'id'       => $s->id,
+            'title'    => $s->title,
+            'subtitle' => $s->subtitle,
+            'emoji'    => $s->emoji,
+            'from'     => $s->available_from,
+            'until'    => $s->available_until,
+            'label'    => $s->label(),
+            'now'      => $s->isOpen(),
+            'items'    => collect($s->dishIds())->map(fn ($id) => $dishes->get($id))->filter()->values(),
+        ])->filter(fn ($s) => count($s['items']) > 0)->values(),
     ]);
 });
 

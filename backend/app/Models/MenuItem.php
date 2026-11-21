@@ -86,6 +86,10 @@ class MenuItem extends Model
         if ($this->time_limited && $this->available_from && $this->available_until) {
             return ['from' => $this->available_from, 'until' => $this->available_until, 'outside' => $this->outside_hours ?: 'show', 'source' => 'dish'];
         }
+        // A timed section (Admin → Timed Menus) set to "sell only at this time"
+        if ($this->id && ($sec = MenuSection::limitingFor((int) $this->id))) {
+            return ['from' => $sec->available_from, 'until' => $sec->available_until, 'outside' => $sec->outside_hours ?: 'show', 'source' => 'section'];
+        }
         $c = $this->categoryModel();
         if ($c && $c->time_limited && $c->available_from && $c->available_until) {
             return ['from' => $c->available_from, 'until' => $c->available_until, 'outside' => $c->outside_hours ?: 'show', 'source' => 'category'];

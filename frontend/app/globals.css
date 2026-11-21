@@ -2632,3 +2632,7 @@ img, video { max-width: 100%; }
 .later-box strong { font-size: 1rem; color: #8A5A00; }
 .later-box span { font-size: .85rem; }
 @media (max-width: 768px) { .later-pill { font-size: .72rem; padding: 6px 8px; white-space: normal; max-width: 128px; } }
+
+/* Timed sections (e.g. Breakfast 4 PM – 7 PM) */
+.timed-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; font-size: .88rem; color: var(--text-muted); }
+.timed-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 99px; background: #FFF4DC; border: 1px solid #F0C978; color: #8A5A00; font-weight: 800; font-size: .78rem; }
