@@ -9,6 +9,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import OfferProgress, { useOffers, computeOffer } from './OfferProgress';
 import { itemPath } from '../lib/itemPath';
 import { useGst, calcGst, gstLabel, money } from '../lib/gst';
+import NoPhoto from './NoPhoto';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   special_combo:  '🍱',
@@ -182,7 +183,7 @@ export default function CartDrawer() {
                           onError={() => setBroken(b => ({ ...b, [item.menu_item_id]: true }))}
                         />
                       ) : (
-                        <div className="cart-item-emoji">{CATEGORY_EMOJI[item.category] || '🍽️'}</div>
+                        <NoPhoto small className="cart-item-img" />
                       )}
                       <div className="cart-item-info">
                         <div className="cart-item-name">{item.name}</div>

@@ -120,14 +120,17 @@ class CustomerResource extends Resource
                     ->label('Not ordered for')
                     ->placeholder('Any time')
                     ->options(['15' => '15+ days', '30' => '30+ days', '60' => '60+ days', '90' => '90+ days'])
-                    ->query(fn ($query, array $data) => filled($data['value'] ?? null)
+                    // HAVING must go on the main query (->query() runs inside a WHERE group)
+                    ->query(fn ($query) => $query)
+                    ->baseQuery(fn ($query, array $data) => filled($data['value'] ?? null)
                         ? $query->havingRaw('MAX(created_at) < ?', [now()->subDays((int) $data['value'])])
                         : $query),
                 Tables\Filters\SelectFilter::make('min_orders')
                     ->label('Orders')
                     ->placeholder('Any')
                     ->options(['1' => 'Only 1 (new)', '2' => '2 or more', '5' => '5 or more (regulars)', '10' => '10 or more'])
-                    ->query(function ($query, array $data) {
+                    ->query(fn ($query) => $query)
+                    ->baseQuery(function ($query, array $data) {
                         $v = $data['value'] ?? null;
                         if (! filled($v)) return $query;
                         $expr = "SUM(CASE WHEN status NOT IN ('cancelled','awaiting_payment') THEN 1 ELSE 0 END)";

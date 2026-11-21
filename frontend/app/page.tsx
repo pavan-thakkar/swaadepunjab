@@ -10,12 +10,17 @@ import FeaturedCards from './components/FeaturedCards';
 import PlansSection from './components/PlansSection';
 import PromoVideo from './components/PromoVideo';
 import Icon from './components/Icon';
+import SplashLoader from './components/SplashLoader';
 import DeliveryScooter from './components/DeliveryScooter';
 import OfferProgress from './components/OfferProgress';
 import { searchMenu } from './lib/search';
 import { itemPath } from './lib/itemPath';
+import NoPhoto, { LOGO_SRC, logoOnError } from './components/NoPhoto';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
+
+// Show the logo splash only on the first load of the site (not when coming back to Home)
+let splashDone = false;
 
 const DEFAULT_CATEGORIES = [
   { key: 'all',            label: 'All',            emoji: '🍽️' },
@@ -67,7 +72,11 @@ export default function HomePage() {
   const [activeIdx, setActiveIdx] = useState(-1);
   const [showSuggest, setShowSuggest] = useState(false);
 
-  const [categories, setCategories] = useState<any[]>(DEFAULT_CATEGORIES);
+  // Start empty: real categories from the admin load first (no placeholder categories flash)
+  const [categories, setCategories] = useState<any[]>([]);
+  const [catsReady, setCatsReady] = useState(false);
+  const [itemsReady, setItemsReady] = useState(false);
+  const [splash, setSplash] = useState<'show' | 'hiding' | 'gone'>(() => (splashDone ? 'gone' : 'show'));
   const catRowRef = useRef<HTMLDivElement>(null);
   // Show the ‹ › arrows only when there are more categories off-screen
   const [catEdge, setCatEdge] = useState({ left: false, right: false });
@@ -114,9 +123,14 @@ export default function HomePage() {
         });
         setCategoryEmoji(emojiMap);
         setCategoryLabels(labelMap);
+      } else {
+        setCategories(DEFAULT_CATEGORIES);
       }
     } catch (e) {
       console.error("Error fetching categories:", e);
+      setCategories(DEFAULT_CATEGORIES); // offline / server error: show the basic list
+    } finally {
+      setCatsReady(true);
     }
   };
 
@@ -137,8 +151,23 @@ export default function HomePage() {
       setAllItems(data.data || []);
     } catch (e) {
       console.error(e);
+    } finally {
+      setItemsReady(true);
     }
   };
+
+  // Hide the splash once categories + dish photos are ready (or after 6 s at most)
+  useEffect(() => {
+    if (splash !== 'show') return;
+    const finish = () => {
+      splashDone = true;
+      setSplash('hiding');
+      setTimeout(() => setSplash('gone'), 500);
+    };
+    if (catsReady && itemsReady) { finish(); return; }
+    const t = setTimeout(finish, 6000);
+    return () => clearTimeout(t);
+  }, [catsReady, itemsReady, splash]);
 
   useEffect(() => {
     fetchPromoSlides();
@@ -342,6 +371,7 @@ export default function HomePage() {
 
   return (
     <div className="page-wrapper">
+      {splash !== 'gone' && <SplashLoader hiding={splash === 'hiding'} />}
       <Navbar />
       <CartDrawer />
 
@@ -410,7 +440,9 @@ export default function HomePage() {
                   onMouseEnter={() => setActiveIdx(idx)}
                   onClick={() => handleSuggestionClick(item)}
                 >
-                  <span className="search-suggestion-emoji">{categoryEmoji[item.category] || '🍽️'}</span>
+                  {firstImage(item.image)
+                    ? <img className="search-suggestion-thumb" src={firstImage(item.image) as string} alt="" loading="lazy" onError={logoOnError} />
+                    : <img className="search-suggestion-thumb img-logo-fallback" src={LOGO_SRC} alt="" />}
                   <span className="search-suggestion-name">{item.name}</span>
                   <span className="search-suggestion-price">₹{Number(item.price).toFixed(0)}</span>
                 </li>
@@ -526,7 +558,12 @@ export default function HomePage() {
             onClick={() => catRowRef.current?.scrollBy({ left: -480, behavior: 'smooth' })}>‹</button>
           <div className="cat3d-row" ref={catRowRef} role="tablist" aria-label="Categories"
             // Fill row 1 left→right first, then row 2 (same order as the admin list)
-            style={{ ['--cat-cols' as string]: Math.max(1, Math.ceil(categories.length / 2)) } as React.CSSProperties}>
+            style={{ ['--cat-cols' as string]: Math.max(1, Math.ceil((catsReady ? categories.length : 10) / 2)) } as React.CSSProperties}>
+            {!catsReady && Array.from({ length: 10 }).map((_, i) => (
+              <span key={`sk${i}`} className="cat3d skeleton" aria-hidden="true">
+                <span className="cat3d-plate" /><span className="cat3d-label" />
+              </span>
+            ))}
             {categories.map(c => {
               const isActive = category === c.key;
               // Admin photo first; otherwise a photo of one of this category's dishes
@@ -548,9 +585,9 @@ export default function HomePage() {
                           className={`cat3d-slide${i === allSlide % allSlides.length ? ' on' : ''}`} />
                       ))
                     ) : photo
-                      ? <img src={photo} alt="" loading="lazy" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.removeAttribute('hidden'); }} />
-                      : null}
-                    <span className="cat3d-emoji" hidden={!!photo || (c.key === 'all' && allSlides.length > 1)}>{c.emoji}</span>
+                      ? <img src={photo} alt="" loading="lazy" onError={logoOnError} />
+                      // No photo uploaded → our logo (only then)
+                      : <img src={LOGO_SRC} alt="" className="cat3d-logo" />}
                   </span>
                   <span className="cat3d-label">{c.label}</span>
                 </button>
@@ -716,11 +753,10 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
                 : `${API.replace('/api', '/storage')}/${currentImage}`} 
               alt={item.name} 
               className="food-card-image"
+              onError={logoOnError}
             />
           ) : (
-            <div className="food-card-image-placeholder">
-              {categoryEmoji[item.category] || '🍽️'}
-            </div>
+            <NoPhoto />
           )}
 
           {/* Multi-Photo Arrows on Card */}
@@ -817,7 +853,7 @@ function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem)
   return (
     <div className="best-card" role="link" tabIndex={0} onClick={() => router.push(itemPath(item))} onKeyDown={e => { if (e.key === 'Enter') router.push(itemPath(item)); }}>
       <div className="best-card-img">
-        {img ? <img src={img} alt={item.name} loading="lazy" /> : <span aria-hidden="true">{emoji}</span>}
+        {img ? <img src={img} alt={item.name} loading="lazy" onError={logoOnError} /> : <NoPhoto />}
         {item.rating ? <span className="best-card-rating">★ {Number(item.rating).toFixed(1)}</span> : null}
       </div>
       <div className="best-card-body">

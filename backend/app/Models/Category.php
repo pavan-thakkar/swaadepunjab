@@ -42,6 +42,27 @@ class Category extends Model
         return $out;
     }
 
+    /** Picture for admin lists: uploaded category image → a dish photo → our logo. */
+    public function thumbUrl(): string
+    {
+        $path = $this->image ?: array_key_first($this->dishPhotos(1));
+        if (! $path) {
+            return asset('images/brand/logo.png');
+        }
+        return str_starts_with($path, 'http') ? $path : asset('storage/' . ltrim($path, '/'));
+    }
+
+    /** Category options A → Z with their picture, for admin dropdowns. */
+    public static function pictureOptions(): array
+    {
+        return static::all()
+            ->sortBy(fn ($c) => mb_strtolower(trim((string) $c->name)))
+            ->mapWithKeys(fn ($c) => [$c->slug => '<span style="display:inline-flex;align-items:center;gap:10px">'
+                . '<img src="' . e($c->thumbUrl()) . '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;background:#FFF8E7;flex-shrink:0">'
+                . '<span>' . e($c->name) . '</span></span>'])
+            ->all();
+    }
+
     /** Copy a dish photo to be this category's image (a copy, so deleting the dish photo later won't break it). */
     public function useDishPhoto(string $path): bool
     {

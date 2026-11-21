@@ -35,9 +35,10 @@ class MenuItemResource extends Resource
                 Forms\Components\Select::make('category')
                     ->required()
                     ->native(false)
-                    ->options(fn () => \App\Models\Category::all()->mapWithKeys(function ($cat) {
-                        return [$cat->slug => ($cat->emoji ? $cat->emoji . ' ' : '') . $cat->name];
-                    })),
+                    // A → Z by name (easy to find in a long list)
+                    ->options(fn () => \App\Models\Category::pictureOptions())
+                    ->allowHtml()
+                    ->searchable(),
                 Forms\Components\Textarea::make('description')
                     ->rows(3)
                     ->columnSpanFull(),
@@ -204,7 +205,8 @@ class MenuItemResource extends Resource
                     ->circular()
                     ->stacked()
                     ->limit(1)
-                    ->size(44),
+                    ->size(44)
+                    ->defaultImageUrl(asset('images/brand/logo.png')), // no photo → our logo
 
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
@@ -277,7 +279,9 @@ class MenuItemResource extends Resource
                         'newest'     => 'Newest first',
                         'oldest'     => 'Oldest first',
                     ])
-                    ->query(function ($query, array $data) {
+                    // Sorting must change the main query (the normal ->query() runs inside a WHERE group, where ORDER BY is ignored)
+                    ->query(fn ($query) => $query)
+                    ->baseQuery(function ($query, array $data) {
                         return match ($data['value'] ?? null) {
                             'name_asc'   => $query->orderBy('menu_items.name', 'asc'),
                             'name_desc'  => $query->orderBy('menu_items.name', 'desc'),
@@ -295,9 +299,15 @@ class MenuItemResource extends Resource
                         default => null,
                     }),
                 Tables\Filters\SelectFilter::make('category')
-                    ->options(fn () => \App\Models\Category::all()->mapWithKeys(function ($cat) {
-                        return [$cat->slug => ($cat->emoji ? $cat->emoji . ' ' : '') . $cat->name];
-                    })),
+                    // A → Z by name (easy to find in a long list)
+                    ->options(fn () => \App\Models\Category::pictureOptions())
+                    ->native(false)
+                    ->modifyFormFieldUsing(fn (Forms\Components\Select $field) => $field->allowHtml())
+                    ->searchable()
+                    // Plain name in the "Active filters" chip (the dropdown itself shows pictures)
+                    ->indicateUsing(fn (array $data) => filled($data['value'] ?? null)
+                        ? 'Category: ' . (\App\Models\Category::where('slug', $data['value'])->value('name') ?? $data['value'])
+                        : null),
                 Tables\Filters\TernaryFilter::make('is_available')->label('Available'),
                 Tables\Filters\TernaryFilter::make('is_featured')->label('Featured'),
             ])

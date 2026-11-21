@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MenuItem, ChosenOption, OptionGroup, cleanGroups, firstImageUrl, useCart } from '../context/CartContext';
+import { LOGO_SRC, logoOnError } from './NoPhoto';
 
 const money = (n: number) => `₹${Math.round(n)}`;
 
@@ -101,7 +102,7 @@ export default function OptionSheet({
         onClick={e => e.stopPropagation()}
       >
         <div className="os-head">
-          {img && <img src={img} alt="" className="os-thumb" />}
+          {img ? <img src={img} alt="" className="os-thumb" onError={logoOnError} /> : <img src={LOGO_SRC} alt="" className="os-thumb img-logo-fallback" />}
           <div style={{ minWidth: 0 }}>
             <h2 id="os-title" className="os-title">{item.name}</h2>
             <div className="os-sub">

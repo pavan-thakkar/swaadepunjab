@@ -8,6 +8,7 @@ import CartDrawer from '../../components/CartDrawer';
 import Toast from '../../components/Toast';
 import Link from 'next/link';
 import { itemPath } from '../../lib/itemPath';
+import NoPhoto, { logoOnError } from '../../components/NoPhoto';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
@@ -340,11 +341,7 @@ export default function ItemDetailPage() {
                   )}
                 </div>
               ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <div style={{ fontSize: '8rem', filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.15))' }}>
-                    {categoryEmoji[item.category] || '🍽️'}
-                  </div>
-                </div>
+                <NoPhoto />
               )}
 
             </div>
@@ -644,11 +641,10 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
                 : `${API.replace('/api', '/storage')}/${displayImage}`} 
               alt={item.name} 
               className="food-card-image"
+              onError={logoOnError}
             />
           ) : (
-            <div className="food-card-image-placeholder">
-              {categoryEmoji[item.category] || '🍽️'}
-            </div>
+            <NoPhoto />
           )}
         </div>
 

@@ -115,7 +115,7 @@ class CategoryResource extends Resource
                     // No saved image yet → show the dish photo the website is using automatically
                     ->defaultImageUrl(function (Category $record) {
                         $path = array_key_first($record->dishPhotos(1));
-                        return $path ? (str_starts_with($path, 'http') ? $path : asset('storage/' . $path)) : null;
+                        return $path ? (str_starts_with($path, 'http') ? $path : asset('storage/' . $path)) : asset('images/brand/logo.png');
                     })
                     ->tooltip(fn (Category $record) => filled($record->image)
                         ? 'Saved category photo'
