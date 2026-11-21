@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\Model;
 class MenuSection extends Model
 {
     protected $fillable = [
-        'title', 'subtitle', 'emoji', 'available_from', 'available_until', 'menu_item_ids',
+        'title', 'subtitle', 'emoji', 'available_from', 'available_until', 'menu_item_ids', 'category_slugs',
         'sell_only_in_time', 'outside_hours', 'is_active', 'sort_order',
     ];
 
     protected $casts = [
         'menu_item_ids'     => 'array',
+        'category_slugs'    => 'array',
         'sell_only_in_time' => 'boolean',
         'is_active'         => 'boolean',
         'sort_order'        => 'integer',
@@ -40,9 +41,42 @@ class MenuSection extends Model
         self::$cache = null;
     }
 
+    private ?array $resolvedIds = null;
+
+    /**
+     * All dishes in this section: every dish of the chosen categories (in menu order),
+     * then the single dishes picked by hand. New dishes added to a chosen category join automatically.
+     */
     public function dishIds(): array
     {
-        return array_values(array_map('intval', array_filter((array) ($this->menu_item_ids ?? []))));
+        if ($this->resolvedIds !== null) {
+            return $this->resolvedIds;
+        }
+        $ids = [];
+        $slugs = array_values(array_filter((array) ($this->category_slugs ?? [])));
+        if ($slugs) {
+            try {
+                $ids = MenuItem::whereIn('category', $slugs)->menuOrder()->pluck('id')->map(fn ($v) => (int) $v)->all();
+            } catch (\Throwable $e) {
+                $ids = [];
+            }
+        }
+        foreach ((array) ($this->menu_item_ids ?? []) as $id) {
+            $id = (int) $id;
+            if ($id && ! in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
+        }
+        return $this->resolvedIds = $ids;
+    }
+
+    /** Hand-picked dish count + category names, for admin lists. */
+    public function categoryNames(): array
+    {
+        $slugs = array_values(array_filter((array) ($this->category_slugs ?? [])));
+        if (! $slugs) return [];
+        $names = Category::whereIn('slug', $slugs)->pluck('name', 'slug');
+        return collect($slugs)->map(fn ($s) => $names[$s] ?? $s)->all();
     }
 
     public function label(): string

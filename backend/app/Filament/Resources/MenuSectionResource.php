@@ -84,17 +84,33 @@ class MenuSectionResource extends Resource
                 ])->columns(2),
 
             Forms\Components\Section::make('Dishes in this section')
+                ->description('Add whole categories (all their dishes, including ones you add later), single dishes, or both.')
                 ->schema([
+                    Forms\Components\Select::make('category_slugs')
+                        ->label('Add whole categories')
+                        ->multiple()
+                        ->searchable()
+                        ->allowHtml()
+                        ->options(fn () => \App\Models\Category::pictureOptions())
+                        ->getSearchResultsUsing(fn (string $search) => \App\Models\Category::pictureOptions($search))
+                        ->getOptionLabelsUsing(fn (array $values) => collect(\App\Models\Category::pictureOptions())->only($values)->all())
+                        ->placeholder('e.g. Breakfast, Hot Starter')
+                        ->helperText('Every dish in these categories shows in this section.')
+                        ->required(fn (Forms\Get $get) => blank($get('menu_item_ids')))
+                        ->markAsRequired(false) // one of the two boxes is enough
+                        ->validationMessages(['required' => 'Add at least one category or one dish.']),
                     Forms\Components\Select::make('menu_item_ids')
-                        ->label('Search and add dishes')
                         ->multiple()
                         ->searchable()
                         ->options(fn () => self::dishOptions())
                         ->getSearchResultsUsing(fn (string $search) => self::dishOptions($search))
                         ->getOptionLabelsUsing(fn (array $values) => collect(self::dishOptions())->only($values)->all())
                         ->placeholder('Type a dish name, e.g. Maggi, Sandwich')
-                        ->helperText('They show in this order on the website. Sold-out dishes are skipped automatically.')
-                        ->required(),
+                        ->label('Add single dishes (optional)')
+                        ->helperText('Category dishes show first, then these in the order you add them. Sold-out dishes are skipped automatically.')
+                        ->required(fn (Forms\Get $get) => blank($get('category_slugs')))
+                        ->markAsRequired(false)
+                        ->validationMessages(['required' => 'Add at least one category or one dish.']),
                 ]),
 
             Forms\Components\Section::make('Selling these dishes')
@@ -137,7 +153,9 @@ class MenuSectionResource extends Resource
                     ->color(fn ($state) => ['live' => 'success', 'later' => 'warning', 'off' => 'gray'][$state] ?? 'gray'),
                 Tables\Columns\TextColumn::make('menu_item_ids')
                     ->label('Dishes')
-                    ->formatStateUsing(fn ($state, MenuSection $r) => count($r->dishIds()) . ' dishes')
+                    ->state(fn (MenuSection $r) => count($r->dishIds()))
+                    ->formatStateUsing(fn ($state, MenuSection $r) => count($r->dishIds()) . ' dishes'
+                        . ($r->categoryNames() ? ' · ' . implode(', ', $r->categoryNames()) : ''))
                     ->description(function (MenuSection $r) {
                         $first = array_slice($r->dishIds(), 0, 4);
                         $names = MenuItem::whereIn('id', $first)->pluck('name', 'id');
