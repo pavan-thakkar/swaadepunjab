@@ -39,6 +39,25 @@ export interface MenuItem {
   is_available: boolean;
   is_featured: boolean;
   image: string | null;
+  /** Selling hours (e.g. breakfast 4–7 PM), null = all day */
+  availability?: { from: string; until: string; label: string; hide: boolean; now: boolean } | null;
+}
+
+/** Is this dish inside its selling hours right now? (India time, worked out in the browser so an open page stays correct) */
+export function isOnNow(item: Pick<MenuItem, 'availability'> | null | undefined): boolean {
+  const a = item?.availability;
+  if (!a || !a.from || !a.until) return true;
+  const toMin = (hm: string) => { const [h, m] = hm.split(':').map(Number); return ((h || 0) % 24) * 60 + (m || 0); };
+  const f = toMin(a.from), u = toMin(a.until);
+  if (f === u) return true;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
+  const n = (Number(parts.find(p => p.type === 'hour')?.value) % 24) * 60 + Number(parts.find(p => p.type === 'minute')?.value);
+  return f < u ? n >= f && n < u : n >= f || n < u;
+}
+
+/** Hidden from the website right now (outside its hours and the admin chose "hide"). */
+export function isHiddenNow(item: Pick<MenuItem, 'availability'> | null | undefined): boolean {
+  return !!item?.availability?.hide && !isOnNow(item);
 }
 
 export interface CartItem {
@@ -126,6 +145,7 @@ function findLine(items: CartItem[], id: number | string): CartItem | undefined 
 function cartReducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case 'ADD': {
+      if (!isOnNow(action.item)) return state; // outside selling hours (button shows "Available 4 PM – 7 PM")
       if (!action.options && hasOptions(action.item)) {
         return { ...state, picker: action.item };
       }
@@ -167,6 +187,7 @@ function cartReducer(state: CartState, action: CartAction): CartState {
       return line ? { ...state, items: state.items.filter(i => i !== line) } : state;
     }
     case 'INCREMENT': {
+      if (action.item && !isOnNow(action.item)) return state; // outside selling hours
       // "+" on a menu card for a dish with options → let the customer choose again
       if (typeof action.id === 'number' && action.item && hasOptions(action.item)) {
         return { ...state, picker: action.item };

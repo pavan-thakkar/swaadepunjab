@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart, MenuItem, qtyInCart, hasOptions } from './context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions, isOnNow, isHiddenNow } from './context/CartContext';
 import CartDrawer from './components/CartDrawer';
 import Navbar from './components/Navbar';
 import Toast from './components/Toast';
@@ -148,7 +148,7 @@ export default function HomePage() {
     try {
       const res = await fetch(`${API}/menu`);
       const data = await res.json();
-      setAllItems(data.data || []);
+      setAllItems((data.data || []).filter((i: MenuItem) => !isHiddenNow(i))); // dishes hidden outside their selling hours
     } catch (e) {
       console.error(e);
     } finally {
@@ -234,7 +234,7 @@ export default function HomePage() {
       if (cat !== 'all') params.set('category', cat);
       const res = await fetch(`${API}/menu?${params}`, { cache: 'no-store' });
       const data = await res.json();
-      if (seq === fetchSeq.current) setItems(data.data || []); // ignore late, older replies
+      if (seq === fetchSeq.current) setItems((data.data || []).filter((i: MenuItem) => !isHiddenNow(i))); // ignore late, older replies
     } catch {
       if (seq === fetchSeq.current) showToast('Could not load the menu. Please check your internet and try again.', 'error');
     } finally {
@@ -715,7 +715,7 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
 
   return (
     <div 
-      className="food-card" 
+      className={`food-card${isOnNow(item) ? '' : ' later'}`} 
       style={{ animationDelay: `${delay}ms`, cursor: 'pointer' }}
       onClick={() => router.push(itemPath(item))}
     >
@@ -788,7 +788,9 @@ function FoodCard({ item, onAdd, delay, categoryEmoji, categoryLabels }: { item:
 
         {/* Floating Action Button */}
         <div className="food-card-action-wrap" onClick={(e) => e.stopPropagation()}>
-          {quantity > 0 ? (
+          {!isOnNow(item) ? (
+            <span className="later-pill" title="This dish is sold only at these hours">🕐 Available {item.availability?.label}</span>
+          ) : quantity > 0 ? (
             <div className="quantity-control-card">
               <button 
                 type="button" 
@@ -868,7 +870,7 @@ function BestCard({ item, onAdd, emoji }: { item: MenuItem; onAdd: (i: MenuItem)
               <button type="button" className="qty-control-btn" aria-label={`Add one ${item.name}`} onClick={() => dispatch({ type: 'INCREMENT', id: item.id, item })}>+</button>
             </div>
           ) : (
-            <button type="button" className="best-add" onClick={() => onAdd(item)}>ADD</button>
+            isOnNow(item) ? <button type="button" className="best-add" onClick={() => onAdd(item)}>ADD</button> : <span className="later-pill small">🕐 {item.availability?.label}</span>
           )}
         </div>
       </div>

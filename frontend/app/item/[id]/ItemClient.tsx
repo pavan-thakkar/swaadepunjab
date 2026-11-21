@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCart, MenuItem, qtyInCart, hasOptions } from '../../context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions, isOnNow, isHiddenNow } from '../../context/CartContext';
 import Navbar from '../../components/Navbar';
 import CartDrawer from '../../components/CartDrawer';
 import Toast from '../../components/Toast';
@@ -147,7 +147,7 @@ export default function ItemDetailPage() {
         const res = await fetch(`${API}/menu/${item.id}/pairs?exclude=${inCart.join(',')}`, { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
-          if (Array.isArray(json.data)) { setSuggestions(json.data); return; }
+          if (Array.isArray(json.data)) { setSuggestions(json.data.filter((i: MenuItem) => !isHiddenNow(i))); return; }
         }
       } catch {}
       // Fallback (older server): popular dishes from other categories, never variants of this dish
@@ -158,7 +158,7 @@ export default function ItemDetailPage() {
         const base = (n: string) => n.toLowerCase().split(/\s+(?:with|and|\+)\s+|[,(]/)[0].trim();
         const all: MenuItem[] = json.data || [];
         setSuggestions(all
-          .filter(i => i.id !== item.id && i.is_available && !inCart.includes(i.id) && i.category !== item.category && base(i.name) !== base(item.name))
+          .filter(i => i.id !== item.id && i.is_available && !isHiddenNow(i) && !inCart.includes(i.id) && i.category !== item.category && base(i.name) !== base(item.name))
           .slice(0, 4));
       } catch (err) {
         console.error("Error fetching suggestions:", err);
@@ -432,7 +432,12 @@ export default function ItemDetailPage() {
                   </div>
                 </div>
 
-                {quantity > 0 ? (
+                {item.is_available && !isOnNow(item) ? (
+                  <div className="later-box">
+                    <strong>🕐 Available {item.availability?.label}</strong>
+                    <span>This dish is served only at these hours. Please come back then!</span>
+                  </div>
+                ) : quantity > 0 ? (
                   <div className="quantity-control-card large" style={{ height: '48px', minWidth: '130px', padding: '6px 16px' }}>
                     <button 
                       type="button" 
@@ -601,7 +606,7 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
 
   return (
     <div 
-      className="food-card" 
+      className={`food-card${isOnNow(item) ? '' : ' later'}`} 
       style={{ cursor: 'pointer', height: '100%' }}
       onClick={() => router.push(itemPath(item))}
     >
@@ -650,7 +655,9 @@ function SuggestedFoodCard({ item, onAdd, categoryEmoji, categoryLabels }: { ite
 
         {/* Floating Action Button */}
         <div className="food-card-action-wrap" onClick={(e) => e.stopPropagation()}>
-          {quantity > 0 ? (
+          {!isOnNow(item) ? (
+            <span className="later-pill" title="This dish is sold only at these hours">🕐 Available {item.availability?.label}</span>
+          ) : quantity > 0 ? (
             <div className="quantity-control-card">
               <button 
                 type="button" 

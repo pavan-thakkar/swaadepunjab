@@ -96,6 +96,8 @@ class CategoryResource extends Resource
                     ->default(false),
 
             ])->columns(2),
+
+            \App\Filament\Support\SellingHours::section('category'),
         ]);
     }
 
@@ -129,7 +131,8 @@ class CategoryResource extends Resource
                     ->label('Category Name')
                     ->searchable()
                     ->sortable()
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->description(fn ($record) => \App\Filament\Support\SellingHours::badge($record)),
 
                 Tables\Columns\TextColumn::make('slug')
                     ->label('Slug')

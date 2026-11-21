@@ -37,6 +37,8 @@ class MenuItemResource extends Resource
                     ->native(false)
                     // A → Z by name (easy to find in a long list)
                     ->options(fn () => \App\Models\Category::pictureOptions())
+                    ->getSearchResultsUsing(fn (string $search) => \App\Models\Category::pictureOptions($search))
+                    ->getOptionLabelUsing(fn ($value) => \App\Models\Category::pictureOptions()[$value] ?? $value)
                     ->allowHtml()
                     ->searchable(),
                 Forms\Components\Textarea::make('description')
@@ -89,6 +91,8 @@ class MenuItemResource extends Resource
                 Forms\Components\Toggle::make('is_featured')
                     ->label('Featured on homepage'),
             ])->columns(2),
+
+            \App\Filament\Support\SellingHours::section('dish'),
 
             Forms\Components\Section::make('Goes well with (optional)')
                 ->description('Pick dishes to suggest on this dish\'s page. Leave empty and the website picks automatically from what customers order together and from your sides (breads, papad…).')
@@ -217,6 +221,7 @@ class MenuItemResource extends Resource
                     ->description(fn (MenuItem $record) => collect([
                         $record->quantity_label,
                         count($record->groups()) ? count($record->groups()) . ' option group(s)' : null,
+                        \App\Filament\Support\SellingHours::badge($record),
                     ])->filter()->implode(' · ') ?: null),
 
                 Tables\Columns\TextColumn::make('category')
@@ -301,6 +306,8 @@ class MenuItemResource extends Resource
                 Tables\Filters\SelectFilter::make('category')
                     // A → Z by name (easy to find in a long list)
                     ->options(fn () => \App\Models\Category::pictureOptions())
+                    ->getSearchResultsUsing(fn (string $search) => \App\Models\Category::pictureOptions($search))
+                    ->getOptionLabelUsing(fn ($value) => \App\Models\Category::pictureOptions()[$value] ?? $value)
                     ->native(false)
                     ->modifyFormFieldUsing(fn (Forms\Components\Select $field) => $field->allowHtml())
                     ->searchable()

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCart, MenuItem, qtyInCart, hasOptions } from '../context/CartContext';
+import { useCart, MenuItem, qtyInCart, hasOptions, isOnNow, isHiddenNow } from '../context/CartContext';
 import { itemPath } from '../lib/itemPath';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
@@ -67,7 +67,7 @@ export default function FeaturedCards() {
           return (
             <div
               key={card.id}
-              className={`featured-card${clickable ? ' clickable' : ''}${card.menu_item && card.menu_item.is_available !== false ? ' has-bar' : ''}`}
+              className={`featured-card${clickable ? ' clickable' : ''}${card.menu_item && card.menu_item.is_available !== false && !isHiddenNow(card.menu_item) ? ' has-bar' : ''}`}
               role={clickable ? 'link' : undefined}
               tabIndex={clickable ? 0 : undefined}
               onClick={() => clickable && router.push(card.menu_item ? itemPath(card.menu_item) : `/item/${card.menu_item_id}/`)}
@@ -79,7 +79,7 @@ export default function FeaturedCards() {
                   {card.badge}
                 </span>
               )}
-              {card.menu_item && card.menu_item.is_available !== false && (() => {
+              {card.menu_item && card.menu_item.is_available !== false && !isHiddenNow(card.menu_item) && (() => {
                 const dish = card.menu_item!;
                 const qty = qtyInCart(state.items, dish.id);
                 return (
@@ -88,7 +88,9 @@ export default function FeaturedCards() {
                       <span className="featured-add-name">{dish.name}{dish.quantity_label ? <span className="qty-label" style={{ display: 'inline', marginLeft: 6 }}>· {dish.quantity_label}</span> : null}</span>
                       <span className="featured-add-price">₹{Number(dish.price).toFixed(0)}{hasOptions(dish) && <span className="featured-add-opts">Customisable</span>}</span>
                     </div>
-                    {qty > 0 ? (
+                    {!isOnNow(dish) ? (
+                      <span className="later-pill featured-later">🕐 {dish.availability?.label}</span>
+                    ) : qty > 0 ? (
                       <div className="quantity-control-card featured-qty">
                         <button type="button" className="qty-control-btn" aria-label={`Remove one ${dish.name}`} onClick={() => dispatch({ type: 'DECREMENT', id: dish.id })}>−</button>
                         <span className="qty-control-val">{qty}</span>

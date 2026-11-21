@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useCart, MenuItem } from '../context/CartContext';
+import { useCart, MenuItem, isOnNow } from '../context/CartContext';
 import { useOffers, computeOffer, rewardText } from './OfferProgress';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
@@ -22,7 +22,7 @@ export default function QuickAdds({ subtotal, dark = true }: { subtotal: number;
   if (!next || subtotal <= 0 || menu.length === 0) return null;
   const gap = Number(next.min_order_amount) - subtotal;
   const inCart = new Set(state.items.map(i => i.menu_item_id));
-  const pool = menu.filter(m => m.is_available !== false && !inCart.has(m.id) && Number(m.price) > 0);
+  const pool = menu.filter(m => m.is_available !== false && isOnNow(m) && !inCart.has(m.id) && Number(m.price) > 0);
   const closing = pool.filter(m => Number(m.price) >= gap).sort((a, b) => Number(a.price) - Number(b.price));
   const picks = (closing.length ? closing : [...pool].sort((a, b) => Number(b.price) - Number(a.price))).slice(0, 3);
   if (picks.length === 0) return null;

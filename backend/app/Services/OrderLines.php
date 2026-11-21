@@ -45,6 +45,11 @@ class OrderLines
             if (! $dish) self::fail('One of the dishes in your cart is no longer on the menu.');
             $kept = in_array($k, $keepKeys, true);
             if (! $dish->is_available && ! $kept) self::fail("{$dish->name} is currently unavailable.");
+            // Selling hours (e.g. breakfast 4–7 PM)
+            if (! $kept && ! $dish->isOnNow()) {
+                $w = $dish->availability;
+                self::fail("{$dish->name} is available only {$w['label']}. Please remove it from your cart.");
+            }
 
             try {
                 $r = $dish->resolveOptions($m['options'], $kept);

@@ -76,6 +76,7 @@
                         <span style="font-size: 14px; font-weight: 700; line-height: 1.25">{{ $d->name }}</span>
                         @if ($d->hasOptions())<span style="font-size: 11px; font-weight: 800; color: #9A3412">Choose options ›</span>@endif
                         @if ($d->quantity_label)<span style="font-size: 11px; font-weight: 600; color: #8A5A00">{{ $d->quantity_label }}</span>@endif
+                        @if (($tw = $d->availability) && ! $tw['now'])<span style="font-size: 11px; font-weight: 700; color: #B45309" title="Website sells this only at these hours">🕐 {{ $tw['label'] }}</span>@endif
                         <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
                             <span style="font-size: 15px; font-weight: 800">₹{{ number_format($d->price, 0) }}</span>
                             @if (! $d->is_available)<span style="font-size: 11px; font-weight: 800; color: #9F1D1D">SOLD OUT</span>@endif

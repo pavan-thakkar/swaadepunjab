@@ -22,10 +22,14 @@ class MenuItem extends Model
         'rating',
         'is_available',
         'is_featured',
+        'time_limited',
+        'available_from',
+        'available_until',
+        'outside_hours',
     ];
 
     // Pretty web address: /item/paneer-tikka instead of /item/548
-    protected $appends = ['slug', 'choice_groups'];
+    protected $appends = ['slug', 'choice_groups', 'availability'];
 
     public function getSlugAttribute(): string
     {
@@ -50,7 +54,67 @@ class MenuItem extends Model
         'option_groups' => 'array',
         'customisation_ids' => 'array',
         'pairs_with'    => 'array',
+        'time_limited'  => 'boolean',
     ];
+
+    /** Categories by slug, loaded once per request (for selling hours set on a category). */
+    private static ?array $categoryCache = null;
+
+    public static function flushCategoryCache(): void
+    {
+        self::$categoryCache = null;
+    }
+
+    private function categoryModel(): ?Category
+    {
+        if (self::$categoryCache === null) {
+            try {
+                self::$categoryCache = Category::all()->keyBy('slug')->all();
+            } catch (\Throwable $e) {
+                self::$categoryCache = [];
+            }
+        }
+        return self::$categoryCache[$this->category] ?? null;
+    }
+
+    /**
+     * Selling hours for this dish: its own hours, otherwise its category's hours, otherwise none.
+     * @return array{from: string, until: string, outside: string, source: string}|null
+     */
+    public function timeWindow(): ?array
+    {
+        if ($this->time_limited && $this->available_from && $this->available_until) {
+            return ['from' => $this->available_from, 'until' => $this->available_until, 'outside' => $this->outside_hours ?: 'show', 'source' => 'dish'];
+        }
+        $c = $this->categoryModel();
+        if ($c && $c->time_limited && $c->available_from && $c->available_until) {
+            return ['from' => $c->available_from, 'until' => $c->available_until, 'outside' => $c->outside_hours ?: 'show', 'source' => 'category'];
+        }
+        return null;
+    }
+
+    /** Can this dish be ordered right now (selling hours)? */
+    public function isOnNow(): bool
+    {
+        $w = $this->timeWindow();
+        return ! $w || \App\Support\TimeWindow::isOpen($w['from'], $w['until']);
+    }
+
+    /** For the website: hours, a label like "4 PM – 7 PM", and whether it's on now. */
+    public function getAvailabilityAttribute(): ?array
+    {
+        $w = $this->timeWindow();
+        if (! $w) {
+            return null;
+        }
+        return [
+            'from'  => $w['from'],
+            'until' => $w['until'],
+            'label' => \App\Support\TimeWindow::label($w['from'], $w['until']),
+            'hide'  => $w['outside'] === 'hide',
+            'now'   => \App\Support\TimeWindow::isOpen($w['from'], $w['until']),
+        ];
+    }
 
     public function orderItems(): HasMany
     {

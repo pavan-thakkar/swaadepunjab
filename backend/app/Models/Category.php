@@ -16,11 +16,16 @@ class Category extends Model
         'is_active',
         'is_addon',
         'sort_order',
+        'time_limited',
+        'available_from',
+        'available_until',
+        'outside_hours',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'is_addon'  => 'boolean',
+        'time_limited' => 'boolean',
     ];
 
     /** Dish photos in this category, best first: [storage path => dish name]. */
@@ -53,9 +58,12 @@ class Category extends Model
     }
 
     /** Category options A → Z with their picture, for admin dropdowns. */
-    public static function pictureOptions(): array
+    public static function pictureOptions(?string $search = null): array
     {
+        // Search by the plain name (searching the picture HTML would never match)
+        $q = mb_strtolower(trim((string) $search));
         return static::all()
+            ->when($q !== '', fn ($all) => $all->filter(fn ($c) => str_contains(mb_strtolower((string) $c->name), $q) || str_contains(mb_strtolower((string) $c->slug), $q)))
             ->sortBy(fn ($c) => mb_strtolower(trim((string) $c->name)))
             ->mapWithKeys(fn ($c) => [$c->slug => '<span style="display:inline-flex;align-items:center;gap:10px">'
                 . '<img src="' . e($c->thumbUrl()) . '" alt="" style="width:28px;height:28px;border-radius:50%;object-fit:cover;background:#FFF8E7;flex-shrink:0">'
