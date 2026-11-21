@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Background video for a promo banner.
@@ -29,6 +29,20 @@ export default function PromoVideo({
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const audible = active && hasSound && soundOn;
+  // A tall / square video in a wide banner would be cropped badly → show it whole, with a soft blurred copy behind
+  const [fitWhole, setFitWhole] = useState(false);
+  const checkFit = () => {
+    const v = ref.current;
+    const box = v?.parentElement;
+    if (!v || !box || !v.videoWidth || !box.clientHeight) return;
+    const videoRatio = v.videoWidth / v.videoHeight;
+    const boxRatio = box.clientWidth / box.clientHeight;
+    setFitWhole(videoRatio < boxRatio * 0.6);
+  };
+  useEffect(() => {
+    window.addEventListener('resize', checkFit);
+    return () => window.removeEventListener('resize', checkFit);
+  });
 
   useEffect(() => {
     const v = ref.current;
@@ -51,9 +65,13 @@ export default function PromoVideo({
 
   return (
     <>
+      {fitWhole && (
+        <video className="promo-video-blur" src={src} muted playsInline loop autoPlay={active} preload="metadata" aria-hidden="true" />
+      )}
       <video
         ref={ref}
-        className="promo-video-bg"
+        className={`promo-video-bg${fitWhole ? ' fit-whole' : ''}`}
+        onLoadedMetadata={checkFit}
         src={src}
         poster={poster || undefined}
         muted
