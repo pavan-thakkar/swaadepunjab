@@ -70,6 +70,7 @@ sshpass -p "$SSH_PASS" ssh -tt -o StrictHostKeyChecking=no -p $SSH_PORT $SSH_USE
    rm -f public/info.php && \
    find public -path public/storage -prune -o -type d -exec chmod 755 {} + && \
    find public -path public/storage -prune -o -type f -exec chmod 644 {} + && \
+   (grep -q '^FRONTEND_URL=' .env && sed -i 's#^FRONTEND_URL=.*#FRONTEND_URL=https://swaadepunjab.com#' .env || printf '\\nFRONTEND_URL=https://swaadepunjab.com\\n' >> .env) && \
    (grep -q '^GOOGLE_CLIENT_ID=' .env || printf '\\nGOOGLE_CLIENT_ID=82292707740-slkcblrneb4jeckjbdjq85onu6pr3qgf.apps.googleusercontent.com\\n' >> .env) && \
    rm -f public/storage && \
    ln -s /home/u360309011/domains/swaadepunjab.com/public_html/backend/storage/app/public public/storage 2>/dev/null || true && \

@@ -175,6 +175,23 @@ class Order extends Model
         });
     }
 
+    /**
+     * The customer website address for links we send (rating, etc.).
+     * A "localhost" address only makes sense on the developer laptop, so on the live server we never use one.
+     */
+    public static function websiteUrl(): string
+    {
+        $live = 'https://swaadepunjab.com';
+        $url = trim((string) (config('app.frontend_url') ?: env('FRONTEND_URL', '')));
+        $isLocalUrl = $url === '' || preg_match('#^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(/|$)#i', $url);
+        if ($isLocalUrl) {
+            $host = request()?->getHost() ?? '';
+            $onLaptop = in_array($host, ['localhost', '127.0.0.1', '::1'], true) || app()->environment('local');
+            return ($onLaptop && $url !== '') ? rtrim($url, '/') : $live;
+        }
+        return rtrim($url, '/');
+    }
+
     /** Secret part of the rating link (works on any phone, no login needed). */
     public function ratingToken(): string
     {
@@ -183,7 +200,7 @@ class Order extends Model
 
     public function ratingUrl(): string
     {
-        $site = rtrim((string) (config('app.frontend_url') ?: env('FRONTEND_URL', 'https://swaadepunjab.com')), '/');
+        $site = self::websiteUrl();
         return $site . '/rate/?o=' . urlencode((string) $this->order_number) . '&t=' . $this->ratingToken();
     }
 
