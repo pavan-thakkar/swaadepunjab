@@ -357,11 +357,9 @@ class OrderResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->grow(false),
 
-                Tables\Columns\TextColumn::make('ordered_items')
+                Tables\Columns\ViewColumn::make('ordered_items')
                     ->label('Ordered Items')
-                    ->html()
-                    ->state(fn (Order $record): string => static::itemsHtml($record))
-                    ->extraAttributes(['style' => 'min-width:270px']),
+                    ->view('filament.tables.columns.order-items'),
 
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Phone')
@@ -634,7 +632,7 @@ class OrderResource extends Resource
     /** Split "Paneer Chur Chur Naan Meal - Choose Your Gravy (Dal Makhani)" into the dish and its choices. */
     public static function splitItemName(string $name): array
     {
-        $parts = explode(' - ', $name, 2);
+        $parts = preg_split('/\s+[-–—]\s+/u', $name, 2);
         $dish = trim($parts[0]);
         $extra = '';
         if (isset($parts[1])) {
@@ -654,7 +652,7 @@ class OrderResource extends Resource
             if (! $extra && is_array($it->options) && $it->options) {
                 $extra = collect($it->options)->pluck('choice')->filter()->implode(', ');
             }
-            $rows .= '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">'
+            $rows .= '<div style="display:flex;flex-direction:row;width:100%;gap:8px;align-items:flex-start;padding:3px 0;white-space:normal">'
                 . '<span style="flex:0 0 auto;min-width:30px;text-align:center;background:#FFF4D6;color:#8A5A00;border-radius:6px;padding:1px 6px;font-weight:900;font-size:13px">' . (int) $it->quantity . '×</span>'
                 . '<span style="line-height:1.3"><span style="font-weight:700;font-size:13.5px">' . e($dish) . ($it->is_free ? ' <span style="color:#15803D;font-size:11px;font-weight:800">FREE</span>' : '') . '</span>'
                 . ($extra ? '<br><span style="font-size:12px;opacity:.7">' . e($extra) . '</span>' : '')
@@ -671,7 +669,7 @@ class OrderResource extends Resource
         $note = $record->special_instructions
             ? '<div style="margin-top:4px;font-size:12px;background:#FEF3C7;color:#92400E;border-radius:6px;padding:3px 8px;font-weight:600">📝 ' . e($record->special_instructions) . '</div>'
             : '';
-        return '<div>' . $head . $rows . $tail . $note . '</div>';
+        return '<div style="display:flex;flex-direction:column;width:100%">' . $head . $rows . $tail . $note . '</div>';
     }
 
     public static function getPages(): array
