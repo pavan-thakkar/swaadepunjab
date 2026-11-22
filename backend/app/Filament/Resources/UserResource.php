@@ -33,6 +33,8 @@ class UserResource extends Resource
                 Forms\Components\TextInput::make('name')->label('Name')->required()->maxLength(100),
                 Forms\Components\TextInput::make('email')->label('Login email')->email()->required()
                     ->unique(ignoreRecord: true)->maxLength(150),
+                Forms\Components\TextInput::make('phone')->label('Mobile number')->tel()->maxLength(15)
+                    ->helperText('For delivery boys: the customer and the shop can call this number.'),
                 Forms\Components\TextInput::make('password')
                     ->label(fn (string $operation) => $operation === 'create' ? 'Password' : 'New password (leave blank to keep)')
                     ->password()->revealable()
@@ -50,6 +52,7 @@ class UserResource extends Resource
                         'owner'   => 'Everything: sales reports, settings, staff accounts, activity log, delete orders.',
                         'manager' => 'Orders, menu, categories, offers, coupons, cards, reviews, customers, loyalty, WhatsApp. No reports, settings or staff accounts.',
                         'staff'   => 'Counter: new-order alarm, orders (accept, status, print bill, counter orders) and switching dishes available / sold out. No sales totals or customer list.',
+                        'rider'   => 'Delivery boy: sees only "My Deliveries" — the orders given to him, with customer phone, address, map, amount to collect and payment buttons. Nothing else.',
                     ])
                     ->default('staff')
                     ->required()
@@ -76,7 +79,7 @@ class UserResource extends Resource
                     ->description(fn (User $r) => $r->id === auth()->id() ? 'You' : null),
                 Tables\Columns\TextColumn::make('email')->searchable()->copyable(),
                 Tables\Columns\TextColumn::make('role')->badge()
-                    ->formatStateUsing(fn ($state) => ['owner' => 'Owner', 'manager' => 'Manager', 'staff' => 'Counter Staff'][$state] ?? $state)
+                    ->formatStateUsing(fn ($state) => ['owner' => 'Owner', 'manager' => 'Manager', 'staff' => 'Counter Staff', 'rider' => '🛵 Delivery Boy'][$state] ?? $state)
                     ->color(fn ($state) => match ($state) { 'owner' => 'warning', 'manager' => 'info', default => 'gray' }),
                 Tables\Columns\IconColumn::make('is_active')->label('Active')->boolean(),
                 Tables\Columns\TextColumn::make('last_login_at')->label('Last login')->since()->placeholder('Never'),

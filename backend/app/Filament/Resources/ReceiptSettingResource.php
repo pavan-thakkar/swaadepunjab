@@ -320,6 +320,21 @@ class ReceiptSettingResource extends Resource
                         ])->columnSpanFull(),
                     ])->columns(3),
 
+                Forms\Components\Section::make('📱 Shop UPI (for delivery boys)')
+                    ->description('When a COD customer wants to pay by UPI at the door, the delivery boy shows a QR of this UPI ID with the exact bill amount filled in.')
+                    ->schema([
+                        Forms\Components\TextInput::make('shop_upi_id')
+                            ->label('Shop UPI ID')
+                            ->placeholder('e.g. swaadepunjab@okaxis or 98xxxxxxxx@ybl')
+                            ->regex('/^[a-zA-Z0-9._\-]{2,}@[a-zA-Z0-9]{2,}$/')
+                            ->validationMessages(['regex' => 'A UPI ID looks like name@bank (e.g. swaad@okaxis)'])
+                            ->maxLength(100),
+                        Forms\Components\TextInput::make('shop_upi_name')
+                            ->label('Name shown in the UPI app')
+                            ->placeholder('Swaad E Punjab')
+                            ->maxLength(100),
+                    ])->columns(2),
+
                 Forms\Components\Section::make('✏️ Customer Order Changes')
                     ->description('How long customers can add/remove items or change special instructions after placing an order.')
                     ->schema([

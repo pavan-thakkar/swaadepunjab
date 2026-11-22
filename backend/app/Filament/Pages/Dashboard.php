@@ -9,6 +9,19 @@ class Dashboard extends BaseDashboard
     protected static ?string $navigationIcon = 'heroicon-o-home';
     protected static ?int $navigationSort = -100;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return ! auth()->user()?->hasRole('rider');
+    }
+
+    /** Delivery boys don't see the dashboard: straight to their deliveries. */
+    public function mount(): void
+    {
+        if (auth()->user()?->hasRole('rider')) {
+            $this->redirect(\App\Filament\Pages\MyDeliveries::getUrl());
+        }
+    }
+
     public function getHeading(): string
     {
         $h = (int) now()->format('G');

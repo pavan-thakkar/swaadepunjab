@@ -13,7 +13,7 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'last_login_at'])]
+#[Fillable(['name', 'email', 'password', 'role', 'is_active', 'last_login_at', 'phone'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements FilamentUser
 {
@@ -39,7 +39,13 @@ class User extends Authenticatable implements FilamentUser
         'owner'   => 'Owner (full access)',
         'manager' => 'Manager (menu, offers, orders)',
         'staff'   => 'Counter Staff (orders only)',
+        'rider'   => 'Delivery Boy (own deliveries only)',
     ];
+
+    public function isRider(): bool
+    {
+        return $this->hasRole('rider');
+    }
 
     /** Only active accounts can open the admin panel. */
     public function canAccessPanel(Panel $panel): bool

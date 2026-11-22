@@ -166,8 +166,12 @@ class CounterMode extends Page
     /** Short name shown on a bill tab. */
     protected function billLabel(array $b, int $n): string
     {
+        $name = trim($b['customerName'] ?? '');
         if (($b['orderType'] ?? '') === 'dine_in' && trim($b['table'] ?? '') !== '') {
-            return 'Table ' . trim($b['table']);
+            return 'Table ' . trim($b['table']) . ($name !== '' ? ' · ' . mb_strimwidth($name, 0, 10, '…') : '');
+        }
+        if ($name !== '' && in_array($b['orderType'] ?? '', ['dine_in', 'takeaway'], true)) {
+            return mb_strimwidth($name, 0, 14, '…');
         }
         if (($b['orderType'] ?? '') === 'delivery') {
             $who = trim($b['customerName'] ?? '') ?: trim($b['phone'] ?? '');
@@ -471,7 +475,7 @@ class CounterMode extends Page
             $items = $id === $this->active ? $this->bill : ($b['bill'] ?? []);
             $tabs[] = [
                 'id' => $id,
-                'label' => $this->billLabel($id === $this->active ? array_merge($b, ['orderType' => $this->orderType, 'table' => $this->table]) : $b, $n),
+                'label' => $this->billLabel($id === $this->active ? array_merge($b, ['orderType' => $this->orderType, 'table' => $this->table, 'customerName' => $this->customerName, 'phone' => $this->phone]) : $b, $n),
                 'count' => array_sum($items),
                 'opened' => $b['opened'] ?? '',
                 'active' => $id === $this->active,

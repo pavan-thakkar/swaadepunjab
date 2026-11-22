@@ -133,10 +133,18 @@
                         <input class="sp-input" type="number" min="0" step="1" inputmode="numeric" placeholder="₹0" aria-label="Delivery charge" wire:model.live.debounce.400ms="deliveryFee" style="text-align: right; font-weight: 800">
                     </div>
                 @else
-                    <div style="display: grid; grid-template-columns: {{ $orderType === 'dine_in' ? '90px 1fr' : '1fr' }}; gap: 8px">
-                        @if ($orderType === 'dine_in')<input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">@endif
+                    @if ($orderType === 'dine_in')
+                        <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px">
+                            <input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">
+                            <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
+                        </div>
                         <input class="sp-input" type="tel" placeholder="Phone (optional, for points)" aria-label="Customer phone (optional)" wire:model.blur="phone">
-                    </div>
+                    @else
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+                            <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
+                            <input class="sp-input" type="tel" placeholder="Phone (optional)" aria-label="Customer phone (optional)" wire:model.blur="phone">
+                        </div>
+                    @endif
                 @endif
                 <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
             </div>

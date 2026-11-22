@@ -156,6 +156,12 @@ class Razorpay
         }
         $data = json_decode($rawBody, true) ?: [];
         $event = $data['event'] ?? '';
+        if ($event === 'payment_link.paid') {
+            $linkId = $data['payload']['payment_link']['entity']['id'] ?? null;
+            $o = $linkId ? Order::where('pay_link_id', $linkId)->first() : null;
+            if ($o) self::markPaidAtDoor($o, $data['payload']['payment']['entity']['id'] ?? null);
+            return true;
+        }
         $payment = $data['payload']['payment']['entity'] ?? [];
         $rzpOrderId = $payment['order_id'] ?? ($data['payload']['order']['entity']['id'] ?? null);
         if (! $rzpOrderId) {
@@ -232,6 +238,72 @@ class Razorpay
                 $o->estimated_delivery_at = now()->addMinutes(45);
             }
             $o->save();
+        });
+        $order->refresh();
+    }
+
+    // ---------------- Pay online at the door (COD order, customer wants to pay online) ----------------
+
+    /**
+     * Make (or reuse) a Razorpay payment link for the order's amount. Customer pays by UPI / card / netbanking.
+     * @return string|null the link (null = Razorpay not set up / error)
+     */
+    public static function payLinkFor(Order $order): ?string
+    {
+        if ($order->pay_link_url && $order->pay_link_id) {
+            return $order->pay_link_url;
+        }
+        if (! filled(self::keyId()) || ! filled(self::secret())) {
+            return null; // keys not saved in Store & Receipt Config
+        }
+        $digits = substr(preg_replace('/\D/', '', (string) $order->customer_phone), -10);
+        $body = [
+            'amount' => (int) round(((float) $order->total) * 100),
+            'currency' => 'INR',
+            'accept_partial' => false,
+            'description' => 'Swaad E Punjab order ' . $order->order_number,
+            'reference_id' => mb_substr($order->order_number . '-' . now()->format('His'), 0, 40),
+            'notify' => ['sms' => false, 'email' => false],
+            'reminder_enable' => false,
+            'expire_by' => now()->addDay()->timestamp,
+            'notes' => ['order_number' => $order->order_number, 'order_id' => (string) $order->id],
+        ];
+        if (strlen($digits) === 10) {
+            $body['customer'] = ['name' => mb_substr((string) $order->customer_name, 0, 50), 'contact' => '+91' . $digits];
+        }
+        $res = self::request('post', '/payment_links', $body);
+        if (! $res || empty($res['short_url'])) {
+            return null;
+        }
+        $order->forceFill(['pay_link_id' => $res['id'] ?? null, 'pay_link_url' => $res['short_url']])->saveQuietly();
+        return $res['short_url'];
+    }
+
+    /** Ask Razorpay if the door payment link was paid. @return string 'paid' | 'pending' | 'error' */
+    public static function syncPayLink(Order $order): string
+    {
+        if ($order->payment_status === 'paid') return 'paid';
+        if (! $order->pay_link_id) return 'error';
+        $res = self::request('get', '/payment_links/' . $order->pay_link_id);
+        if (! $res) return 'error';
+        if (($res['status'] ?? '') === 'paid') {
+            $pid = $res['payments'][0]['payment_id'] ?? ($res['payments'][0]['id'] ?? null);
+            self::markPaidAtDoor($order, $pid);
+            return 'paid';
+        }
+        return 'pending';
+    }
+
+    /** Door payment done: mark paid and settle the bill as Online (credited to the delivery boy who took it). */
+    public static function markPaidAtDoor(Order $order, ?string $paymentId): void
+    {
+        DB::transaction(function () use ($order, $paymentId) {
+            $o = Order::lockForUpdate()->find($order->id);
+            if (! $o || $o->payment_status === 'paid') return;
+            $o->forceFill(['payment_status' => 'paid', 'razorpay_payment_id' => $paymentId, 'paid_at' => now()])->save();
+            if ($o->needsSettlement()) {
+                $o->settle('online', [], 'Paid online at the door (Razorpay link)', $o->rider ?: null);
+            }
         });
         $order->refresh();
     }

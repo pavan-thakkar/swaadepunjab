@@ -13,8 +13,8 @@ Route::post('/admin/menu-import/upload', [MenuImportController::class, 'upload']
 
 // Alarm polling endpoint — returns pending order count for admin-custom.js alarm
 Route::get('/admin/alarm/pending-count', function () {
-    if (!auth()->guard('web')->check()) {
-        return response()->json(['count' => 0]);
+    if (!auth()->guard('web')->check() || auth()->guard('web')->user()->hasRole('rider')) {
+        return response()->json(['count' => 0]); // riders don't get the kitchen alarm
     }
     $count = \App\Models\Order::where('status', 'pending')->count();
     $latest = $count ? \App\Models\Order::where('status', 'pending')->latest('created_at')->first(['id', 'order_number', 'customer_name', 'total', 'order_type']) : null;

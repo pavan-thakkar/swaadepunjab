@@ -9,6 +9,8 @@ class ReceiptSetting extends Model
     protected $table = 'receipt_settings';
 
     protected $fillable = [
+        'shop_upi_id',
+        'shop_upi_name',
         'outlet_name',
         'outlet_address',
         'outlet_phone',

@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'rider_id',
+        'rider_name',
+        'rider_assigned_at',
+        'picked_up_at',
+        'delivered_at',
+        'pay_link_id',
+        'pay_link_url',
         'cancelled_by',
         'cancelled_by_name',
         'cancelled_at',
@@ -96,6 +103,9 @@ class Order extends Model
         'paid_at' => 'datetime',
         'settled_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'rider_assigned_at' => 'datetime',
+        'picked_up_at' => 'datetime',
+        'delivered_at' => 'datetime',
         'settle_cash' => 'decimal:2',
         'settle_upi' => 'decimal:2',
         'settle_card' => 'decimal:2',
@@ -127,6 +137,9 @@ class Order extends Model
         // System cancels (unpaid online orders) call cancelledBySystem() first, so they are kept as 'system'.
         static::saving(function (Order $order) {
             if (! $order->isDirty('status')) return;
+            // Delivery timeline
+            if ($order->status === 'out_for_delivery' && ! $order->picked_up_at) $order->picked_up_at = now();
+            if ($order->status === 'delivered' && ! $order->delivered_at) $order->delivered_at = now();
             if ($order->status === 'cancelled') {
                 if (! $order->isDirty('cancelled_by') || ! $order->cancelled_by) {
                     $user = auth()->guard('web')->user();
@@ -296,6 +309,42 @@ class Order extends Model
         $was = $this->settleLabel();
         $this->update(['settle_mode' => null, 'settle_cash' => 0, 'settle_upi' => 0, 'settle_card' => 0, 'settled_at' => null, 'settled_by' => null, 'settled_by_name' => null, 'settle_note' => null]);
         \App\Models\ActivityLog::record('unsettle', "Undid settlement of bill {$this->order_number} (was {$was})", $this);
+    }
+
+    // ---------------- Delivery boys ----------------
+
+    /** Active delivery-boy accounts, for the "Assign rider" picker. */
+    public static function riderOptions(): array
+    {
+        return \App\Models\User::where('role', 'rider')->where('is_active', true)->orderBy('name')->get()
+            ->mapWithKeys(fn ($u) => [$u->id => $u->name . ($u->phone ? " · {$u->phone}" : '')])->all();
+    }
+
+    public function rider(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(\App\Models\User::class, 'rider_id');
+    }
+
+    public function assignRider(?int $riderId): void
+    {
+        $r = $riderId ? \App\Models\User::where('role', 'rider')->find($riderId) : null;
+        $this->update(['rider_id' => $r?->id, 'rider_name' => $r?->name, 'rider_assigned_at' => $r ? now() : null]);
+        \App\Models\ActivityLog::record('rider', $r ? "Gave order {$this->order_number} to {$r->name} for delivery" : "Removed delivery boy from order {$this->order_number}", $this);
+    }
+
+    /** Google Maps directions to the customer: exact GPS pin if we have it, otherwise the typed address. */
+    public function mapsUrl(): string
+    {
+        if ($this->latitude && $this->longitude) {
+            return "https://www.google.com/maps/dir/?api=1&destination={$this->latitude},{$this->longitude}";
+        }
+        return 'https://www.google.com/maps/dir/?api=1&destination=' . rawurlencode(trim($this->delivery_address . ($this->city && $this->city !== 'Counter' ? ', ' . $this->city : '')));
+    }
+
+    /** Amount the delivery boy must collect (0 if already paid / settled). */
+    public function amountToCollect(): float
+    {
+        return $this->needsSettlement() ? round((float) $this->total, 2) : 0.0;
     }
 
     /** Mark the next cancel as done by the system (e.g. online payment not completed). Call before update(['status' => 'cancelled']). */

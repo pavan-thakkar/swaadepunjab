@@ -404,6 +404,9 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('order_type')
                     ->label('Type')
+                    ->description(fn (Order $record) => $record->order_type === 'delivery'
+                        ? ($record->rider_name ? '🛵 ' . $record->rider_name . ($record->picked_up_at ? ' · on the way' : '') : ($record->status === 'cancelled' || $record->status === 'delivered' ? null : '⚠️ No rider yet'))
+                        : null)
                     ->badge()
                     ->formatStateUsing(fn ($state) => match ($state) {
                         'dine_in'   => '🍽️ Dine In',
@@ -513,6 +516,27 @@ class OrderResource extends Resource
                     ->color('gray')
                     ->button()
                     ->tooltip('Print KOT for the kitchen or the customer bill'),
+
+                Tables\Actions\Action::make('assign_rider')
+                    ->label(fn (?Order $record) => $record?->rider_id ? 'Change rider' : 'Assign rider')
+                    ->icon('heroicon-o-user-plus')
+                    ->color('info')
+                    ->visible(fn (?Order $record) => $record && $record->order_type === 'delivery' && ! in_array($record->status, ['delivered', 'cancelled', 'awaiting_payment'], true))
+                    ->modalHeading(fn (Order $record) => "Delivery boy for {$record->order_number}")
+                    ->modalDescription('He will see this order on his phone (My Deliveries): customer phone, address, map and amount to collect.')
+                    ->modalWidth('md')
+                    ->fillForm(fn (Order $record) => ['rider_id' => $record->rider_id])
+                    ->form([
+                        Forms\Components\Select::make('rider_id')
+                            ->label('Delivery boy')
+                            ->options(fn () => Order::riderOptions())
+                            ->placeholder('— nobody —')
+                            ->helperText(fn () => Order::riderOptions() ? null : 'No delivery boys yet. Add one in Staff accounts with the role “Delivery Boy”.'),
+                    ])
+                    ->action(function (Order $record, array $data) {
+                        $record->assignRider($data['rider_id'] ? (int) $data['rider_id'] : null);
+                        \Filament\Notifications\Notification::make()->title($record->rider_name ? "Given to {$record->rider_name} 🛵" : 'Delivery boy removed')->success()->send();
+                    }),
 
                 Tables\Actions\Action::make('settle')
                     ->label('Settle')
