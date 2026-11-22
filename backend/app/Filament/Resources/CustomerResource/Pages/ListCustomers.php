@@ -34,11 +34,11 @@ class ListCustomers extends ListRecords
         return [
             'all' => Tab::make('All'),
             'regulars' => Tab::make('⭐ Regulars (5+ orders)')
-                ->modifyQueryUsing(fn (Builder $q) => $q->havingRaw("{$real} >= 5")),
+                ->modifyQueryUsing(fn (Builder $query) => $query->havingRaw("{$real} >= 5")),
             'new' => Tab::make('🆕 New (1 order)')
-                ->modifyQueryUsing(fn (Builder $q) => $q->havingRaw("{$real} = 1")),
+                ->modifyQueryUsing(fn (Builder $query) => $query->havingRaw("{$real} = 1")),
             'win_back' => Tab::make('💤 Not ordered in 30 days')
-                ->modifyQueryUsing(fn (Builder $q) => $q->havingRaw('MAX(created_at) < ?', [now()->subDays(30)])),
+                ->modifyQueryUsing(fn (Builder $query) => $query->havingRaw('MAX(created_at) < ?', [now()->subDays(30)])),
         ];
     }
 }

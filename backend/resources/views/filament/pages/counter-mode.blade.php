@@ -23,7 +23,7 @@
         .cm-qty { background: #2C1A00; color: #FFF8E7; font-size: 13px; font-weight: 800; min-width: 28px; height: 28px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
         .cm-bill { background: #fff; border: 1px solid #EDE0C4; border-radius: 18px; display: flex; flex-direction: column; position: sticky; top: 80px; }
         .dark .cm-bill, .dark .cm-dish, .dark .cm-tab { background: rgb(24 24 27); color: #fff; border-color: rgb(63 63 70); }
-        .cm-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: #F3EAD6; border-radius: 12px; padding: 4px; gap: 4px; }
+        .cm-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #F3EAD6; border-radius: 12px; padding: 4px; gap: 4px; }
         .cm-seg button { height: 40px; border-radius: 9px; border: 0; background: transparent; font: inherit; font-weight: 600; color: #4A3518; cursor: pointer; }
         .cm-seg button[aria-pressed="true"] { background: #fff; font-weight: 800; color: #1A0F00; box-shadow: 0 1px 3px rgba(100,60,0,.12); }
         .cm-step { display: flex; align-items: center; border: 1px solid #C98F0F; border-radius: 10px; height: 36px; background: #FFF8E7; }
@@ -120,11 +120,24 @@
                 <div class="cm-seg" role="group" aria-label="Order type">
                     <button type="button" aria-pressed="{{ $orderType === 'dine_in' ? 'true' : 'false' }}" wire:click="$set('orderType', 'dine_in')">Dine In</button>
                     <button type="button" aria-pressed="{{ $orderType === 'takeaway' ? 'true' : 'false' }}" wire:click="$set('orderType', 'takeaway')">Take Away</button>
+                    <button type="button" aria-pressed="{{ $orderType === 'delivery' ? 'true' : 'false' }}" wire:click="$set('orderType', 'delivery')">🛵 Delivery</button>
                 </div>
-                <div style="display: grid; grid-template-columns: {{ $orderType === 'dine_in' ? '90px 1fr' : '1fr' }}; gap: 8px">
-                    @if ($orderType === 'dine_in')<input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">@endif
-                    <input class="sp-input" type="tel" placeholder="Phone (optional, for points)" aria-label="Customer phone (optional)" wire:model.blur="phone">
-                </div>
+                @if ($orderType === 'delivery')
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+                        <input class="sp-input" placeholder="Customer name" aria-label="Customer name" wire:model.blur="customerName">
+                        <input class="sp-input" type="tel" placeholder="Phone * (rider calls)" aria-label="Customer phone (required for delivery)" wire:model.blur="phone">
+                    </div>
+                    <textarea class="sp-input" rows="2" style="height: auto; padding-top: 10px; resize: vertical" placeholder="Full delivery address * (house no, society, area, landmark)" aria-label="Delivery address" wire:model.blur="address"></textarea>
+                    <div style="display: grid; grid-template-columns: 1fr 120px; gap: 8px; align-items: center">
+                        <span style="font-size: 13px; font-weight: 700; color: #4A3518">Delivery charge</span>
+                        <input class="sp-input" type="number" min="0" step="1" inputmode="numeric" placeholder="₹0" aria-label="Delivery charge" wire:model.live.debounce.400ms="deliveryFee" style="text-align: right; font-weight: 800">
+                    </div>
+                @else
+                    <div style="display: grid; grid-template-columns: {{ $orderType === 'dine_in' ? '90px 1fr' : '1fr' }}; gap: 8px">
+                        @if ($orderType === 'dine_in')<input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">@endif
+                        <input class="sp-input" type="tel" placeholder="Phone (optional, for points)" aria-label="Customer phone (optional)" wire:model.blur="phone">
+                    </div>
+                @endif
                 <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
             </div>
 
@@ -153,15 +166,16 @@
                 @if (($gst['gst_amount'] ?? 0) > 0)
                     <div class="sp-row" style="font-size: 13px; color: #6B5A3E"><span>GST {{ rtrim(rtrim(number_format($gst['gst_rate'], 2), '0'), '.') }}%{{ $gst['gst_mode'] === 'inclusive' ? ' (included)' : '' }}</span><span>{{ $gst['gst_mode'] === 'inclusive' ? '' : '+' }}₹{{ number_format($gst['gst_amount'], 2) }}</span></div>
                 @endif
+                @if ($deliveryFeeAmount > 0)<div class="sp-row" style="font-size: 14px"><span>🛵 Delivery charge</span><span>+₹{{ number_format($deliveryFeeAmount, fmod((float) $deliveryFeeAmount, 1) ? 2 : 0) }}</span></div>@endif
                 <div class="sp-row" style="font-size: 22px; font-weight: 900"><span>Total</span><span>₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span></div>
                 <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'cash' ? 'true' : 'false' }}" wire:click="$set('payment', 'cash')">Cash</button>
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'upi' ? 'true' : 'false' }}" wire:click="$set('payment', 'upi')">UPI</button>
                     <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'card' ? 'true' : 'false' }}" wire:click="$set('payment', 'card')">Card</button>
-                    <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'later' ? 'true' : 'false' }}" wire:click="$set('payment', 'later')" title="Customer pays after eating — settle the bill later from Orders">Pay later</button>
+                    <button type="button" class="cm-pay" aria-pressed="{{ $payment === 'later' ? 'true' : 'false' }}" wire:click="$set('payment', 'later')" title="Customer pays later (dine-in after eating, or cash on delivery) — settle the bill later from Orders">{{ $orderType === 'delivery' ? 'COD' : 'Pay later' }}</button>
                 </div>
                 <div style="font-size: 12px; color: #6B5A3E; margin-top: -4px">
-                    {{ $payment === 'later' ? 'Bill stays “Unsettled” — settle it from Orders when the customer pays.' : 'Bill is settled as ' . strtoupper($payment) . ' when you place the order.' }}
+                    {{ $payment === 'later' ? ($orderType === 'delivery' ? 'Cash on delivery — settle the bill from Orders / Hisab when the rider brings the money.' : 'Bill stays “Unsettled” — settle it from Orders when the customer pays.') : 'Bill is settled as ' . strtoupper($payment) . ' when you place the order.' }}
                 </div>
                 <button type="button" class="cm-go" wire:click="placeOrder" wire:loading.attr="disabled" @disabled(! count($lines))>
                     <span wire:loading.remove wire:target="placeOrder">Place order &amp; print · ₹{{ number_format($total, fmod((float) $total, 1) ? 2 : 0) }}</span>

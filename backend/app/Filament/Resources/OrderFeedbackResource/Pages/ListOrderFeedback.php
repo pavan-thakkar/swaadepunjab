@@ -31,12 +31,12 @@ class ListOrderFeedback extends ListRecords
         return [
             'call' => Tab::make('📞 Needs a call')
                 ->badge(fn () => Order::badRatingsToCall() ?: null)->badgeColor('danger')
-                ->modifyQueryUsing(fn (Builder $q) => $q->where('order_rating', '<=', 2)->whereNull('feedback_called_at')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('order_rating', '<=', 2)->whereNull('feedback_called_at')),
             'all' => Tab::make('All ratings'),
             'happy' => Tab::make('😊 Happy (4–5 ★)')
-                ->modifyQueryUsing(fn (Builder $q) => $q->where('order_rating', '>=', 4)),
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('order_rating', '>=', 4)),
             'low' => Tab::make('😞 Low (1–2 ★)')
-                ->modifyQueryUsing(fn (Builder $q) => $q->where('order_rating', '<=', 2)),
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('order_rating', '<=', 2)),
         ];
     }
 

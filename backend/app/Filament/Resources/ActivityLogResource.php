@@ -56,7 +56,7 @@ class ActivityLogResource extends Resource
                     'Order' => 'Orders', 'MenuItem' => 'Menu items', 'Offer' => 'Offers', 'Coupon' => 'Coupons',
                     'ReceiptSetting' => 'Store settings', 'User' => 'Staff accounts', 'LoyaltyTransaction' => 'Loyalty points',
                 ]),
-                Tables\Filters\Filter::make('today')->label('Today only')->query(fn ($q) => $q->whereDate('created_at', today())),
+                Tables\Filters\Filter::make('today')->label('Today only')->query(fn ($query) => $query->whereDate('created_at', today())),
             ])
             ->actions([Tables\Actions\ViewAction::make()]);
     }

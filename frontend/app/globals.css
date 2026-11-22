@@ -2645,3 +2645,7 @@ img, video { max-width: 100%; }
 .promo-video-bg.fit-whole { object-fit: contain; z-index: 1 !important; }
 .promo-video-blur { position: absolute; inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); object-fit: cover;
   filter: blur(28px) brightness(.55) saturate(1.2); z-index: 0; pointer-events: none; }
+
+/* Splash: size the <picture> wrapper (not the img) so the logo stays exactly in the middle of the ring on every phone */
+.splash-mark picture { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; width: 82%; max-width: 82%; flex: 0 0 82%; }
+.splash-mark .splash-logo { width: 100%; max-width: 100%; margin: 0 auto; }

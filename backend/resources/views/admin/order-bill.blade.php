@@ -47,7 +47,7 @@
     <!-- Delivery Address if applicable -->
     <div style="font-size: 10px; margin-bottom: 8px;">
         <span style="font-weight: bold;">DELIVER TO:</span>
-        <p style="margin: 2px 0 0 0; line-height: 1.3;">{{ $order->delivery_address }}, {{ $order->city }}</p>
+        <p style="margin: 2px 0 0 0; line-height: 1.3;">{{ $order->delivery_address }}{{ $order->city ? ', ' . $order->city : '' }}</p>
     </div>
 
     <!-- Divider -->

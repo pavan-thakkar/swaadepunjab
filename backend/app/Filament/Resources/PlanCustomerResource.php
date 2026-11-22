@@ -96,9 +96,9 @@ class PlanCustomerResource extends Resource
             ])
             ->filters([
                 Tables\Filters\Filter::make('ending')->label('Ending soon / just ended')
-                    ->query(fn (Builder $q) => $q->endingSoon()),
+                    ->query(fn (Builder $query) => $query->endingSoon()),
                 Tables\Filters\Filter::make('not_called')->label('Not called yet')
-                    ->query(fn (Builder $q) => $q->whereNull('renewal_called_at')),
+                    ->query(fn (Builder $query) => $query->whereNull('renewal_called_at')),
                 Tables\Filters\SelectFilter::make('payment_status')->label('Payment')->options(PlanEnquiry::PAYMENT),
                 Tables\Filters\SelectFilter::make('monthly_plan_id')->label('Plan')->relationship('plan', 'name'),
             ])

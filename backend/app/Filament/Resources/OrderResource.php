@@ -50,6 +50,13 @@ class OrderResource extends Resource
                     Forms\Components\Placeholder::make('customer')
                         ->label('Customer')
                         ->content(fn (Order $record) => "👤 {$record->customer_name} ({$record->customer_phone})"),
+                    Forms\Components\Placeholder::make('cancelled_display')
+                        ->label('Cancelled')
+                        ->visible(fn (?Order $record) => $record?->status === 'cancelled')
+                        ->content(fn (Order $record) => new \Illuminate\Support\HtmlString(
+                            '<b style="color:#DC2626">' . e($record->cancelledByLabel() ?: 'Cancelled (who is not known — older order)') . '</b>'
+                            . ($record->cancel_reason && $record->cancelled_by !== 'system' ? '<div style="font-size:12px;color:#6B5A3E">' . e($record->cancel_reason) . '</div>' : '')
+                        )),
                     Forms\Components\Placeholder::make('settlement_display')
                         ->label('Bill settlement')
                         ->content(fn (Order $record) => new \Illuminate\Support\HtmlString(
@@ -352,11 +359,9 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('ordered_items')
                     ->label('Ordered Items')
-                    ->state(function (Order $record): string {
-                        return $record->items->map(fn ($item) => "{$item->quantity}x {$item->name}")->implode(', ');
-                    })
-                    ->wrap()
-                    ->description(fn (Order $record): string => $record->special_instructions ? "Note: {$record->special_instructions}" : ''),
+                    ->html()
+                    ->state(fn (Order $record): string => static::itemsHtml($record))
+                    ->extraAttributes(['style' => 'min-width:270px']),
 
                 Tables\Columns\TextColumn::make('customer_phone')
                     ->label('Phone')
@@ -394,6 +399,7 @@ class OrderResource extends Resource
                         'cancelled'        => 'danger',
                         default            => 'gray',
                     })
+                    ->description(fn (Order $record) => $record->cancelledByLabel())
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('order_type')
@@ -599,6 +605,49 @@ class OrderResource extends Resource
             ->defaultSort('created_at', 'desc')
             ->poll('10s')
             ->recordUrl(fn (Order $record): string => static::getUrl('view', ['record' => $record]));
+    }
+
+    /** Split "Paneer Chur Chur Naan Meal - Choose Your Gravy (Dal Makhani)" into the dish and its choices. */
+    public static function splitItemName(string $name): array
+    {
+        $parts = explode(' - ', $name, 2);
+        $dish = trim($parts[0]);
+        $extra = '';
+        if (isset($parts[1])) {
+            preg_match_all('/\(([^)]+)\)/', $parts[1], $m);
+            $extra = $m[1] ? implode(', ', $m[1]) : trim($parts[1]);
+        }
+        return [$dish, $extra];
+    }
+
+    /** Ordered items as a short readable list: qty badge, dish in bold, choice below; big orders show the first 4 + "N more". */
+    public static function itemsHtml(Order $record, int $show = 4): string
+    {
+        $items = $record->items;
+        $rows = '';
+        foreach ($items->take($show) as $it) {
+            [$dish, $extra] = static::splitItemName((string) $it->name);
+            if (! $extra && is_array($it->options) && $it->options) {
+                $extra = collect($it->options)->pluck('choice')->filter()->implode(', ');
+            }
+            $rows .= '<div style="display:flex;gap:8px;align-items:flex-start;padding:3px 0">'
+                . '<span style="flex:0 0 auto;min-width:30px;text-align:center;background:#FFF4D6;color:#8A5A00;border-radius:6px;padding:1px 6px;font-weight:900;font-size:13px">' . (int) $it->quantity . '×</span>'
+                . '<span style="line-height:1.3"><span style="font-weight:700;font-size:13.5px">' . e($dish) . ($it->is_free ? ' <span style="color:#15803D;font-size:11px;font-weight:800">FREE</span>' : '') . '</span>'
+                . ($extra ? '<br><span style="font-size:12px;opacity:.7">' . e($extra) . '</span>' : '')
+                . '</span></div>';
+        }
+        $more = $items->count() - $show;
+        $head = '';
+        if ($items->count() > $show) {
+            $head = '<div style="font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#B45309;margin-bottom:2px">🧾 Big order · ' . $items->count() . ' dishes · ' . (int) $items->sum('quantity') . ' pcs</div>';
+        }
+        $tail = $more > 0
+            ? '<div style="margin-top:4px"><a href="' . e(static::getUrl('view', ['record' => $record])) . '" style="display:inline-block;font-size:12.5px;font-weight:800;color:#B45309;background:#FFF7E6;border:1px solid #F3D68A;border-radius:999px;padding:2px 10px">+ ' . $more . ' more dish' . ($more > 1 ? 'es' : '') . ' — view all</a></div>'
+            : '';
+        $note = $record->special_instructions
+            ? '<div style="margin-top:4px;font-size:12px;background:#FEF3C7;color:#92400E;border-radius:6px;padding:3px 8px;font-weight:600">📝 ' . e($record->special_instructions) . '</div>'
+            : '';
+        return '<div>' . $head . $rows . $tail . $note . '</div>';
     }
 
     public static function getPages(): array

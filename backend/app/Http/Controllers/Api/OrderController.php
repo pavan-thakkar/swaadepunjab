@@ -170,7 +170,7 @@ class OrderController extends Controller
             } catch (\RuntimeException $e) {
                 // Could not start payment: cancel this order (points/coupon come back) so the customer can retry
                 $pricing['coupon']?->decrement('used_count');
-                $order->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+                $order->cancelledBySystem('Online payment could not start')->update(['status' => 'cancelled', 'payment_status' => 'failed']);
                 return response()->json(['message' => $e->getMessage(), 'payment_error' => true], 422);
             }
         }
@@ -506,6 +506,9 @@ class OrderController extends Controller
         }
         $order->edited_at = now();
         $order->status = 'cancelled'; // loyalty points are returned automatically
+        $order->cancelled_by = 'customer';
+        $order->cancelled_by_name = null;
+        $order->cancel_reason = $unpaidOnline ? 'Left without paying online' : 'Cancelled from the website';
         if ($unpaidOnline) {
             $order->payment_status = 'failed';
         }

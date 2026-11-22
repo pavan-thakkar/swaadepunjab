@@ -53,21 +53,21 @@ class ListActivityLogs extends ListRecords
             'all' => Tab::make('All'),
             'orders' => Tab::make('Order changes')
                 ->icon('heroicon-o-shopping-cart')
-                ->modifyQueryUsing(fn (Builder $q) => $q->where('subject_type', 'Order')->whereNotNull('user_id')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('subject_type', 'Order')->whereNotNull('user_id')),
             'cancelled' => Tab::make('Cancelled orders')
                 ->icon('heroicon-o-x-circle')
                 ->badge(fn () => $todayCount(fn ($q) => static::cancelled($q)) ?: null)->badgeColor('danger')
-                ->modifyQueryUsing(fn (Builder $q) => static::cancelled($q)),
+                ->modifyQueryUsing(fn (Builder $query) => static::cancelled($query)),
             'money' => Tab::make('Price & bill changes')
                 ->icon('heroicon-o-currency-rupee')
                 ->badge(fn () => $todayCount(fn ($q) => static::money($q)) ?: null)->badgeColor('warning')
-                ->modifyQueryUsing(fn (Builder $q) => static::money($q)),
+                ->modifyQueryUsing(fn (Builder $query) => static::money($query)),
             'deleted' => Tab::make('Deleted')
                 ->icon('heroicon-o-trash')
-                ->modifyQueryUsing(fn (Builder $q) => $q->where('action', 'deleted')),
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('action', 'deleted')),
             'logins' => Tab::make('Logins')
                 ->icon('heroicon-o-key')
-                ->modifyQueryUsing(fn (Builder $q) => $q->whereIn('action', ['login', 'login_failed'])),
+                ->modifyQueryUsing(fn (Builder $query) => $query->whereIn('action', ['login', 'login_failed'])),
         ];
     }
 }

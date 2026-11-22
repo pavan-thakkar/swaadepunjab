@@ -8,6 +8,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Order extends Model
 {
     protected $fillable = [
+        'cancelled_by',
+        'cancelled_by_name',
+        'cancelled_at',
+        'cancel_reason',
         'settle_mode',
         'settle_cash',
         'settle_upi',
@@ -91,6 +95,7 @@ class Order extends Model
     protected $casts = [
         'paid_at' => 'datetime',
         'settled_at' => 'datetime',
+        'cancelled_at' => 'datetime',
         'settle_cash' => 'decimal:2',
         'settle_upi' => 'decimal:2',
         'settle_card' => 'decimal:2',
@@ -118,6 +123,23 @@ class Order extends Model
 
     protected static function booted(): void
     {
+        // Remember who cancelled: a logged-in admin user → staff (with name); otherwise the customer.
+        // System cancels (unpaid online orders) call cancelledBySystem() first, so they are kept as 'system'.
+        static::saving(function (Order $order) {
+            if (! $order->isDirty('status')) return;
+            if ($order->status === 'cancelled') {
+                if (! $order->isDirty('cancelled_by') || ! $order->cancelled_by) {
+                    $user = auth()->guard('web')->user();
+                    $order->cancelled_by = $user ? 'staff' : 'customer';
+                    $order->cancelled_by_name = $user?->name;
+                }
+                $order->cancelled_at = $order->cancelled_at && $order->isDirty('cancelled_at') ? $order->cancelled_at : now();
+            } elseif ($order->getOriginal('status') === 'cancelled') {
+                // order brought back → forget the old cancel
+                $order->cancelled_by = null; $order->cancelled_by_name = null; $order->cancelled_at = null; $order->cancel_reason = null;
+            }
+        });
+
         // Loyalty points: earn on delivery, give back on cancel
         static::updated(function (Order $order) {
             if ($order->wasChanged('status')) {
@@ -276,6 +298,30 @@ class Order extends Model
         \App\Models\ActivityLog::record('unsettle', "Undid settlement of bill {$this->order_number} (was {$was})", $this);
     }
 
+    /** Mark the next cancel as done by the system (e.g. online payment not completed). Call before update(['status' => 'cancelled']). */
+    public function cancelledBySystem(string $reason): static
+    {
+        $this->cancelled_by = 'system';
+        $this->cancelled_by_name = null;
+        $this->cancel_reason = $reason;
+        return $this;
+    }
+
+    /** Short text for admin screens: "by customer", "by Ramesh (staff)", "Auto: payment not completed". */
+    public function cancelledByLabel(): ?string
+    {
+        if ($this->status !== 'cancelled') return null;
+        $t = $this->cancelled_at?->timezone(config('app.timezone'))->format('d M, h:i A');
+        $who = match ($this->cancelled_by) {
+            'customer' => '👤 by customer',
+            'staff'    => '🧑‍🍳 by ' . ($this->cancelled_by_name ?: 'admin') . ' (admin)',
+            'system'   => '⚙️ Auto' . ($this->cancel_reason ? ': ' . lcfirst($this->cancel_reason) : ''),
+            default    => null,
+        };
+        if (! $who) return null;
+        return $who . ($t ? " · {$t}" : '');
+    }
+
     /** Online orders whose payment was never finished are cancelled after this many minutes. */
     public const PAYMENT_TIMEOUT_MINUTES = 30;
 
@@ -293,7 +339,7 @@ class Order extends Model
                     if ($o->coupon_code) {
                         \App\Models\Coupon::findByCode($o->coupon_code)?->decrement('used_count');
                     }
-                    $o->update(['status' => 'cancelled', 'payment_status' => 'failed']);
+                    $o->cancelledBySystem('Online payment not completed in ' . self::PAYMENT_TIMEOUT_MINUTES . ' min')->update(['status' => 'cancelled', 'payment_status' => 'failed']);
                 });
         } catch (\Throwable $e) {
             report($e);

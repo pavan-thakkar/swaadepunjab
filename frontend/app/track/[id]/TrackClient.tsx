@@ -291,7 +291,7 @@ export default function TrackOrderPage() {
                   {awaitingPayment ? (
                     <><div className="track-hero-big">Waiting for payment</div><div className="track-hero-sub">Complete the payment to send your order to the kitchen.</div></>
                   ) : isCancelled ? (
-                    <><div className="track-hero-big">Order cancelled</div><div className="track-hero-sub">{order.payment_status === 'failed' ? 'The online payment was not completed. ' : ''}Any points you used have been returned.</div></>
+                    <><div className="track-hero-big">Order cancelled</div><div className="track-hero-sub">{order.cancelled_by === 'staff' ? 'Cancelled by the restaurant — please call us if you have any question. ' : order.cancelled_by === 'customer' ? 'You cancelled this order. ' : ''}{order.payment_status === 'failed' ? 'The online payment was not completed. ' : ''}Any points you used have been returned.</div></>
                   ) : order.status === 'delivered' ? (
                     <><div className="track-hero-big">Delivered</div><div className="track-hero-sub">Enjoy your meal, {order.customer_name}!</div></>
                   ) : (

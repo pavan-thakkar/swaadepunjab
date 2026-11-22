@@ -150,7 +150,7 @@ class PlanEnquiryResource extends Resource
                 Tables\Filters\SelectFilter::make('status')->options(PlanEnquiry::STATUSES),
                 Tables\Filters\SelectFilter::make('monthly_plan_id')->label('Plan')->relationship('plan', 'name'),
                 Tables\Filters\Filter::make('ending_soon')->label('Ending in 7 days / ended')
-                    ->query(fn ($q) => $q->where('status', 'active')->whereNotNull('active_until')->whereDate('active_until', '<=', now()->addDays(7))),
+                    ->query(fn ($query) => $query->where('status', 'active')->whereNotNull('active_until')->whereDate('active_until', '<=', now()->addDays(7))),
             ])
             ->actions([
                 Tables\Actions\Action::make('call')->label('Call')->icon('heroicon-o-phone')->color('gray')

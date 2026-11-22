@@ -37,16 +37,16 @@ class ListOnlinePayments extends ListRecords
                 ->badge($this->base()->count()),
             'success' => Tab::make('✅ Success')
                 ->badge($count('success'))->badgeColor('success')
-                ->modifyQueryUsing(fn (Builder $q) => OnlinePaymentResource::scopeState($q, 'success')),
+                ->modifyQueryUsing(fn (Builder $query) => OnlinePaymentResource::scopeState($query, 'success')),
             'failed' => Tab::make('❌ Failed')
                 ->badge($count('failed'))->badgeColor('danger')
-                ->modifyQueryUsing(fn (Builder $q) => OnlinePaymentResource::scopeState($q, 'failed')),
+                ->modifyQueryUsing(fn (Builder $query) => OnlinePaymentResource::scopeState($query, 'failed')),
             'waiting' => Tab::make('⏳ Waiting')
                 ->badge($count('waiting'))->badgeColor('warning')
-                ->modifyQueryUsing(fn (Builder $q) => OnlinePaymentResource::scopeState($q, 'waiting')),
+                ->modifyQueryUsing(fn (Builder $query) => OnlinePaymentResource::scopeState($query, 'waiting')),
             'refunded' => Tab::make('↩️ Refunded')
                 ->badge($count('refunded'))
-                ->modifyQueryUsing(fn (Builder $q) => OnlinePaymentResource::scopeState($q, 'refunded')),
+                ->modifyQueryUsing(fn (Builder $query) => OnlinePaymentResource::scopeState($query, 'refunded')),
         ];
     }
 }

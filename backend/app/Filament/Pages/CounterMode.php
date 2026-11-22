@@ -39,6 +39,10 @@ class CounterMode extends Page
     public string $note = '';
     #[Session]
     public string $payment = 'cash';
+    #[Session]
+    public string $address = '';
+    #[Session]
+    public string $deliveryFee = '';
 
     // ---- All open bills (kept in this login's session, survive refresh) ----
     /** @var array<string,array> id => [label, bill, orderType, table, phone, customerName, note, payment, opened] */
@@ -64,7 +68,7 @@ class CounterMode extends Page
 
     private function emptyBill(): array
     {
-        return ['bill' => [], 'orderType' => 'dine_in', 'table' => '', 'phone' => '', 'customerName' => '', 'note' => '', 'payment' => 'cash', 'opened' => now()->format('h:i A')];
+        return ['bill' => [], 'orderType' => 'dine_in', 'table' => '', 'phone' => '', 'customerName' => '', 'note' => '', 'payment' => 'cash', 'address' => '', 'deliveryFee' => '', 'opened' => now()->format('h:i A')];
     }
 
     private function makeBill(): string
@@ -84,6 +88,7 @@ class CounterMode extends Page
         $this->bills[$this->active] = array_merge($this->bills[$this->active], [
             'bill' => $this->bill, 'orderType' => $this->orderType, 'table' => $this->table, 'phone' => $this->phone,
             'customerName' => $this->customerName, 'note' => $this->note, 'payment' => $this->payment,
+            'address' => $this->address, 'deliveryFee' => $this->deliveryFee,
         ]);
     }
 
@@ -98,6 +103,8 @@ class CounterMode extends Page
         $this->customerName = $b['customerName'];
         $this->note = $b['note'];
         $this->payment = $b['payment'];
+        $this->address = $b['address'] ?? '';
+        $this->deliveryFee = (string) ($b['deliveryFee'] ?? '');
     }
 
     public function newBill(): void
@@ -136,7 +143,20 @@ class CounterMode extends Page
     }
 
     // Keep the open-bill list in step with every edit of the active bill
-    public function updatedOrderType(): void { $this->storeActive(); }
+    public function updatedOrderType(): void
+    {
+        // Delivery: the rider usually collects the money → default to "Pay later"; fill the usual delivery fee
+        if ($this->orderType === 'delivery') {
+            if ($this->payment === 'cash') $this->payment = 'later';
+            if ($this->deliveryFee === '') {
+                $fee = (float) (\App\Models\ReceiptSetting::query()->value('delivery_fallback_fee') ?? 0);
+                $this->deliveryFee = $fee > 0 ? rtrim(rtrim(number_format($fee, 2, '.', ''), '0'), '.') : '';
+            }
+        }
+        $this->storeActive();
+    }
+    public function updatedAddress(): void { $this->storeActive(); }
+    public function updatedDeliveryFee(): void { $this->storeActive(); }
     public function updatedTable(): void { $this->storeActive(); }
     public function updatedPhone(): void { $this->storeActive(); }
     public function updatedCustomerName(): void { $this->storeActive(); }
@@ -148,6 +168,10 @@ class CounterMode extends Page
     {
         if (($b['orderType'] ?? '') === 'dine_in' && trim($b['table'] ?? '') !== '') {
             return 'Table ' . trim($b['table']);
+        }
+        if (($b['orderType'] ?? '') === 'delivery') {
+            $who = trim($b['customerName'] ?? '') ?: trim($b['phone'] ?? '');
+            return '🛵 ' . ($who !== '' ? mb_strimwidth($who, 0, 14, '…') : 'Delivery ' . $n);
         }
         return (($b['orderType'] ?? '') === 'takeaway' ? 'Take Away ' : 'Bill ') . $n;
     }
@@ -273,7 +297,7 @@ class CounterMode extends Page
 
     public function clearBill(): void
     {
-        $this->reset(['bill', 'table', 'phone', 'customerName', 'note', 'search']);
+        $this->reset(['bill', 'table', 'phone', 'customerName', 'note', 'search', 'address', 'deliveryFee']);
         $this->payment = 'cash';
         $this->storeActive();
     }
@@ -319,13 +343,15 @@ class CounterMode extends Page
         $pricing = $subtotal > 0 ? OrderPricing::calculate($subtotal, null, $this->phone ?: null) : null;
         $discount = $pricing ? (float) $pricing['offer_discount'] : 0.0;
         $gst = \App\Services\Gst::calculate(max(0, $subtotal - $discount));
+        $fee = $this->orderType === 'delivery' && $subtotal > 0 ? round(max(0, (float) $this->deliveryFee), 2) : 0.0;
         return [
+            'deliveryFeeAmount' => $fee,
             'lines' => $lines,
             'subtotal' => $subtotal,
             'discount' => $discount,
             'freeLine' => $pricing['free_line'] ?? null,
             'offer' => $pricing['offer'] ?? null,
-            'total' => round(max(0, $subtotal - $discount) + $gst['add'], 2),
+            'total' => round(max(0, $subtotal - $discount) + $gst['add'] + $fee, 2),
             'gst' => $gst,
             'pricing' => $pricing,
         ];
@@ -339,6 +365,16 @@ class CounterMode extends Page
             return;
         }
         $digits = preg_replace('/\D/', '', $this->phone);
+        if ($this->orderType === 'delivery') {
+            if (strlen($digits) < 10) {
+                Notification::make()->title('Customer phone is needed for delivery')->body('The rider has to call the customer.')->warning()->send();
+                return;
+            }
+            if (mb_strlen(trim($this->address)) < 8) {
+                Notification::make()->title('Type the full delivery address')->warning()->send();
+                return;
+            }
+        }
         if ($this->phone !== '' && strlen($digits) < 10) {
             Notification::make()->title('Phone number looks incomplete')->warning()->send();
             return;
@@ -351,18 +387,22 @@ class CounterMode extends Page
             $items[] = $p['freeLine'];
         }
 
-        $prep = 15;
+        $prep = $this->orderType === 'delivery' ? 30 : 15;
         $order = Order::create([
             'order_number'          => Order::generateOrderNumber(),
-            'customer_name'         => trim($this->customerName) ?: ($this->orderType === 'dine_in' ? 'Dine-in guest' : 'Walk-in customer'),
+            'customer_name'         => trim($this->customerName) ?: match ($this->orderType) { 'dine_in' => 'Dine-in guest', 'delivery' => 'Delivery customer', default => 'Walk-in customer' },
             'customer_phone'        => $digits ? substr($digits, -10) : 'Counter',
             'order_type'            => $this->orderType,
             'table_number'          => $this->orderType === 'dine_in' ? (trim($this->table) ?: null) : null,
             'pickup_time'           => null,
-            'delivery_address'      => $this->orderType === 'dine_in' ? ('Dine In' . ($this->table ? ' · Table ' . trim($this->table) : '')) : 'Take Away (counter)',
-            'city'                  => 'Counter',
+            'delivery_address'      => match ($this->orderType) {
+                'dine_in'  => 'Dine In' . ($this->table ? ' · Table ' . trim($this->table) : ''),
+                'delivery' => trim($this->address),
+                default    => 'Take Away (counter)',
+            },
+            'city'                  => $this->orderType === 'delivery' ? '' : 'Counter',
             'subtotal'              => $p['subtotal'],
-            'delivery_fee'          => 0,
+            'delivery_fee'          => $p['deliveryFeeAmount'],
             'discount'              => $p['discount'],
             'offer_id'              => $p['offer']?->id,
             'offer_title'           => $p['offer']?->title,
@@ -398,7 +438,10 @@ class CounterMode extends Page
 
     protected function getViewData(): array
     {
-        $cats = Category::orderBy('sort_order')->orderBy('name')->get(['name', 'slug']);
+        // Category chips A → Z (ignoring capitals / extra spaces), so staff find them fast. All + Bestsellers stay first.
+        $cats = Category::get(['name', 'slug'])
+            ->sortBy(fn ($c) => mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $c->name))), SORT_NATURAL)
+            ->values();
         $q = trim($this->search);
         $menu = MenuItem::query()
             ->when($this->category === 'bestsellers', fn ($x) => $x->where('is_featured', true))
