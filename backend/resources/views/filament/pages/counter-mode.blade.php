@@ -22,6 +22,13 @@
         .cm-stepper span { color: #FFF8E7; font-weight: 900; font-size: 17px; min-width: 28px; text-align: center; }
         .cm-qty { background: #2C1A00; color: #FFF8E7; font-size: 13px; font-weight: 800; min-width: 28px; height: 28px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
         .cm-bill { background: #fff; border: 1px solid #EDE0C4; border-radius: 18px; display: flex; flex-direction: column; position: sticky; top: 80px; }
+        /* Desktop: the bill fits the screen and scrolls by itself (the dish list does not move); total + Place order stay visible */
+        @media (min-width: 1025px) {
+            .cm-bill { max-height: calc(100vh - 96px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+            .cm-foot { position: sticky; bottom: 0; z-index: 3; box-shadow: 0 -8px 16px -10px rgba(80,50,0,.25); }
+            .cm-lines { max-height: none !important; overflow: visible !important; }
+        }
+        .dark .cm-foot { background: rgb(24 24 27) !important; border-color: rgb(63 63 70) !important; }
         .dark .cm-bill, .dark .cm-dish, .dark .cm-tab { background: rgb(24 24 27); color: #fff; border-color: rgb(63 63 70); }
         .cm-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #F3EAD6; border-radius: 12px; padding: 4px; gap: 4px; }
         .cm-seg button { height: 40px; border-radius: 9px; border: 0; background: transparent; font: inherit; font-weight: 600; color: #4A3518; cursor: pointer; }
@@ -149,7 +156,7 @@
                 <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
             </div>
 
-            <div style="padding: 4px 18px; max-height: 340px; overflow-y: auto">
+            <div class="cm-lines" style="padding: 4px 18px; max-height: 340px; overflow-y: auto">
                 @forelse ($lines as $l)
                     <div class="sp-row" style="padding: 10px 0; border-bottom: 1px solid #F3EAD6" wire:key="l-{{ md5($l['key']) }}">
                         <div style="flex: 1; min-width: 0"><div style="font-size: 14px; font-weight: 700">{{ $l['name'] }}</div><div class="sp-muted">₹{{ number_format($l['price'], 0) }} each</div></div>
@@ -168,7 +175,7 @@
                 @endif
             </div>
 
-            <div style="padding: 14px 18px 18px; border-top: 1px solid #EDE0C4; display: flex; flex-direction: column; gap: 10px; background: #FBF8F1; border-radius: 0 0 18px 18px">
+            <div class="cm-foot" style="padding: 14px 18px 18px; border-top: 1px solid #EDE0C4; display: flex; flex-direction: column; gap: 10px; background: #FBF8F1; border-radius: 0 0 18px 18px">
                 <div class="sp-row" style="font-size: 14px"><span>Items ({{ array_sum(array_column($lines, 'qty')) }})</span><span>₹{{ number_format($subtotal, 0) }}</span></div>
                 @if ($discount > 0)<div class="sp-row" style="font-size: 14px; color: #11622F; font-weight: 700"><span>Offer: {{ $offer?->title }}</span><span>−₹{{ number_format($discount, 0) }}</span></div>@endif
                 @if (($gst['gst_amount'] ?? 0) > 0)
