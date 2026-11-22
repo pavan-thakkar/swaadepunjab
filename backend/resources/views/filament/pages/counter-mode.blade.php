@@ -27,7 +27,14 @@
             .cm-bill { max-height: calc(100vh - 96px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
             .cm-foot { position: sticky; bottom: 0; z-index: 3; box-shadow: 0 -8px 16px -10px rgba(80,50,0,.25); }
             .cm-lines { max-height: none !important; overflow: visible !important; }
+            /* open-bill tabs stay pinned at the top — nothing gets cut while the bill scrolls */
+            .cm-tabsbar { position: sticky; top: 0; z-index: 4; flex-shrink: 0; }
+            /* a bit more compact bottom, so more items fit in between */
+            .cm-foot { padding: 10px 18px 14px !important; gap: 8px !important; }
+            .cm-foot .cm-pay { height: 42px; }
+            .cm-foot .cm-go { height: 50px; }
         }
+
         .dark .cm-foot { background: rgb(24 24 27) !important; border-color: rgb(63 63 70) !important; }
         .dark .cm-bill, .dark .cm-dish, .dark .cm-tab { background: rgb(24 24 27); color: #fff; border-color: rgb(63 63 70); }
         .cm-seg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #F3EAD6; border-radius: 12px; padding: 4px; gap: 4px; }
@@ -39,6 +46,12 @@
         .cm-pay[aria-pressed="true"] { border: 2px solid #C98F0F; background: #FFF8E7; }
         .cm-go { height: 56px; border-radius: 14px; border: 0; background: #E6A817; color: #1A0F00; font: inherit; font-size: 17px; font-weight: 900; cursor: pointer; }
         .cm-go:disabled { opacity: .5; cursor: not-allowed; }
+        .cm-details-btn { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 46px; padding: 0 14px; border: 1px dashed #D9C49A; border-radius: 12px; background: #FFFBF2; font: inherit; font-size: 14px; color: #3B2A12; cursor: pointer; text-align: left; }
+        .cm-details-btn:hover { background: #FFF4DC; }
+        .cm-details-btn[aria-expanded="true"] { border-style: solid; border-color: #E6A817; }
+        .cm-details-sum { font-size: 12.5px; font-weight: 600; color: #8A7A5C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .cm-details-chev { font-size: 16px; color: #8A5A00; flex-shrink: 0; }
+        .dark .cm-details-btn { background: rgb(39 39 42); border-color: rgb(82 82 91); color: #f4f4f5; }
         .cm-tabsbar { display: flex; gap: 6px; padding: 10px 10px 0; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid #EDE0C4; background: #FBF8F1; border-radius: 18px 18px 0 0; }
         .cm-billtab { display: flex; align-items: center; flex-shrink: 0; border: 1px solid #EDE0C4; border-bottom: 0; border-radius: 10px 10px 0 0; background: #F3EAD6; }
         .cm-billtab.on { background: #fff; border-color: #C98F0F; box-shadow: 0 -2px 0 #E6A817 inset; }
@@ -139,21 +152,42 @@
                         <span style="font-size: 13px; font-weight: 700; color: #4A3518">Delivery charge</span>
                         <input class="sp-input" type="number" min="0" step="1" inputmode="numeric" placeholder="₹0" aria-label="Delivery charge" wire:model.live.debounce.400ms="deliveryFee" style="text-align: right; font-weight: 800">
                     </div>
+                    <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
                 @else
-                    @if ($orderType === 'dine_in')
-                        <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px">
-                            <input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">
-                            <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
-                        </div>
-                        <input class="sp-input" type="tel" placeholder="Phone (optional, for points)" aria-label="Customer phone (optional)" wire:model.blur="phone">
-                    @else
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
-                            <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
-                            <input class="sp-input" type="tel" placeholder="Phone (optional)" aria-label="Customer phone (optional)" wire:model.blur="phone">
-                        </div>
+                    @php
+                        $filled = array_values(array_filter([
+                            $orderType === 'dine_in' && trim($table) !== '' ? 'Table ' . trim($table) : null,
+                            trim($customerName) ?: null,
+                            trim($phone) ?: null,
+                            trim($note) !== '' ? '📝 note' : null,
+                        ]));
+                    @endphp
+                    <button type="button" class="cm-details-btn" wire:click="$toggle('showDetails')" aria-expanded="{{ $showDetails ? 'true' : 'false' }}">
+                        <span style="display:flex;align-items:center;gap:8px;min-width:0">
+                            <span aria-hidden="true">👤</span>
+                            <span style="font-weight:800">Customer details</span>
+                            @if (! $showDetails)
+                                <span class="cm-details-sum">{{ $filled ? implode(' · ', $filled) : ($orderType === 'dine_in' ? 'table, name, phone, note' : 'name, phone, note') }}</span>
+                            @endif
+                        </span>
+                        <span class="cm-details-chev" aria-hidden="true">{{ $showDetails ? '▴' : '▾' }}</span>
+                    </button>
+                    @if ($showDetails)
+                        @if ($orderType === 'dine_in')
+                            <div style="display: grid; grid-template-columns: 90px 1fr; gap: 8px">
+                                <input class="sp-input" placeholder="Table" aria-label="Table number" wire:model.blur="table">
+                                <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
+                            </div>
+                            <input class="sp-input" type="tel" placeholder="Phone (optional, for points)" aria-label="Customer phone (optional)" wire:model.blur="phone">
+                        @else
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px">
+                                <input class="sp-input" placeholder="Customer name (optional)" aria-label="Customer name (optional)" wire:model.blur="customerName" autocomplete="off">
+                                <input class="sp-input" type="tel" placeholder="Phone (optional)" aria-label="Customer phone (optional)" wire:model.blur="phone">
+                            </div>
+                        @endif
+                        <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
                     @endif
                 @endif
-                <input class="sp-input" placeholder="Note for kitchen (optional)" aria-label="Note for kitchen" wire:model.blur="note">
             </div>
 
             <div class="cm-lines" style="padding: 4px 18px; max-height: 340px; overflow-y: auto">

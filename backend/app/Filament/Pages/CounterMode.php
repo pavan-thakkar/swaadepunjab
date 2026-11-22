@@ -39,6 +39,9 @@ class CounterMode extends Page
     public string $note = '';
     #[Session]
     public string $payment = 'cash';
+    /** Customer details (table, name, phone, note) open or folded away — remembered for this login. */
+    #[Session]
+    public bool $showDetails = false;
     #[Session]
     public string $address = '';
     #[Session]
