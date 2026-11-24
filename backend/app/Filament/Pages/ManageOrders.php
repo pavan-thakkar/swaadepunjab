@@ -149,6 +149,15 @@ class ManageOrders extends Page
         Notification::make()->title('Bill settled — ' . $o->settleLabel())->success()->send();
     }
 
+    /** Big switch at the top: accept home-delivery orders or not (same as Dashboard → Quick switches). */
+    public function toggleOnline(): void
+    {
+        $st = \App\Models\ReceiptSetting::getSettings();
+        $st->update(['delivery_enabled' => ! $st->delivery_enabled]);
+        Notification::make()->title($st->delivery_enabled ? 'You are ONLINE — delivery orders are open' : 'You are OFFLINE — website delivery is closed (Take Away / Dine In still open)')
+            ->{$st->delivery_enabled ? 'success' : 'warning'}()->send();
+    }
+
     protected function getViewData(): array
     {
         Order::autoRejectStale();
@@ -161,15 +170,20 @@ class ManageOrders extends Page
         }
         $list = $this->listQuery()->limit(80)->get();
 
-        $sel = $this->selected ? Order::with('items')->find($this->selected) : null;
+        $sel = $this->selected ? Order::with('items.menuItem')->find($this->selected) : null;
         if (! $sel && $list->isNotEmpty()) {
-            $sel = $list->first(); // show the first order straight away (big screens)
+            $sel = $list->first()?->load('items.menuItem'); // show the first order straight away (big screens)
         }
         $history = $sel && preg_match('/\d{10}/', (string) $sel->customer_phone)
             ? Order::where('customer_phone', $sel->customer_phone)->whereNotIn('status', ['cancelled', 'awaiting_payment'])->where('created_at', '>=', now()->subDays(30))->count()
             : 0;
 
+        $st = \App\Models\ReceiptSetting::getSettings();
         return [
+            'online' => (bool) ($st->delivery_enabled ?? true),
+            'outletName' => $st->outlet_name ?: 'Swaad E Punjab',
+            'outletAddress' => $st->outlet_address,
+            'catNames' => \App\Models\Category::pluck('name', 'slug')->all(),
             'counts' => $counts, 'list' => $list, 'sel' => $sel, 'history' => $history,
             'riders' => Order::riderOptions(),
             'viewUrl' => fn ($o) => OrderResource::getUrl('view', ['record' => $o]),
