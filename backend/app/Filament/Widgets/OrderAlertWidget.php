@@ -69,11 +69,7 @@ class OrderAlertWidget extends Widget
     {
         $order = Order::find($orderId);
         if ($order && $order->status === 'pending') {
-            $order->update([
-                'status'                => 'accepted',
-                'prep_time_minutes'     => $prepMinutes,
-                'estimated_delivery_at' => now()->addMinutes($prepMinutes),
-            ]);
+            $order->advance($prepMinutes); // starts the kitchen countdown
         }
         // Remove from pending cards
         $this->pendingOrderCards = array_values(
@@ -81,11 +77,13 @@ class OrderAlertWidget extends Widget
         );
     }
 
-    public function rejectOrder(int $orderId): void
+    public function rejectOrder(int $orderId, string $reason = 'busy'): void
     {
         $order = Order::find($orderId);
         if ($order && $order->status === 'pending') {
-            $order->update(['status' => 'cancelled']);
+            $order->reject(array_key_exists($reason, Order::REJECT_REASONS) ? $reason : 'other');
+            \Filament\Notifications\Notification::make()->title("{$order->order_number} rejected — " . (Order::REJECT_REASONS[$reason] ?? 'Other reason'))
+                ->body($order->isPaidViaRazorpay() ? 'Paid online: refund it from the order page.' : null)->warning()->send();
         }
         $this->pendingOrderCards = array_values(
             array_filter($this->pendingOrderCards, fn ($c) => $c['id'] !== $orderId)
@@ -94,6 +92,12 @@ class OrderAlertWidget extends Widget
 
     public function checkForNewOrders(): void
     {
+        Order::autoRejectStale();
+        // Drop cards for orders already accepted / rejected elsewhere (kitchen board, another screen, auto-reject)
+        if ($this->pendingOrderCards) {
+            $stillNew = Order::whereIn('id', array_column($this->pendingOrderCards, 'id'))->where('status', 'pending')->pluck('id')->all();
+            $this->pendingOrderCards = array_values(array_filter($this->pendingOrderCards, fn ($c) => in_array($c['id'], $stillNew, true)));
+        }
         $latestOrder = Order::latest('id')->first();
 
         if ($latestOrder && $latestOrder->id > $this->lastOrderId) {

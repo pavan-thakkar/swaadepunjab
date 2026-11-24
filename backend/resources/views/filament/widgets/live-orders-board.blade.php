@@ -16,7 +16,7 @@
                         <article class="sp-order {{ $col['key'] === 'pending' ? 'new' : '' }}" wire:key="order-{{ $o['id'] }}">
                             <div class="sp-row">
                                 <a class="sp-no" href="{{ $o['url'] }}">#{{ $o['no'] }}</a>
-                                <span style="font-size: 12px; font-weight: 700; color: {{ $o['late'] ? '#B91C1C' : '#6B5232' }}">{{ $o['ago'] }}</span>
+                                <span style="font-size: 12px; font-weight: 700; color: {{ $o['late'] ? '#B91C1C' : '#6B5232' }}">{{ $o['timer'] ?: $o['ago'] }}</span>
                             </div>
                             <div style="font-size: 13px; line-height: 1.35">{{ $o['items'] }}</div>
                             @if ($o['note'])

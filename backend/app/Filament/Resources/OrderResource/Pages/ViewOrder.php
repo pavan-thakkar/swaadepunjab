@@ -101,78 +101,55 @@ class ViewOrder extends ViewRecord
                 ->modalCancelActionLabel('Close'),
 
             Actions\Action::make('accept_order')
-                ->label('Accept Order')
+                ->label('Accept')
                 ->icon('heroicon-o-check-circle')
                 ->color('success')
                 ->visible(fn () => $this->record->status === 'pending')
+                ->modalHeading('Accept order')
+                ->modalDescription('How long will the food take? The kitchen sees a countdown and the customer sees the time.')
+                ->modalWidth('md')
+                ->fillForm(fn () => ['prep' => (string) ($this->record->prep_time_minutes ?: 20)])
                 ->form([
-                    Forms\Components\TextInput::make('prep_time_minutes')
-                        ->label('Preparation Time (minutes)')
-                        ->numeric()
-                        ->default(20)
-                        ->required()
-                        ->minValue(13)
-                        ->maxValue(120)
-                        ->helperText('Minimum preparation time is 13 minutes.'),
+                    Forms\Components\ToggleButtons::make('prep')->label('Ready in (minutes)')
+                        ->options(collect(\App\Models\Order::PREP_CHOICES)->mapWithKeys(fn ($m) => [(string) $m => "{$m} min"])->all())
+                        ->inline()->required(),
                 ])
                 ->action(function (array $data) {
-                    $this->record->update([
-                        'status'                => 'accepted',
-                        'prep_time_minutes'     => $data['prep_time_minutes'],
-                        'estimated_delivery_at' => now()->addMinutes($data['prep_time_minutes']),
-                    ]);
-                    
-                    // Notify user
-                    \Filament\Notifications\Notification::make()
-                        ->title('Order Accepted')
-                        ->body("Preparation time set to {$data['prep_time_minutes']} minutes.")
-                        ->success()
-                        ->send();
+                    if ($this->record->status !== 'pending') return;
+                    $this->record->advance((int) $data['prep']);
+                    \Filament\Notifications\Notification::make()->title("Accepted — ready in {$data['prep']} min")->success()->send();
                 }),
 
-            Actions\Action::make('ready_order')
-                ->label('Ready')
-                ->icon('heroicon-o-check-circle')
-                ->color('warning')
-                ->visible(fn () => $this->record->status === 'accepted')
+            Actions\Action::make('next_step')
+                ->label(fn () => $this->record->nextStep()['label'] ?? '')
+                ->color(fn () => $this->record->nextStep()['color'] ?? 'gray')
+                ->icon('heroicon-o-arrow-right-circle')
+                ->visible(fn () => $this->record->status !== 'pending' && $this->record->nextStep() !== null)
                 ->action(function () {
-                    $this->record->update(['status' => 'preparing']);
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('Order Ready')
-                        ->body('Order is now prepared and ready.')
-                        ->success()
-                        ->send();
+                    $this->record->advance();
+                    $this->record->refresh();
+                    \Filament\Notifications\Notification::make()->title($this->record->statusText())->success()->send();
                 }),
 
-            Actions\Action::make('dispatch_order')
-                ->label('Dispatch')
-                ->icon('heroicon-o-truck')
-                ->color('info')
-                ->visible(fn () => $this->record->status === 'preparing')
-                ->action(function () {
-                    $this->record->update(['status' => 'out_for_delivery']);
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('Order Dispatched')
-                        ->body('Order is out for delivery.')
-                        ->info()
-                        ->send();
-                }),
-
-            Actions\Action::make('deliver_order')
-                ->label('Delivered')
-                ->icon('heroicon-o-check-badge')
-                ->color('success')
-                ->visible(fn () => $this->record->status === 'out_for_delivery')
-                ->action(function () {
-                    $this->record->update(['status' => 'delivered']);
-                    
-                    \Filament\Notifications\Notification::make()
-                        ->title('Order Delivered')
-                        ->body('Order marked as delivered successfully.')
-                        ->success()
-                        ->send();
+            Actions\Action::make('reject_order')
+                ->label('Reject')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->visible(fn () => in_array($this->record->status, ['pending', 'accepted'], true))
+                ->modalHeading('Reject order')
+                ->modalDescription(fn () => $this->record->isPaidViaRazorpay() ? '⚠️ PAID ONLINE — after rejecting, use Refund via Razorpay.' : 'The customer sees the order as cancelled by the restaurant.')
+                ->form(fn () => [
+                    Forms\Components\Radio::make('reason')->label('Why?')->options(\App\Models\Order::REJECT_REASONS)->required()->live(),
+                    Forms\Components\CheckboxList::make('sold_out')
+                        ->label('Mark these dishes SOLD OUT')
+                        ->options(fn () => $this->record->items->whereNotNull('menu_item_id')->unique('menu_item_id')->mapWithKeys(fn ($i) => [$i->menu_item_id => \App\Filament\Resources\OrderResource::splitItemName((string) $i->name)[0]])->all())
+                        ->visible(fn (\Filament\Forms\Get $get) => $get('reason') === 'item_finished'),
+                    Forms\Components\TextInput::make('note')->label('Note (optional)')->maxLength(150),
+                ])
+                ->action(function (array $data) {
+                    $this->record->reject($data['reason'], array_map('intval', $data['sold_out'] ?? []), $data['note'] ?? null);
+                    $this->record->refresh();
+                    \Filament\Notifications\Notification::make()->title('Order rejected')->warning()->send();
                 }),
 
             Actions\EditAction::make(),

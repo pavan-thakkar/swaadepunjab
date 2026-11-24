@@ -39,118 +39,82 @@ class DeliveryFeeSetting extends Model
         return $tier ? (float) $tier->delivery_fee : null;
     }
 
+    /** Old fixed shop point, used until the owner sets the shop location in admin. */
+    public const DEFAULT_SHOP_LAT = 23.1648274;
+    public const DEFAULT_SHOP_LNG = 72.6826934;
+
+    /** Shop location + delivery radius from Store & Receipt Config. */
+    public static function area(): array
+    {
+        $s = \App\Models\ReceiptSetting::getSettings();
+        $lat = (float) ($s->outlet_latitude ?: self::DEFAULT_SHOP_LAT);
+        $lng = (float) ($s->outlet_longitude ?: self::DEFAULT_SHOP_LNG);
+        $max = (float) ($s->delivery_max_distance ?: 20);
+        return ['lat' => $lat, 'lng' => $lng, 'max_km' => max(0.5, $max)];
+    }
+
+    /** Straight-line ("as the crow flies") distance in km between two GPS points. */
+    public static function straightKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $r = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2 + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        return $r * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
     /**
-     * Calculate delivery fee based on Google Maps distance between outlet and destination.
-     * Returns an array: ['distance_km' => float, 'fee' => float, 'error' => ?string]
+     * Delivery distance + fee for an address.
+     * Uses Google road distance when a working Google key is saved; otherwise the straight-line distance from the
+     * customer's map pin. Addresses beyond the admin's delivery radius get a "too far" error (the order is refused).
+     * Returns ['distance_km' => ?float, 'fee' => float, 'error' => ?string]
      */
     public static function calculateDistanceAndFee(string $deliveryAddress, string $city, float $subtotal = 0, ?float $latitude = null, ?float $longitude = null): array
     {
         $settings = \App\Models\ReceiptSetting::getSettings();
-        
-        $apiKey = $settings->google_maps_api_key;
-        $outletAddress = $settings->outlet_address;
-
+        $area = self::area();
+        $maxDistance = $area['max_km'];
         $fallbackFee = (float) $settings->delivery_fallback_fee;
-        if ($settings->delivery_max_distance != 20) {
-            $settings->update(['delivery_max_distance' => 20]);
-        }
-        $maxDistance = 20.0;
+        $hasPin = $latitude !== null && $longitude !== null && ($latitude != 0 || $longitude != 0);
 
-        // If no API key is set, calculate Haversine distance using coordinates if provided, otherwise simulate 3.5 KM
-        if (empty($apiKey)) {
-            if ($latitude !== null && $longitude !== null) {
-                $earthRadius = 6371; // in KM
-                $lat1 = 23.1648274; // Swaad E Punjab — Maple 99 Food County, GIFT City, Gujarat
-                $lon1 = 72.6826934; // Exact GPS coordinates
-                
-                $dLat = deg2rad($latitude - $lat1);
-                $dLon = deg2rad($longitude - $lon1);
-                
-                $a = sin($dLat/2) * sin($dLat/2) +
-                     cos(deg2rad($lat1)) * cos(deg2rad($latitude)) *
-                     sin($dLon/2) * sin($dLon/2);
-                
-                $c = 2 * atan2(sqrt($a), sqrt(1-$a));
-                $distanceKm = $earthRadius * $c;
-                
-                if ($distanceKm > $maxDistance) {
-                    return [
-                        'distance_km' => round($distanceKm, 2),
-                        'fee'         => 0,
-                        'error'       => "Delivery address is too far (" . round($distanceKm, 2) . " KM). Maximum delivery radius is 20 KM."
-                    ];
-                }
-                
-                $fee = self::getFeeForDistance($distanceKm, $subtotal) ?? $fallbackFee;
+        $finish = function (float $km) use ($maxDistance, $subtotal, $fallbackFee): array {
+            if ($km > $maxDistance) {
+                $max = rtrim(rtrim(number_format($maxDistance, 1), '0'), '.');
                 return [
-                    'distance_km' => round($distanceKm, 2),
-                    'fee'         => round($fee, 2),
-                    'error'       => null
+                    'distance_km' => round($km, 2),
+                    'fee'         => 0,
+                    'error'       => "Sorry, this address is too far — " . round($km, 1) . " km away. We deliver only within {$max} km of our restaurant. You can choose Take Away instead.",
                 ];
             }
+            $fee = self::getFeeForDistance($km, $subtotal) ?? $fallbackFee;
+            return ['distance_km' => round($km, 2), 'fee' => round($fee, 2), 'error' => null];
+        };
 
-            // Simulated distance fallback
-            $simulatedDistance = 3.5; 
-            $fee = self::getFeeForDistance($simulatedDistance, $subtotal) ?? $fallbackFee;
-            
-            \Illuminate\Support\Facades\Log::warning("Google Maps API Key not set. Simulating distance {$simulatedDistance} KM. Fee: ₹{$fee}");
-            return [
-                'distance_km' => $simulatedDistance,
-                'fee'         => $fee,
-                'error'       => null
-            ];
-        }
-
-        $origin = urlencode($outletAddress);
-        $destination = urlencode($deliveryAddress . ', ' . $city);
-
-        try {
-            $client = new \GuzzleHttp\Client();
-            $url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins={$origin}&destinations={$destination}&key={$apiKey}";
-            
-            $response = $client->get($url, ['timeout' => 5]);
-            $body = json_decode($response->getBody(), true);
-
-            if (isset($body['rows'][0]['elements'][0]['distance']['value'])) {
-                $distanceMeters = $body['rows'][0]['elements'][0]['distance']['value'];
-                $distanceKm = $distanceMeters / 1000;
-
-                if ($distanceKm > $maxDistance) {
-                    return [
-                        'distance_km' => round($distanceKm, 2),
-                        'fee'         => 0,
-                        'error'       => "Delivery address is too far (" . round($distanceKm, 2) . " KM). Maximum delivery radius is 20 KM."
-                    ];
+        // 1) Google road distance (only if a key is saved and Google answers)
+        $apiKey = $settings->google_maps_api_key;
+        if (! empty($apiKey)) {
+            try {
+                $origin = $area['lat'] . ',' . $area['lng'];
+                $destination = $hasPin ? ($latitude . ',' . $longitude) : ($deliveryAddress . ', ' . $city);
+                $res = \Illuminate\Support\Facades\Http::timeout(5)->get('https://maps.googleapis.com/maps/api/distancematrix/json', [
+                    'origins' => $origin, 'destinations' => $destination, 'key' => $apiKey,
+                ]);
+                $meters = $res->json('rows.0.elements.0.distance.value');
+                if ($meters !== null) {
+                    return $finish($meters / 1000);
                 }
-
-                // Look up fee in distance tiers table
-                $fee = self::getFeeForDistance($distanceKm, $subtotal);
-                
-                if (is_null($fee)) {
-                    $fee = $fallbackFee;
-                }
-
-                return [
-                    'distance_km' => round($distanceKm, 2),
-                    'fee'         => round($fee, 2),
-                    'error'       => null
-                ];
-            } else {
-                $status = $body['rows'][0]['elements'][0]['status'] ?? ($body['status'] ?? 'UNKNOWN_ERROR');
-                \Illuminate\Support\Facades\Log::error("Google Distance Matrix API Error: Status = " . $status);
-                return [
-                    'distance_km' => null,
-                    'fee'         => $fallbackFee,
-                    'error'       => 'Could not calculate distance: ' . $status
-                ];
+                \Illuminate\Support\Facades\Log::warning('Google Distance Matrix gave no distance: ' . ($res->json('rows.0.elements.0.status') ?? $res->json('status') ?? 'unknown') . ' — using straight-line distance');
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Google Distance Matrix failed: ' . $e->getMessage() . ' — using straight-line distance');
             }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Google Distance Matrix API Exception: " . $e->getMessage());
-            return [
-                'distance_km' => null,
-                'fee'         => $fallbackFee,
-                'error'       => 'API Request Failed: ' . $e->getMessage()
-            ];
         }
+
+        // 2) Straight-line distance from the customer's map pin
+        if ($hasPin) {
+            return $finish(self::straightKm($area['lat'], $area['lng'], (float) $latitude, (float) $longitude));
+        }
+
+        // 3) No pin and no Google: we cannot measure — charge the fallback fee, don't block the customer
+        return ['distance_km' => null, 'fee' => $fallbackFee, 'error' => null];
     }
 }

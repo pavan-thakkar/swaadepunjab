@@ -25,21 +25,11 @@ class LiveOrdersBoard extends Widget
     public function advance(int $orderId): void
     {
         $order = Order::find($orderId);
-        if (! $order || ! isset(self::NEXT[$order->status])) {
+        if (! $order || ! $order->nextStep()) {
             return;
         }
-        $next = self::NEXT[$order->status];
-        if ($order->status === 'preparing' && ($order->order_type ?? 'delivery') !== 'delivery') {
-            $next = 'delivered';
-        }
-        $data = ['status' => $next];
-        if ($next === 'accepted') {
-            $prep = (int) ($order->prep_time_minutes ?: 20);
-            $data['prep_time_minutes'] = $prep;
-            $data['estimated_delivery_at'] = now()->addMinutes($prep + (($order->order_type ?? 'delivery') === 'delivery' ? 15 : 0));
-        }
-        $order->update($data);
-        Notification::make()->title("Order {$order->order_number}: " . str_replace('_', ' ', $next))->success()->send();
+        $order->advance();
+        Notification::make()->title("Order {$order->order_number}: " . $order->statusText())->success()->send();
     }
 
     protected function getViewData(): array
@@ -52,13 +42,7 @@ class LiveOrdersBoard extends Widget
 
         $card = function (Order $o) {
             $type = $o->order_type ?: 'delivery';
-            $label = match ($o->status) {
-                'pending' => 'Accept',
-                'accepted' => 'Mark ready',
-                'preparing' => $type === 'delivery' ? 'Out for delivery' : ($type === 'dine_in' ? 'Served' : 'Picked up'),
-                'out_for_delivery' => 'Delivered',
-                default => '',
-            };
+            $label = $o->nextStep()['label'] ?? '';
             $btn = match ($o->status) {
                 'pending' => 'sp-btn-amber', 'accepted' => 'sp-btn-dark', default => 'sp-btn-green',
             };
@@ -71,7 +55,8 @@ class LiveOrdersBoard extends Widget
                 'no' => substr($o->order_number, -6),
                 'url' => OrderResource::getUrl('view', ['record' => $o]),
                 'ago' => $o->created_at->diffForHumans(null, true, true),
-                'late' => $o->status === 'pending' && $o->created_at->lt(now()->subMinutes(3)),
+                'late' => ($o->timer()['state'] ?? 'ok') === 'late',
+                'timer' => $o->timer()['text'] ?? null,
                 'items' => $items,
                 'type' => $type,
                 'typeLabel' => ['delivery' => 'Delivery', 'takeaway' => 'Take Away', 'dine_in' => 'Dine In'][$type] ?? $type,

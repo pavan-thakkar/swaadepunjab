@@ -305,23 +305,23 @@
                             </div>
                         </div>
 
-                        <button
-                            wire:click="rejectOrder({{ $card['id'] }})"
-                            wire:loading.attr="disabled"
-                            x-on:click="if($wire.__instance.pendingOrderCards.length <= 1) window.stopOrderAlarm()"
-                            style="
-                                padding:10px 20px; border-radius:12px;
-                                background:#fff; border:2px solid #fecaca;
-                                color:#dc2626; font-size:13px; font-weight:800;
-                                cursor:pointer; text-transform:uppercase; letter-spacing:0.5px;
-                                transition:all 0.2s; display:flex; align-items:center; gap:6px;
-                            "
-                            onmouseover="this.style.background='#fef2f2'; this.style.borderColor='#dc2626';"
-                            onmouseout="this.style.background='#fff'; this.style.borderColor='#fecaca';"
-                        >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            Reject
-                        </button>
+                        <div x-data="{ rj: false }" style="position:relative" x-on:click.outside="rj = false">
+                            <button type="button" x-on:click="rj = !rj"
+                                style="padding:10px 20px; border-radius:12px; background:#fff; border:2px solid #fecaca; color:#dc2626; font-size:13px; font-weight:800; cursor:pointer; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                Reject ▾
+                            </button>
+                            <div x-show="rj" x-cloak x-transition
+                                style="position:absolute; bottom:calc(100% + 6px); left:0; z-index:50; min-width:250px; background:#fff; border:1px solid #fecaca; border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.18); padding:6px;">
+                                <div style="font-size:11px; font-weight:800; color:#94a3b8; text-transform:uppercase; padding:6px 10px">Why reject?</div>
+                                @foreach (\App\Models\Order::REJECT_REASONS as $rk => $rl)
+                                    <button type="button" wire:click="rejectOrder({{ $card['id'] }}, '{{ $rk }}')" x-on:click="rj = false; if($wire.__instance.pendingOrderCards.length <= 1) window.stopOrderAlarm()"
+                                        style="display:block; width:100%; text-align:left; padding:10px 12px; border:0; background:none; border-radius:8px; font-size:14px; font-weight:700; color:#1e293b; cursor:pointer;"
+                                        onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">{{ $rl }}</button>
+                                @endforeach
+                                <div style="font-size:11.5px; color:#64748b; padding:6px 10px">To mark a finished dish sold out, use Reject on the order page.</div>
+                            </div>
+                        </div>
 
                         <button
                             x-on:click="$wire.acceptOrderWithPrepTime({{ $card['id'] }}, getPrepTime({{ $card['id'] }})); if(pendingOrderCards.length <= 1) window.stopOrderAlarm();"

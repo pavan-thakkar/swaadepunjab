@@ -395,8 +395,7 @@ class CounterMode extends Page
         }
 
         $prep = $this->orderType === 'delivery' ? 30 : 15;
-        $order = Order::create([
-            'order_number'          => Order::generateOrderNumber(),
+        $order = Order::createNumbered([
             'customer_name'         => trim($this->customerName) ?: match ($this->orderType) { 'dine_in' => 'Dine-in guest', 'delivery' => 'Delivery customer', default => 'Walk-in customer' },
             'customer_phone'        => $digits ? substr($digits, -10) : 'Counter',
             'order_type'            => $this->orderType,

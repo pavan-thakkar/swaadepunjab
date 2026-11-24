@@ -119,8 +119,7 @@ class OrderController extends Controller
             }
         }
 
-        $order = Order::create([
-            'order_number'         => Order::generateOrderNumber(),
+        $order = Order::createNumbered([
             'customer_name'        => $validated['customer_name'],
             'customer_email'       => $validated['customer_email'] ?? null,
             'customer_phone'       => $validated['customer_phone'],
@@ -550,6 +549,7 @@ class OrderController extends Controller
 
     public function show(Request $request, string $identifier): JsonResponse
     {
+        Order::autoRejectStale(); // customer is waiting on the tracking page: apply auto-reject if it is due
         $order = Order::with('items')
             ->where('order_number', $identifier)
             ->orWhere(fn ($q) => ctype_digit($identifier) ? $q->where('id', $identifier) : $q->whereRaw('1 = 0'))

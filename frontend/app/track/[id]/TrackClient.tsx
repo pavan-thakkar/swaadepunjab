@@ -14,11 +14,26 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
 const STATUSES = [
   { key: 'pending',          label: 'Order Placed',       emoji: '📋', desc: 'Your order has been received and is awaiting confirmation.' },
-  { key: 'accepted',         label: 'Order Accepted',     emoji: '✅', desc: 'The restaurant has confirmed your order.' },
-  { key: 'preparing',        label: 'Order Ready',        emoji: '🍳', desc: 'Your meal is prepared and ready for dispatch.' },
+  { key: 'accepted',         label: 'Being Prepared',     emoji: '🍳', desc: 'The restaurant accepted your order and is cooking it.' },
+  { key: 'preparing',        label: 'Food Ready',         emoji: '✅', desc: 'Your food is ready and packed for the rider.' },
   { key: 'out_for_delivery', label: 'Out for Delivery',   emoji: '🛵', desc: 'Your order is on its way to you!' },
   { key: 'delivered',        label: 'Delivered',          emoji: '🎉', desc: 'Enjoy your meal!' },
 ];
+
+/** Steps differ by order type (like Swiggy / Zomato): takeaway and dine-in have no "out for delivery". */
+function stepsFor(type?: string) {
+  if (type === 'takeaway') {
+    return STATUSES.filter(s => s.key !== 'out_for_delivery').map(s =>
+      s.key === 'preparing' ? { ...s, label: 'Ready for Pickup', emoji: '🛍️', desc: 'Your order is ready — please collect it at the counter.' }
+      : s.key === 'delivered' ? { ...s, label: 'Picked Up', desc: 'Enjoy your meal!' } : s);
+  }
+  if (type === 'dine_in') {
+    return STATUSES.filter(s => s.key !== 'out_for_delivery').map(s =>
+      s.key === 'preparing' ? { ...s, label: 'Served', emoji: '🍽️', desc: 'Your food is on the table. Enjoy!' }
+      : s.key === 'delivered' ? { ...s, label: 'Completed', emoji: '🙏', desc: 'Thank you for dining with us!' } : s);
+  }
+  return STATUSES;
+}
 
 const CATEGORY_EMOJI: Record<string, string> = {
   special_combo:  '🍱',
@@ -244,7 +259,8 @@ export default function TrackOrderPage() {
     }
   };
 
-  const currentStep = STATUSES.findIndex(s => s.key === order?.status);
+  const STEPS = stepsFor(order?.order_type);
+  const currentStep = STEPS.findIndex(s => s.key === order?.status);
   const isCancelled = order?.status === 'cancelled';
 
   const awaitingPayment = order?.status === 'awaiting_payment';
@@ -283,7 +299,7 @@ export default function TrackOrderPage() {
             {(() => {
               const eta = order.estimated_delivery_at ? new Date(order.estimated_delivery_at).getTime() : 0;
               const minsLeft = eta ? Math.max(0, Math.round((eta - nowTs) / 60000)) : null;
-              const stepLabel = STATUSES.find(st => st.key === order.status)?.label || '';
+              const stepLabel = STEPS.find(st => st.key === order.status)?.label || '';
               const active = !isCancelled && order.status !== 'delivered';
               return (
                 <div className={`track-hero${isCancelled ? ' cancelled' : ''}`}>
@@ -315,7 +331,7 @@ export default function TrackOrderPage() {
             {!isCancelled && !awaitingPayment && (
               <div className="tracking-card" style={{ marginBottom: '1.5rem' }}>
                 <div className="status-steps">
-                  {STATUSES.map((step, index) => {
+                  {STEPS.map((step, index) => {
                     const isDone = index < currentStep;
                     const isActive = index === currentStep;
                     return (
@@ -324,7 +340,7 @@ export default function TrackOrderPage() {
                           <div className={`step-dot${isActive ? ' active' : isDone ? ' done' : ''}`}>
                             {isDone ? '✓' : step.emoji}
                           </div>
-                          {index < STATUSES.length - 1 && (
+                          {index < STEPS.length - 1 && (
                             <div className={`step-connector${isDone ? ' done' : ''}`} />
                           )}
                         </div>

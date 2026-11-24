@@ -9,6 +9,9 @@ class ReceiptSetting extends Model
     protected $table = 'receipt_settings';
 
     protected $fillable = [
+        'auto_reject_minutes',
+        'outlet_latitude',
+        'outlet_longitude',
         'shop_upi_id',
         'shop_upi_name',
         'outlet_name',
@@ -72,9 +75,6 @@ class ReceiptSetting extends Model
                 'footer_message' => 'Swad E Punjab Taste of Tradition',
                 'delivery_max_distance' => 20,
             ]);
-        }
-        if ($settings->delivery_max_distance != 20) {
-            $settings->update(['delivery_max_distance' => 20]);
         }
         return $settings;
     }

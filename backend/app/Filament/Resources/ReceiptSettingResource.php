@@ -134,6 +134,53 @@ class ReceiptSettingResource extends Resource
                             ->columnSpanFull(),
                     ])->columns(3),
 
+                Forms\Components\Section::make('📍 Delivery Area — how far you deliver')
+                    ->description('Customers farther than this from your restaurant cannot place a delivery order (they can still order Take Away / Dine In). Distance is measured from the customer\'s map pin.')
+                    ->schema([
+                        Forms\Components\TextInput::make('delivery_max_distance')
+                            ->label('Deliver up to')
+                            ->numeric()
+                            ->required()
+                            ->minValue(0.5)
+                            ->maxValue(100)
+                            ->step(0.5)
+                            ->suffix('km')
+                            ->default(20)
+                            ->live(debounce: 500)
+                            ->helperText('e.g. 5 = only customers within 5 km. Straight-line distance; roads are usually a little longer.'),
+                        Forms\Components\TextInput::make('outlet_latitude')
+                            ->label('Restaurant latitude')
+                            ->numeric()
+                            ->required()
+                            ->minValue(-90)->maxValue(90)
+                            ->placeholder('23.1648274')
+                            ->live(debounce: 500),
+                        Forms\Components\TextInput::make('outlet_longitude')
+                            ->label('Restaurant longitude')
+                            ->numeric()
+                            ->required()
+                            ->minValue(-180)->maxValue(180)
+                            ->placeholder('72.6826934')
+                            ->live(debounce: 500),
+                        Forms\Components\Placeholder::make('area_help')
+                            ->hiddenLabel()
+                            ->columnSpanFull()
+                            ->content(fn (\Filament\Forms\Get $get) => new \Illuminate\Support\HtmlString(
+                                '<div x-data="{ busy: false, msg: \'\' }" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">'
+                                . '<button type="button" x-on:click="if (!navigator.geolocation) { msg = \'This browser cannot share location\'; return; } busy = true; msg = \'\'; navigator.geolocation.getCurrentPosition(p => { const f = $el.closest(\'form\') || document; const put = (k, v) => { const i = f.querySelector(\'input[id$=&quot;\' + k + \'&quot;]\'); if (i) { i.value = v; i.dispatchEvent(new Event(\'input\', { bubbles: true })); i.dispatchEvent(new Event(\'change\', { bubbles: true })); } }; put(\'outlet_latitude\', p.coords.latitude.toFixed(7)); put(\'outlet_longitude\', p.coords.longitude.toFixed(7)); busy = false; msg = \'✓ Location filled — press Save\'; }, e => { busy = false; msg = \'Could not get location: \' + e.message; }, { enableHighAccuracy: true, timeout: 15000 })" '
+                                . 'style="padding:9px 14px;border-radius:10px;border:1px solid #C98F0F;background:#E6A817;color:#1A0F00;font-weight:800;cursor:pointer">'
+                                . '<span x-show="!busy">📍 Use my current location (stand in the restaurant)</span><span x-show="busy" x-cloak>Getting location…</span></button>'
+                                . (filled($get('outlet_latitude')) && filled($get('outlet_longitude'))
+                                    ? '<a target="_blank" rel="noopener" href="https://www.google.com/maps?q=' . (float) $get('outlet_latitude') . ',' . (float) $get('outlet_longitude') . '" style="padding:9px 14px;border-radius:10px;border:1px solid #E5D9C3;font-weight:700;text-decoration:none">🗺️ Check this point on Google Maps</a>'
+                                    : '')
+                                . '<span x-text="msg" style="font-weight:700;color:#15803D"></span>'
+                                . '</div>'
+                                . '<div style="font-size:12.5px;color:#6B5A3E;margin-top:8px">Or: open Google Maps, long-press / right-click your restaurant, and copy the two numbers shown (latitude, longitude) into the boxes above.'
+                                . (filled($get('delivery_max_distance')) ? ' <b>Right now: delivery within ' . e(rtrim(rtrim(number_format((float) $get('delivery_max_distance'), 1), '0'), '.')) . ' km.</b>' : '')
+                                . '</div>'
+                            )),
+                    ])->columns(3),
+
                 Forms\Components\Section::make('🚗 Distance-Based Delivery Fee Config')
                     ->description('Automatically calculate delivery fees based on the actual road distance (in kilometers) between your outlet and the customer.')
                     ->schema([
@@ -174,13 +221,6 @@ class ReceiptSettingResource extends Resource
                             ->prefix('₹')
                             ->placeholder('10.00')
                             ->helperText('Additional fee charged per kilometer beyond the base distance.')
-                            ->columnSpan(1),
-                        Forms\Components\TextInput::make('delivery_max_distance')
-                            ->label('Maximum Delivery Radius (KM)')
-                            ->numeric()
-                            ->required()
-                            ->placeholder('20.00')
-                            ->helperText('Maximum distance you deliver to. Orders beyond this will be rejected.')
                             ->columnSpan(1),
                     ])->columns(3),
 
@@ -333,6 +373,17 @@ class ReceiptSettingResource extends Resource
                             ->label('Name shown in the UPI app')
                             ->placeholder('Swaad E Punjab')
                             ->maxLength(100),
+                    ])->columns(2),
+
+                Forms\Components\Section::make('⏰ New orders not accepted in time')
+                    ->description('Like Swiggy / Zomato: if nobody accepts a new order within these minutes, it is rejected automatically ("restaurant did not accept") so the customer is not left waiting. Orders already PAID ONLINE are never auto-rejected — they keep ringing until someone acts (refund needs a person).')
+                    ->schema([
+                        Forms\Components\Select::make('auto_reject_minutes')
+                            ->label('Auto-reject after')
+                            ->options([0 => 'Off — never auto-reject', 3 => '3 minutes', 5 => '5 minutes', 7 => '7 minutes', 10 => '10 minutes', 15 => '15 minutes'])
+                            ->default(0)
+                            ->required()
+                            ->selectablePlaceholder(false),
                     ])->columns(2),
 
                 Forms\Components\Section::make('✏️ Customer Order Changes')

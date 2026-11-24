@@ -125,16 +125,7 @@ class OrderResource extends Resource
                         }),
                     Forms\Components\Placeholder::make('status')
                         ->label('Order Status')
-                        ->content(fn (Order $record) => match ($record->status) {
-                            'awaiting_payment' => '💳 Awaiting payment',
-                            'pending'          => '⏳ Pending',
-                            'accepted'         => '✅ Accepted',
-                            'preparing'        => '🍳 Ready',
-                            'out_for_delivery' => '🛵 Out for Delivery',
-                            'delivered'        => '🎉 Delivered',
-                            'cancelled'        => '❌ Cancelled',
-                            default            => $record->status,
-                        }),
+                        ->content(fn (Order $record) => $record->statusText() . (($t = $record->timer()) ? ' · ' . $t['text'] : '')),
                     Forms\Components\Placeholder::make('financial_totals')
                         ->label('Order Totals')
                         ->content(fn (Order $record) => new \Illuminate\Support\HtmlString("
@@ -289,7 +280,7 @@ class OrderResource extends Resource
                         'awaiting_payment' => '💳 Awaiting online payment',
                         'pending'          => '⏳ Pending',
                         'accepted'         => '✅ Accepted',
-                        'preparing'        => '🍳 Ready',
+                        'preparing'        => '✅ Ready / Served',
                         'out_for_delivery' => '🛵 Out for Delivery',
                         'delivered'        => '🎉 Delivered',
                         'cancelled'        => '❌ Cancelled',
@@ -378,26 +369,19 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->formatStateUsing(fn ($state) => match ($state) {
-                        'awaiting_payment' => '💳 Awaiting payment',
-                        'pending'          => '⏳ Pending',
-                        'accepted'         => '✅ Accepted',
-                        'preparing'        => '🍳 Ready',
-                        'out_for_delivery' => '🛵 Out for Delivery',
-                        'delivered'        => '🎉 Delivered',
-                        'cancelled'        => '❌ Cancelled',
-                        default            => $state ?? 'Unknown',
-                    })
+                    ->formatStateUsing(fn ($state, Order $record) => $record->statusText())
                     ->color(fn ($state) => match ($state) {
-                        'pending'          => 'warning',
-                        'accepted'         => 'info',
-                        'preparing'        => 'primary',
-                        'out_for_delivery' => 'primary',
-                        'delivered'        => 'success',
+                        'pending'          => 'danger',
+                        'accepted'         => 'warning',
+                        'preparing'        => 'success',
+                        'out_for_delivery' => 'info',
+                        'delivered'        => 'gray',
                         'cancelled'        => 'danger',
                         default            => 'gray',
                     })
-                    ->description(fn (Order $record) => $record->cancelledByLabel())
+                    ->description(fn (Order $record) => $record->status === 'cancelled'
+                        ? $record->cancelledByLabel()
+                        : (($t = $record->timer()) ? ($t['state'] === 'late' ? '🔴 ' : ($t['state'] === 'warn' ? '🟠 ' : '')) . ltrim($t['text'], '🔴 ') : null))
                     ->grow(false),
 
                 Tables\Columns\TextColumn::make('order_type')
@@ -565,29 +549,61 @@ class OrderResource extends Resource
                     ->label('Accept')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->visible(fn ($record) => $record && $record->status === 'pending')
-                    ->action(fn ($record) => $record->update(['status' => 'accepted'])),
+                    ->button()
+                    ->visible(fn (?Order $record) => $record && $record->status === 'pending')
+                    ->modalHeading(fn (Order $record) => "Accept {$record->order_number}")
+                    ->modalDescription('How long will the food take? The kitchen sees a countdown and the customer sees the time.')
+                    ->modalWidth('md')
+                    ->modalSubmitActionLabel('Accept order')
+                    ->fillForm(fn (Order $record) => ['prep' => (string) ($record->prep_time_minutes ?: 20)])
+                    ->form([
+                        Forms\Components\ToggleButtons::make('prep')->label('Ready in (minutes)')
+                            ->options(collect(Order::PREP_CHOICES)->mapWithKeys(fn ($m) => [(string) $m => "{$m} min"])->all())
+                            ->inline()->required(),
+                    ])
+                    ->action(function (Order $record, array $data) {
+                        if ($record->status !== 'pending') return;
+                        $record->advance((int) $data['prep']);
+                        \Filament\Notifications\Notification::make()->title("Accepted — ready in {$data['prep']} min")->success()->send();
+                    }),
 
-                Tables\Actions\Action::make('prepare')
-                    ->label('Ready')
-                    ->icon('heroicon-o-check-circle')
-                    ->color('warning')
-                    ->visible(fn ($record) => $record && $record->status === 'accepted')
-                    ->action(fn ($record) => $record->update(['status' => 'preparing'])),
+                Tables\Actions\Action::make('next_step')
+                    ->label(fn (?Order $record) => $record?->nextStep()['label'] ?? '')
+                    ->color(fn (?Order $record) => $record?->nextStep()['color'] ?? 'gray')
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->button()
+                    ->visible(fn (?Order $record) => $record && $record->status !== 'pending' && $record->nextStep() !== null)
+                    ->action(function (Order $record) {
+                        if ($record->status === 'preparing' && $record->type() === 'dine_in' && $record->needsSettlement()) {
+                            \Filament\Notifications\Notification::make()->title('Completed — bill still unsettled')->body('Remember to settle the bill (Cash / UPI / Card).')->warning()->send();
+                        }
+                        $to = $record->advance();
+                        if ($to) \Filament\Notifications\Notification::make()->title($record->order_number . ': ' . $record->statusText())->success()->send();
+                    }),
 
-                Tables\Actions\Action::make('dispatch')
-                    ->label('Dispatch')
-                    ->icon('heroicon-o-truck')
-                    ->color('info')
-                    ->visible(fn ($record) => $record && $record->status === 'preparing')
-                    ->action(fn ($record) => $record->update(['status' => 'out_for_delivery'])),
-
-                Tables\Actions\Action::make('deliver')
-                    ->label('Delivered')
-                    ->icon('heroicon-o-gift')
-                    ->color('success')
-                    ->visible(fn ($record) => $record && $record->status === 'out_for_delivery')
-                    ->action(fn ($record) => $record->update(['status' => 'delivered'])),
+                Tables\Actions\Action::make('reject')
+                    ->label('Reject')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (?Order $record) => $record && in_array($record->status, ['pending', 'accepted'], true))
+                    ->modalHeading(fn (Order $record) => ($record->status === 'pending' ? 'Reject ' : 'Cancel ') . $record->order_number)
+                    ->modalDescription(fn (Order $record) => $record->isPaidViaRazorpay() ? '⚠️ This order is PAID ONLINE — after rejecting, refund the customer from the order page (Refund via Razorpay).' : 'The customer sees the order as cancelled by the restaurant.')
+                    ->modalWidth('lg')
+                    ->modalSubmitActionLabel('Reject order')
+                    ->form(fn (Order $record) => [
+                        Forms\Components\Radio::make('reason')->label('Why?')->options(Order::REJECT_REASONS)->required()->live(),
+                        Forms\Components\CheckboxList::make('sold_out')
+                            ->label('Mark these dishes SOLD OUT (so no new orders come for them)')
+                            ->options(fn () => $record->items->whereNotNull('menu_item_id')->unique('menu_item_id')->mapWithKeys(fn ($i) => [$i->menu_item_id => static::splitItemName((string) $i->name)[0]])->all())
+                            ->visible(fn (\Filament\Forms\Get $get) => $get('reason') === 'item_finished')
+                            ->columns(1),
+                        Forms\Components\TextInput::make('note')->label('Note (optional)')->maxLength(150),
+                    ])
+                    ->action(function (Order $record, array $data) {
+                        $record->reject($data['reason'], array_map('intval', $data['sold_out'] ?? []), $data['note'] ?? null);
+                        \Filament\Notifications\Notification::make()->title("{$record->order_number} rejected")
+                            ->body(! empty($data['sold_out']) ? count($data['sold_out']) . ' dish(es) marked sold out' : null)->warning()->send();
+                    }),
 
                 Tables\Actions\EditAction::make()->label('Edit'),
 

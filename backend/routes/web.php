@@ -16,6 +16,7 @@ Route::get('/admin/alarm/pending-count', function () {
     if (!auth()->guard('web')->check() || auth()->guard('web')->user()->hasRole('rider')) {
         return response()->json(['count' => 0]); // riders don't get the kitchen alarm
     }
+    \App\Models\Order::autoRejectStale(); // new orders nobody accepted in time (if switched on)
     $count = \App\Models\Order::where('status', 'pending')->count();
     $latest = $count ? \App\Models\Order::where('status', 'pending')->latest('created_at')->first(['id', 'order_number', 'customer_name', 'total', 'order_type']) : null;
     return response()->json([

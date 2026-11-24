@@ -30,6 +30,7 @@ class ListOrders extends ListRecords
     public function mount(): void
     {
         \App\Models\Order::expireUnpaid(); // tidy up online orders that were never paid
+        \App\Models\Order::autoRejectStale();
         parent::mount();
     }
 
