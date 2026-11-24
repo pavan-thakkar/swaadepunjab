@@ -421,8 +421,10 @@ class Order extends Model
                 return ['text' => $m < 1 ? 'Just now — accept quickly' : "Waiting {$m} min — accept quickly", 'state' => $m >= 3 ? 'late' : ($m >= 1 ? 'warn' : 'ok'), 'due' => null, 'since' => $this->created_at->timestamp];
             case 'accepted':
                 $due = $this->readyDueAt();
-                $left = (int) ceil(($due->timestamp - $now->timestamp) / 60);
-                return ['text' => $left >= 0 ? "⏱ {$left} min left" : '🔴 ' . abs($left) . ' min late', 'state' => $left < 0 ? 'late' : ($left <= 3 ? 'warn' : 'ok'), 'due' => $due->timestamp, 'since' => null];
+                $secs = $due->timestamp - $now->timestamp;
+                $left = (int) ceil($secs / 60);
+                // Red as soon as 3 minutes or less are left, and while late
+                return ['text' => $secs >= 0 ? "⏱ {$left} min left" : '🔴 ' . (int) ceil(abs($secs) / 60) . ' min late', 'state' => $secs <= 180 ? 'late' : 'ok', 'due' => $due->timestamp, 'since' => null];
             case 'preparing':
                 $start = $this->ready_at ?: $this->updated_at;
                 $m = (int) floor($start->diffInSeconds($now) / 60);

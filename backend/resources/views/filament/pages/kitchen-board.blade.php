@@ -64,7 +64,7 @@
                                 default    => ['🛵 Delivery', 'background:#DBEAFE;color:#1E40AF'],
                             };
                         @endphp
-                        <article class="kb-card {{ $t['state'] ?? '' }}" wire:key="kb{{ $o->id }}">
+                        <article class="kb-card {{ $t['state'] ?? '' }}" wire:key="kb{{ $o->id }}" @if ($t && $t['due']) x-data="{ due: {{ $t['due'] }} }" x-bind:class="(due - now) <= 180 ? 'late' : ''" @endif>
                             <div class="kb-head">
                                 <a class="kb-no" href="{{ $viewUrl($o) }}">#{{ substr($o->order_number, -6) }}</a>
                                 <span class="kb-type" style="{{ $typeCss }}">{{ $typeTxt }}</span>
@@ -75,7 +75,7 @@
                             </div>
 
                             @if ($t)
-                                <div class="kb-timer {{ $t['state'] }}"
+                                <div class="kb-timer {{ $t['state'] }}" @if ($t['due']) x-bind:class="(due - now) <= 180 ? 'late' : 'ok'" @endif
                                      @if ($t['due']) x-data="{ due: {{ $t['due'] }} }" @else x-data="{ since: {{ (int) $t['since'] }} }" @endif>
                                     @if ($t['due'])
                                         <span x-text="(due - now) >= 0 ? '⏱ ' + Math.floor((due - now) / 60) + ':' + String((due - now) % 60).padStart(2, '0') + ' left' : '🔴 ' + Math.ceil((now - due) / 60) + ' min late'">{{ $t['text'] }}</span>
