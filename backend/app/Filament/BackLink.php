@@ -22,6 +22,10 @@ class BackLink
             if (! is_string($class) || ! class_exists($class)) {
                 continue;
             }
+            // Full-screen work screens use all the height: no back button
+            if (in_array($class, [\App\Filament\Pages\ManageOrders::class, \App\Filament\Pages\KitchenBoard::class, \App\Filament\Pages\MyDeliveries::class], true)) {
+                return null;
+            }
             if (is_subclass_of($class, ListRecords::class) || is_subclass_of($class, ManageRecords::class)
                 || $class === Dashboard::class || is_subclass_of($class, Dashboard::class)) {
                 return null;

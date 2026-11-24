@@ -45,6 +45,12 @@
 <x-filament-panels::page>
     <style>
         .fi-header { display:none; } /* the dark bar below is the page header */
+        /* use the whole screen: no empty band above, the order area fills the window height */
+        .fi-page > section { padding-top:12px !important; padding-bottom:12px !important; row-gap:0 !important; }
+        @media (min-width: 901px) {
+            .sw { display:flex; flex-direction:column; height:calc(100vh - 4rem - 24px); min-height:560px; }
+            .sw > .sw-main { flex:1 1 auto; height:auto !important; min-height:0 !important; }
+        }
         .sw { --or:#FC8019; --or2:#F15700; font-size:14px; color:#282C3F; }
         .sw-top { display:flex; align-items:center; gap:18px; background:#282C3F; color:#fff; border-radius:16px 16px 0 0; padding:12px 18px; flex-wrap:wrap; }
         .sw-top h2 { margin:0; font-size:17px; font-weight:900; letter-spacing:.02em; }
