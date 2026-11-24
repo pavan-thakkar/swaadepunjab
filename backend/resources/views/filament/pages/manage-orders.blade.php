@@ -50,6 +50,8 @@
         @media (min-width: 901px) {
             .sw { display:flex; flex-direction:column; height:calc(100vh - 4rem - 24px); min-height:560px; }
             .sw > .sw-main { flex:1 1 auto; height:auto !important; min-height:0 !important; }
+            .sw > .sw-top, .sw > .sw-tabs { flex:0 0 auto; }   /* header + tabs keep their full height */
+            .sw-tab { min-height:52px; display:inline-flex; align-items:center; }
         }
         .sw { --or:#FC8019; --or2:#F15700; font-size:14px; color:#282C3F; }
         .sw-top { display:flex; align-items:center; gap:18px; background:#282C3F; color:#fff; border-radius:16px 16px 0 0; padding:12px 18px; flex-wrap:wrap; }
